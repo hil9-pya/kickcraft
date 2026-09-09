@@ -7,7 +7,7 @@ export default defineConfig({
     vue({
       template: {
         compilerOptions: {
-          isCustomElement: (tag) => tag === 'model-viewer',
+          isCustomElement: tag => ['model-viewer', 'extra-model'].includes(tag),
         },
       },
     }),

@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import { PARTS, setMaterialColor } from './customization.js'
+import { CHARMS, PARTS, charmScale, setMaterialColor } from './customization.js'
 
 const sizes = [7, 8, 9, 10, 11]
 const colors = [
@@ -14,6 +14,7 @@ const colors = [
 
 const modelViewer = ref(null)
 const selectedPartId = ref(PARTS[0].id)
+const selectedCharmId = ref('none')
 const partColors = ref({})
 const selectedSize = ref(9)
 const modelReady = ref(false)
@@ -21,8 +22,10 @@ const modelError = ref('')
 const reserved = ref(false)
 
 const selectedPart = computed(() => PARTS.find(part => part.id === selectedPartId.value))
+const selectedCharm = computed(() => CHARMS.find(charm => charm.id === selectedCharmId.value))
 const customizedCount = computed(() => Object.keys(partColors.value).length)
 const selectedColor = computed(() => partColors.value[selectedPartId.value])
+const charmModels = CHARMS.filter(charm => charm.src)
 
 function handleModelLoad() {
   const model = modelViewer.value?.model
@@ -75,7 +78,7 @@ function submitReservation() {
     <header class="border-b border-[#cfd2ce] bg-[#fcfdfb]">
       <div class="mx-auto flex h-16 max-w-[1480px] items-center justify-between px-5 lg:px-8">
         <a href="#studio" class="flex items-center gap-3 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#245fa8]">
-          <span class="grid size-8 place-items-center bg-[#292b2d] text-sm font-black text-white">S</span>
+          <span class="grid size-8 place-items-center bg-[#292b2d] text-sm font-black text-white">K</span>
           <span class="font-display text-lg font-extrabold tracking-[-0.03em]">KickCraft</span>
         </a>
         <nav class="flex items-center gap-6 text-sm font-semibold" aria-label="Main navigation">
@@ -109,7 +112,14 @@ function submitReservation() {
             interaction-prompt="auto"
             @load="handleModelLoad"
             @error="handleModelError"
-          />
+          >
+            <extra-model
+              v-for="charm in charmModels"
+              :key="charm.id"
+              :src="charm.src"
+              :scale="charmScale(charm.id, selectedCharmId)"
+            />
+          </model-viewer>
 
           <div v-if="!modelReady && !modelError" class="pointer-events-none absolute inset-0 grid place-items-center bg-[#e9ece9]/90" role="status">
             <div class="flex items-center gap-3 border border-[#bfc3bf] bg-[#fcfdfb] px-4 py-3 text-sm font-semibold">
@@ -186,8 +196,26 @@ function submitReservation() {
               </div>
             </fieldset>
 
+            <fieldset :disabled="!modelReady">
+              <div class="mb-3 flex items-center justify-between gap-4">
+                <legend class="font-display text-base font-bold">Add accessory</legend>
+                <span class="text-xs font-semibold text-[#696d69]">{{ selectedCharm.label }}</span>
+              </div>
+              <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2">
+                <button
+                  v-for="charm in CHARMS"
+                  :key="charm.id"
+                  type="button"
+                  class="min-h-11 border px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
+                  :class="selectedCharmId === charm.id ? 'border-[#292b2d] bg-[#292b2d] text-white' : 'border-[#c5c9c5] bg-white hover:border-[#6f746f]'"
+                  :aria-pressed="selectedCharmId === charm.id"
+                  @click="selectedCharmId = charm.id"
+                >{{ charm.label }}</button>
+              </div>
+            </fieldset>
+
             <div class="flex items-center justify-between border-y border-[#d9dcd8] py-3 text-sm">
-              <span><strong>{{ customizedCount }}</strong> of {{ PARTS.length }} parts customized</span>
+              <span><strong>{{ customizedCount }}</strong> of {{ PARTS.length }} parts · {{ selectedCharm.label }} accessory</span>
               <button
                 type="button"
                 class="font-semibold text-[#245fa8] underline underline-offset-4 disabled:cursor-not-allowed disabled:text-[#9b9f9b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
@@ -216,7 +244,7 @@ function submitReservation() {
           </div>
 
           <div class="mt-auto border-t border-[#d9dcd8] bg-[#f1f3f0] p-6 lg:p-7">
-            <p class="mb-3 text-sm text-[#5f635f]">Pickup reservation · Your current colors and size are included.</p>
+            <p class="mb-3 text-sm text-[#5f635f]">Pickup reservation · Your colors, accessory, and size are included.</p>
             <button type="button" class="h-12 w-full bg-[#b94d27] px-5 font-bold text-white hover:bg-[#963a20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" @click="openReservation">Reserve this design</button>
           </div>
         </div>
@@ -232,7 +260,7 @@ function submitReservation() {
     <dialog id="reservation-dialog" class="m-auto w-[calc(100%_-_32px)] max-w-md border border-[#8e938e] bg-[#fcfdfb] p-0 text-[#292b2d]">
       <div v-if="!reserved" class="p-6">
         <div class="flex items-start justify-between gap-4 border-b border-[#d9dcd8] pb-4">
-          <div><h2 class="font-display text-xl font-black">Reserve your KickCraft One</h2><p class="mt-1 text-sm text-[#626662]">Size {{ selectedSize }} · {{ customizedCount }} customized parts</p></div>
+          <div><h2 class="font-display text-xl font-black">Reserve your KickCraft One</h2><p class="mt-1 text-sm text-[#626662]">Size {{ selectedSize }} · {{ customizedCount }} customized parts · {{ selectedCharm.label }} accessory</p></div>
           <button class="grid size-9 place-items-center border border-[#bfc3bf] text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" aria-label="Close reservation" @click="closeReservation">×</button>
         </div>
         <form class="space-y-4 pt-5" @submit.prevent="submitReservation">
@@ -245,7 +273,7 @@ function submitReservation() {
       <div v-else class="p-8 text-center">
         <div class="mx-auto grid size-12 place-items-center bg-[#3f7652] text-xl font-black text-white">✓</div>
         <h2 class="font-display mt-5 text-xl font-black">Reservation confirmed</h2>
-        <p class="mt-2 text-sm leading-6 text-[#626662]">Your custom KickCraft One in size {{ selectedSize }} is recorded for pickup.</p>
+        <p class="mt-2 text-sm leading-6 text-[#626662]">Your custom KickCraft One in size {{ selectedSize }} with {{ selectedCharm.label }} accessory is recorded for pickup.</p>
         <button class="mt-6 h-11 w-full border border-[#8e938e] font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" @click="closeReservation">Continue designing</button>
       </div>
     </dialog>
