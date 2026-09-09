@@ -31,3 +31,12 @@ test('generated charms are small valid GLBs with named geometry', async () => {
     assert.ok(buffer.length < 200_000, `${file} is ${buffer.length} bytes`)
   }
 })
+
+test('K tag has a visible mark on both faces', async () => {
+  const { json } = await readGlb('k-tag-charm.glb')
+  const nodeNames = new Set(json.nodes.map(node => node.name))
+
+  assert.ok(json.materials.some(material => material.name === 'CharmMark'))
+  assert.ok(nodeNames.has('KFrontStem'))
+  assert.ok(nodeNames.has('KBackStem'))
+})

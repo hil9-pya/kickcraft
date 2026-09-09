@@ -63,6 +63,19 @@ def make_material():
     return material
 
 
+def make_mark_material():
+    material = bpy.data.materials.get("CharmMark") or bpy.data.materials.new("CharmMark")
+    material.diffuse_color = (0.55, 0.16, 0.07, 1.0)
+    material.metallic = 0.15
+    material.roughness = 0.4
+    material.use_nodes = True
+    shader = material.node_tree.nodes.get("Principled BSDF")
+    shader.inputs["Base Color"].default_value = material.diffuse_color
+    shader.inputs["Metallic"].default_value = material.metallic
+    shader.inputs["Roughness"].default_value = material.roughness
+    return material
+
+
 def make_outline(name, points, thickness, material):
     count = len(points)
     vertices = [(x, -thickness / 2, z) for x, z in points]
@@ -126,11 +139,18 @@ def make_bar(name, location, length, angle, material):
     return bar
 
 
-def make_k_tag(material):
+def make_k_face(prefix, y, x_direction, material):
+    return [
+        make_bar(f"K{prefix}Stem", (-0.0045 * x_direction, y, -0.038), 0.018, 0, material),
+        make_bar(f"K{prefix}Upper", (0.0005 * x_direction, y, -0.0335), 0.012, -45 * x_direction, material),
+        make_bar(f"K{prefix}Lower", (0.0005 * x_direction, y, -0.0425), 0.012, 45 * x_direction, material),
+    ]
+
+
+def make_k_tag(material, mark_material):
     pieces = [make_outline("KTagCharm", TAG_POINTS, 0.004, material)]
-    pieces.append(make_bar("KStem", (-0.0045, -0.0027, -0.038), 0.018, 0, material))
-    pieces.append(make_bar("KUpper", (0.0005, -0.0027, -0.0335), 0.012, -45, material))
-    pieces.append(make_bar("KLower", (0.0005, -0.0027, -0.0425), 0.012, 45, material))
+    pieces.extend(make_k_face("Front", 0.0027, 1, mark_material))
+    pieces.extend(make_k_face("Back", -0.0027, -1, mark_material))
     return pieces
 
 
@@ -148,6 +168,7 @@ def apply_modifiers(objects):
 def build_and_export(slug, mesh_name, anchor_matrix):
     clear_scene()
     material = make_material()
+    mark_material = make_mark_material()
 
     bpy.ops.object.empty_add(type="PLAIN_AXES")
     root = bpy.context.object
@@ -161,7 +182,7 @@ def build_and_export(slug, mesh_name, anchor_matrix):
     elif slug == "lightning":
         pieces = [make_outline(mesh_name, LIGHTNING_POINTS, 0.004, material)]
     elif slug == "k-tag":
-        pieces = make_k_tag(material)
+        pieces = make_k_tag(material, mark_material)
     else:
         raise ValueError(f"Unknown charm: {slug}")
 
