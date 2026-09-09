@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+:root {
+  font-family: "Segoe UI Variable", "Segoe UI", sans-serif;
+  color: #292b2d;
+  background: #f5f6f4;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body { margin: 0; min-width: 320px; min-height: 100vh; background: #f5f6f4; }
+button, input { font: inherit; }
+button { cursor: pointer; }
+.font-display { font-family: Bahnschrift, "Arial Narrow", sans-serif; }
+
+model-viewer {
+  width: 100%;
+  height: 100%;
+  min-height: 720px;
+  background: #e9ece9;
+  --poster-color: #e9ece9;
+}
+
+model-viewer::part(default-progress-bar) { background-color: #b94d27; }
+
+@media (max-width: 900px) { model-viewer { min-height: 430px; } }
+@media (max-width: 640px) { model-viewer { min-height: 360px; } }
+
+dialog::backdrop { background: rgb(32 34 32 / 60%); }
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { scrollbar-width: none; }
