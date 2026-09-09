@@ -76,7 +76,7 @@ function submitReservation() {
       <div class="mx-auto flex h-16 max-w-[1480px] items-center justify-between px-5 lg:px-8">
         <a href="#studio" class="flex items-center gap-3 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#245fa8]">
           <span class="grid size-8 place-items-center bg-[#292b2d] text-sm font-black text-white">S</span>
-          <span class="font-display text-lg font-extrabold tracking-[-0.03em]">SoleView</span>
+          <span class="font-display text-lg font-extrabold tracking-[-0.03em]">KickCraft</span>
         </a>
         <nav class="flex items-center gap-6 text-sm font-semibold" aria-label="Main navigation">
           <a href="#studio" class="hidden border-b-2 border-[#b94d27] py-5 sm:block">Design studio</a>
@@ -88,7 +88,7 @@ function submitReservation() {
     <main id="studio" class="mx-auto max-w-[1480px] px-5 py-7 lg:px-8 lg:py-10">
       <div class="mb-7 grid gap-4 border-b border-[#cfd2ce] pb-7 md:grid-cols-[1fr_auto] md:items-end">
         <div>
-          <p class="mb-2 text-sm font-semibold text-[#6a6e6a]">Original concept / SoleView One</p>
+          <p class="mb-2 text-sm font-semibold text-[#6a6e6a]">Original concept / KickCraft One</p>
           <h1 class="font-display max-w-4xl text-4xl font-black leading-[0.95] tracking-[-0.045em] text-[#202220] sm:text-5xl lg:text-6xl">Shape the color. Keep the character.</h1>
         </div>
         <p class="max-w-sm text-sm leading-6 text-[#5f635f] md:text-right">Select a shoe part, choose its finish, then rotate the model to inspect your design from every side.</p>
@@ -99,7 +99,7 @@ function submitReservation() {
           <model-viewer
             ref="modelViewer"
             src="/models/shoe-soleview-final.glb"
-            alt="Interactive customizable 3D SoleView concept shoe"
+            alt="Interactive customizable 3D KickCraft concept shoe"
             camera-controls
             touch-action="pan-y"
             shadow-intensity="1"
@@ -136,7 +136,7 @@ function submitReservation() {
           <div class="border-b border-[#d9dcd8] p-6 lg:p-7">
             <div class="flex items-start justify-between gap-4">
               <div>
-                <h2 class="font-display text-3xl font-black tracking-[-0.04em] text-[#202220]">SoleView One</h2>
+                <h2 class="font-display text-3xl font-black tracking-[-0.04em] text-[#202220]">KickCraft One</h2>
                 <p class="mt-2 text-sm leading-6 text-[#626662]">Our first original customizable sneaker concept.</p>
               </div>
               <p class="shrink-0 text-xl font-black text-[#b94d27]">₱4,890</p>
@@ -232,7 +232,7 @@ function submitReservation() {
     <dialog id="reservation-dialog" class="m-auto w-[calc(100%_-_32px)] max-w-md border border-[#8e938e] bg-[#fcfdfb] p-0 text-[#292b2d]">
       <div v-if="!reserved" class="p-6">
         <div class="flex items-start justify-between gap-4 border-b border-[#d9dcd8] pb-4">
-          <div><h2 class="font-display text-xl font-black">Reserve your SoleView One</h2><p class="mt-1 text-sm text-[#626662]">Size {{ selectedSize }} · {{ customizedCount }} customized parts</p></div>
+          <div><h2 class="font-display text-xl font-black">Reserve your KickCraft One</h2><p class="mt-1 text-sm text-[#626662]">Size {{ selectedSize }} · {{ customizedCount }} customized parts</p></div>
           <button class="grid size-9 place-items-center border border-[#bfc3bf] text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" aria-label="Close reservation" @click="closeReservation">×</button>
         </div>
         <form class="space-y-4 pt-5" @submit.prevent="submitReservation">
@@ -245,7 +245,7 @@ function submitReservation() {
       <div v-else class="p-8 text-center">
         <div class="mx-auto grid size-12 place-items-center bg-[#3f7652] text-xl font-black text-white">✓</div>
         <h2 class="font-display mt-5 text-xl font-black">Reservation confirmed</h2>
-        <p class="mt-2 text-sm leading-6 text-[#626662]">Your custom SoleView One in size {{ selectedSize }} is recorded for pickup.</p>
+        <p class="mt-2 text-sm leading-6 text-[#626662]">Your custom KickCraft One in size {{ selectedSize }} is recorded for pickup.</p>
         <button class="mt-6 h-11 w-full border border-[#8e938e] font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" @click="closeReservation">Continue designing</button>
       </div>
     </dialog>
