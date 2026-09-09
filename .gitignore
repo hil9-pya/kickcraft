@@ -1,5 +1,6 @@
 node_modules/
 dist/
 tmp/
+.worktrees/
 .DS_Store
 *.log
