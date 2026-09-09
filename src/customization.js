@@ -15,3 +15,14 @@ export function setMaterialColor(model, materialName, color) {
   material.pbrMetallicRoughness.setBaseColorFactor(color)
   return true
 }
+
+export const CHARMS = [
+  { id: 'none', label: 'None', src: null },
+  { id: 'star', label: 'Star', src: '/models/charms/star-charm.glb' },
+  { id: 'lightning', label: 'Lightning', src: '/models/charms/lightning-charm.glb' },
+  { id: 'k-tag', label: 'K tag', src: '/models/charms/k-tag-charm.glb' },
+]
+
+export function charmScale(charmId, selectedCharmId) {
+  return charmId === selectedCharmId ? '1 1 1' : '0 0 0'
+}
