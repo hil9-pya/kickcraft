@@ -1,0 +1,162 @@
+{"kind":"deck","id":"pr/j4t13g","name":"Deck"}
+{"kind":"layout","layoutId":"b9570c15-1b0d-42d9-9593-90ff5755a523","name":"Master","type":"master"}
+{"kind":"layout","layoutId":"d6012585-e325-420c-9145-a05984153093","name":"Title Slide","type":"title"}
+{"kind":"slide","id":"sl/717nmz","slide":1,"title":"SOLEVIEW","textShapes":4}
+{"kind":"shape","id":"sh/ve5k729g","slide":1,"bbox":[0,0,750,720]}
+{"kind":"textbox","id":"sh/udw3exsv","slide":1,"text":"SOLEVIEW","textPreview":"SOLEVIEW","textChars":8,"textLines":1,"bbox":[70,64,300,42]}
+{"kind":"shape","id":"sh/547mdwri","slide":1,"bbox":[70,125,72,4]}
+{"kind":"textbox","id":"sh/43ylkrax","slide":1,"text":"3D Shoe Viewing and\nPickup Reservation\nSystem","textPreview":"3D Shoe Viewing and | Pickup Reservation | System","textChars":45,"textLines":3,"bbox":[70,182,620,230]}
+{"kind":"textbox","id":"sh/j254bm9c","slide":1,"text":"Integrative Programming 2\nPrefinal Week 1 Title Presentation","textPreview":"Integrative Programming 2 | Prefinal Week 1 Title Presentation","textChars":60,"textLines":2,"bbox":[70,470,470,68]}
+{"kind":"textbox","id":"sh/ihw3ihsr","slide":1,"text":"Group members: [Add names]\nSection: [Add section]","textPreview":"Group members: [Add names] | Section: [Add section]","textChars":49,"textLines":2,"bbox":[70,590,500,62]}
+{"kind":"image","id":"im/5s7yxkfq","slide":1,"name":"","alt":"Brown sneaker photographed on warm fabric","bbox":[750,0,530,720]}
+{"kind":"notes","id":"nt/717nmz","slide":1,"text":"Image source: https://images.unsplash.com/photo-1549298916-b41d501d3772\nReplace bracketed group information before submission."}
+{"kind":"slide","id":"sl/l6r60q","slide":2,"title":"Target users and context","textShapes":8}
+{"kind":"textbox","id":"sh/psjy943e","slide":2,"text":"Target users and context","textPreview":"Target users and context","textChars":24,"textLines":1,"bbox":[64,42,1060,56]}
+{"kind":"textbox","id":"sh/2pszepkn","slide":2,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[1160,52,56,32]}
+{"kind":"shape","id":"sh/3q1g7ul8","slide":2,"bbox":[64,112,1152,2]}
+{"kind":"textbox","id":"sh/gnqhcz2x","slide":2,"text":"Primary user","textPreview":"Primary user","textChars":12,"textLines":1,"bbox":[64,155,300,32]}
+{"kind":"textbox","id":"sh/1ozy543i","slide":2,"text":"Customers of one shoe store","textPreview":"Customers of one shoe store","textChars":27,"textLines":1,"bbox":[64,192,540,92]}
+{"kind":"textbox","id":"sh/el8zapkr","slide":2,"text":"Customers inspect branded shoes, check available variants, and reserve a pair before visiting the store.","textPreview":"Customers inspect branded shoes, check available variants, and reserve a pair before visiting the store.","textChars":104,"textLines":1,"bbox":[64,300,525,92]}
+{"kind":"shape","id":"sh/fmhg3ulc","slide":2,"bbox":[64,414,525,2]}
+{"kind":"textbox","id":"sh/sjqh8f2l","slide":2,"text":"Secondary user","textPreview":"Secondary user","textChars":14,"textLines":1,"bbox":[64,448,180,30]}
+{"kind":"textbox","id":"sh/tkzy1k36","slide":2,"text":"The store owner signs in to manage products, GLB models, size and color stock, and pickup reservations.","textPreview":"The store owner signs in to manage products, GLB models, size and color stock, and pickup reservations.","textChars":103,"textLines":1,"bbox":[64,492,525,110]}
+{"kind":"textbox","id":"sh/wvi10f6t","slide":2,"text":"SoleView proposal","textPreview":"SoleView proposal","textChars":17,"textLines":1,"bbox":[64,680,300,20]}
+{"kind":"image","id":"im/ytkzydgj","slide":2,"name":"","alt":"Customer wearing a white sneaker outdoors","bbox":[650,150,566,485]}
+{"kind":"notes","id":"nt/l6r60q","slide":2,"text":"Image source: https://images.unsplash.com/photo-1460353581641-37baddab0fa2\nTarget-user description is the project team's proposed scope."}
+{"kind":"slide","id":"sl/2xzl4y","slide":3,"title":"Problem statement","textShapes":7}
+{"kind":"textbox","id":"sh/rm9krax0","slide":3,"text":"Problem statement","textPreview":"Problem statement","textChars":17,"textLines":1,"bbox":[64,42,1060,56]}
+{"kind":"textbox","id":"sh/cni10vyl","slide":3,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[1160,52,56,32]}
+{"kind":"shape","id":"sh/dor2t0f6","slide":3,"bbox":[64,112,1152,2]}
+{"kind":"textbox","id":"sh/3y90nqxo","slide":3,"text":"Customers cannot inspect shoes or confirm stock quickly","textPreview":"Customers cannot inspect shoes or confirm stock quickly","textChars":55,"textLines":1,"bbox":[595,160,570,112]}
+{"kind":"textbox","id":"sh/4ji1wvy9","slide":3,"text":"Static photos limit product inspection. Size and color availability often requires a separate message to the store.","textPreview":"Static photos limit product inspection. Size and color availability often requires a separate message to the store.","textChars":115,"textLines":1,"bbox":[595,300,570,100]}
+{"kind":"shape","id":"sh/pkrip0fu","slide":3,"bbox":[595,420,80,4]}
+{"kind":"textbox","id":"sh/mtkj6pgn","slide":3,"text":"Why it matters","textPreview":"Why it matters","textChars":14,"textLines":1,"bbox":[595,450,230,32]}
+{"kind":"textbox","id":"sh/nutkzux8","slide":3,"text":"Customers spend more time asking questions and may visit the store without knowing whether their preferred variant remains available.","textPreview":"Customers spend more time asking questions and may visit the store without knowing whether their preferred variant remains available.","textChars":133,"textLines":1,"bbox":[595,492,570,110]}
+{"kind":"textbox","id":"sh/bm5sfi98","slide":3,"text":"SoleView proposal","textPreview":"SoleView proposal","textChars":17,"textLines":1,"bbox":[64,680,300,20]}
+{"kind":"image","id":"im/bypo3ulk","slide":3,"name":"","alt":"White sneaker shown in a static product photo","bbox":[64,150,470,470]}
+{"kind":"notes","id":"nt/2xzl4y","slide":3,"text":"Image source: https://images.unsplash.com/photo-1608231387042-66d1773070a5\nProblem statement is a project hypothesis. Validate it through a short shopper survey during testing."}
+{"kind":"slide","id":"sl/63f182","slide":4,"title":"Current process","textShapes":16}
+{"kind":"textbox","id":"sh/i1sjyh8n","slide":4,"text":"Current process","textPreview":"Current process","textChars":15,"textLines":1,"bbox":[64,42,1060,56]}
+{"kind":"textbox","id":"sh/54329cry","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[1160,52,56,32]}
+{"kind":"shape","id":"sh/43a107qd","slide":4,"bbox":[64,112,1152,2]}
+{"kind":"textbox","id":"sh/ve1k329w","slide":4,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[78,150,62,44]}
+{"kind":"textbox","id":"sh/udsjux8b","slide":4,"text":"Browse static photos","textPreview":"Browse static photos","textChars":20,"textLines":1,"bbox":[160,152,390,38]}
+{"kind":"textbox","id":"sh/h0j25cr2","slide":4,"text":"Customer checks a small set of fixed product angles.","textPreview":"Customer checks a small set of fixed product angles.","textChars":52,"textLines":1,"bbox":[580,152,585,62]}
+{"kind":"shape","id":"sh/gfa1w7qh","slide":4,"bbox":[78,236,1087,1]}
+{"kind":"textbox","id":"sh/7ah0zi90","slide":4,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[78,272,62,44]}
+{"kind":"textbox","id":"sh/698jqd8f","slide":4,"text":"Message the store","textPreview":"Message the store","textChars":17,"textLines":1,"bbox":[160,274,390,38]}
+{"kind":"textbox","id":"sh/o3ypovqx","slide":4,"text":"Customer asks whether a size and color are still available.","textPreview":"Customer asks whether a size and color are still available.","textChars":59,"textLines":1,"bbox":[580,274,585,62]}
+{"kind":"shape","id":"sh/p47qx0ri","slide":4,"bbox":[78,358,1087,1]}
+{"kind":"textbox","id":"sh/21w7ml87","slide":4,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[78,394,62,44]}
+{"kind":"textbox","id":"sh/n258vq9s","slide":4,"text":"Wait for confirmation","textPreview":"Wait for confirmation","textChars":21,"textLines":1,"bbox":[160,396,390,38]}
+{"kind":"textbox","id":"sh/0zepkbq1","slide":4,"text":"Staff manually checks stock and replies when available.","textPreview":"Staff manually checks stock and replies when available.","textChars":55,"textLines":1,"bbox":[580,396,585,62]}
+{"kind":"shape","id":"sh/10nqtgrm","slide":4,"bbox":[78,480,1087,1]}
+{"kind":"textbox","id":"sh/edw7i18v","slide":4,"text":"04","textPreview":"04","textChars":2,"textLines":1,"bbox":[78,516,62,44]}
+{"kind":"textbox","id":"sh/fe5or69g","slide":4,"text":"Visit without a hold","textPreview":"Visit without a hold","textChars":20,"textLines":1,"bbox":[160,518,390,38]}
+{"kind":"textbox","id":"sh/kvipwfq5","slide":4,"text":"The selected pair may sell before the customer arrives.","textPreview":"The selected pair may sell before the customer arrives.","textChars":55,"textLines":1,"bbox":[580,518,585,62]}
+{"kind":"shape","id":"sh/lwrq5krq","slide":4,"bbox":[64,630,1152,34]}
+{"kind":"textbox","id":"sh/tsnq90zu","slide":4,"text":"Main pain point: product inspection and pickup availability require separate manual steps.","textPreview":"Main pain point: product inspection and pickup availability require separate manual steps.","textChars":90,"textLines":1,"bbox":[82,636,1040,25]}
+{"kind":"textbox","id":"sh/srepgvi9","slide":4,"text":"SoleView proposal","textPreview":"SoleView proposal","textChars":17,"textLines":1,"bbox":[64,680,300,20]}
+{"kind":"notes","id":"nt/63f182","slide":4,"text":"Current-process description represents the proposed problem framing. Validate it through observation or user interviews."}
+{"kind":"slide","id":"sl/2qnemm","slide":5,"title":"Proposed solution","textShapes":21}
+{"kind":"textbox","id":"sh/k7ahkjyl","slide":5,"text":"Proposed solution","textPreview":"Proposed solution","textChars":17,"textLines":1,"bbox":[64,42,1060,56]}
+{"kind":"textbox","id":"sh/z6hgbex0","slide":5,"text":"05","textPreview":"05","textChars":2,"textLines":1,"bbox":[1160,52,56,32]}
+{"kind":"shape","id":"sh/y58zi9gf","slide":5,"bbox":[64,112,1152,2]}
+{"kind":"textbox","id":"sh/xkzy9ofa","slide":5,"text":"SoleView connects product inspection, stock checking, and pickup reservation in one workflow.","textPreview":"SoleView connects product inspection, stock checking, and pickup reservation in one workflow.","textChars":93,"textLines":1,"bbox":[64,145,1100,48]}
+{"kind":"shape","id":"sh/cjqhgjyp","slide":5,"bbox":[64,245,194,250]}
+{"kind":"textbox","id":"sh/bihg7ex4","slide":5,"text":"1","textPreview":"1","textChars":1,"textLines":1,"bbox":[82,265,52,45]}
+{"kind":"textbox","id":"sh/ah8ze9gj","slide":5,"text":"Browse","textPreview":"Browse","textChars":6,"textLines":1,"bbox":[82,338,158,38]}
+{"kind":"textbox","id":"sh/hg3il8fe","slide":5,"text":"Open the store's shoe catalog","textPreview":"Open the store's shoe catalog","textChars":29,"textLines":1,"bbox":[82,395,158,78]}
+{"kind":"shape","id":"sh/wfuhs3et","slide":5,"bbox":[258,368,37,2]}
+{"kind":"shape","id":"sh/2d4jitsr","slide":5,"bbox":[295,245,194,250]}
+{"kind":"textbox","id":"sh/3edkby9c","slide":5,"text":"2","textPreview":"2","textChars":1,"textLines":1,"bbox":[313,265,52,45]}
+{"kind":"textbox","id":"sh/4fm1k3ax","slide":5,"text":"Inspect","textPreview":"Inspect","textChars":7,"textLines":1,"bbox":[313,338,158,38]}
+{"kind":"textbox","id":"sh/pgf2d8r2","slide":5,"text":"Rotate and zoom the 3D model","textPreview":"Rotate and zoom the 3D model","textChars":28,"textLines":1,"bbox":[313,395,158,78]}
+{"kind":"shape","id":"sh/u94je9sf","slide":5,"bbox":[489,368,37,2]}
+{"kind":"shape","id":"sh/fadk7e90","slide":5,"bbox":[526,245,194,250]}
+{"kind":"textbox","id":"sh/gbm1gjal","slide":5,"text":"3","textPreview":"3","textChars":1,"textLines":1,"bbox":[544,265,52,45]}
+{"kind":"textbox","id":"sh/hcv29or6","slide":5,"text":"Select","textPreview":"Select","textChars":6,"textLines":1,"bbox":[544,338,158,38]}
+{"kind":"textbox","id":"sh/y5o3qdsz","slide":5,"text":"Choose an available size and color","textPreview":"Choose an available size and color","textChars":34,"textLines":1,"bbox":[544,395,158,78]}
+{"kind":"shape","id":"sh/z6xkji9k","slide":5,"bbox":[720,368,37,2]}
+{"kind":"shape","id":"sh/vq9gbapw","slide":5,"bbox":[757,245,194,250]}
+{"kind":"textbox","id":"sh/apgzi58b","slide":5,"text":"4","textPreview":"4","textChars":1,"textLines":1,"bbox":[775,265,52,45]}
+{"kind":"textbox","id":"sh/xsrydk72","slide":5,"text":"Reserve","textPreview":"Reserve","textChars":7,"textLines":1,"bbox":[775,338,158,38]}
+{"kind":"textbox","id":"sh/wrihkfqh","slide":5,"text":"Enter pickup contact details","textPreview":"Enter pickup contact details","textChars":28,"textLines":1,"bbox":[775,395,158,78]}
+{"kind":"shape","id":"sh/je9gfaps","slide":5,"bbox":[951,368,37,2]}
+{"kind":"shape","id":"sh/it0zmp87","slide":5,"bbox":[988,245,194,250]}
+{"kind":"textbox","id":"sh/5grihk7y","slide":5,"text":"5","textPreview":"5","textChars":1,"textLines":1,"bbox":[1006,265,52,45]}
+{"kind":"textbox","id":"sh/kfihofqd","slide":5,"text":"Confirm","textPreview":"Confirm","textChars":7,"textLines":1,"bbox":[1006,338,158,38]}
+{"kind":"textbox","id":"sh/7it0jup4","slide":5,"text":"Owner approves and prepares the pair","textPreview":"Owner approves and prepares the pair","textChars":36,"textLines":1,"bbox":[1006,395,158,78]}
+{"kind":"textbox","id":"sh/6hkzqp8j","slide":5,"text":"Owner workflow","textPreview":"Owner workflow","textChars":14,"textLines":1,"bbox":[64,555,180,30]}
+{"kind":"textbox","id":"sh/4n2xgzmh","slide":5,"text":"After login, manage products and GLB files, update variant stock, then confirm or reject reservations.","textPreview":"After login, manage products and GLB files, update variant stock, then confirm or reject reservations.","textChars":102,"textLines":1,"bbox":[255,553,900,52]}
+{"kind":"textbox","id":"sh/povy94n2","slide":5,"text":"SoleView proposal","textPreview":"SoleView proposal","textChars":17,"textLines":1,"bbox":[64,680,300,20]}
+{"kind":"notes","id":"nt/2qnemm","slide":5,"text":"Workflow reflects the planned system scope and current prototype capabilities."}
+{"kind":"slide","id":"sl/abuf44","slide":6,"title":"Innovation and improvement","textShapes":6}
+{"kind":"textbox","id":"sh/ed0r6p4v","slide":6,"text":"Innovation and improvement","textPreview":"Innovation and improvement","textChars":26,"textLines":1,"bbox":[64,44,900,54]}
+{"kind":"textbox","id":"sh/1gbahk36","slide":6,"text":"06","textPreview":"06","textChars":2,"textLines":1,"bbox":[1160,54,56,28]}
+{"kind":"shape","id":"sh/gf298fm1","slide":6,"bbox":[64,116,1152,2]}
+{"kind":"textbox","id":"sh/7a98bal4","slide":6,"text":"Existing shoe-store pages rely on static photos and manual messages for stock confirmation and pickup requests.","textPreview":"Existing shoe-store pages rely on static photos and manual messages for stock confirmation and pickup requests.","textChars":111,"textLines":1,"bbox":[84,168,1050,112]}
+{"kind":"shape","id":"sh/690ri54j","slide":6,"bbox":[84,318,72,5]}
+{"kind":"textbox","id":"sh/tcrqdk3a","slide":6,"text":"Our system improves this through interactive 3D viewing, variant-level stock display, and pickup reservation, which helps customers inspect a shoe and secure an available pair faster.","textPreview":"Our system improves this through interactive 3D viewing, variant-level stock display, and pickup reservation, which helps customers inspe...","textChars":183,"textLines":1,"bbox":[84,366,1040,140]}
+{"kind":"shape","id":"sh/sbi94fmp","slide":6,"bbox":[84,550,1050,1]}
+{"kind":"textbox","id":"sh/b6dsnulo","slide":6,"text":"Measurable test","textPreview":"Measurable test","textChars":15,"textLines":1,"bbox":[84,580,180,28]}
+{"kind":"textbox","id":"sh/q5kre943","slide":6,"text":"Compare the time and number of steps needed to inspect a shoe and confirm a pickup-ready variant.","textPreview":"Compare the time and number of steps needed to inspect a shoe and confirm a pickup-ready variant.","textChars":97,"textLines":1,"bbox":[285,577,835,56]}
+{"kind":"notes","id":"nt/abuf44","slide":6,"text":"Innovation statement follows the required sentence structure from the instructor handout. The proposed measurement needs user testing before reporting results."}
+{"kind":"slide","id":"sl/fbxcsz","slide":7,"title":"Core features","textShapes":13}
+{"kind":"textbox","id":"sh/e5g3yx4n","slide":7,"text":"Core features","textPreview":"Core features","textChars":13,"textLines":1,"bbox":[64,42,1060,56]}
+{"kind":"textbox","id":"sh/1sr29cne","slide":7,"text":"07","textPreview":"07","textChars":2,"textLines":1,"bbox":[1160,52,56,32]}
+{"kind":"shape","id":"sh/07il07mt","slide":7,"bbox":[64,112,1152,2]}
+{"kind":"textbox","id":"sh/r2pk325w","slide":7,"text":"01","textPreview":"01","textChars":2,"textLines":1,"bbox":[64,165,80,50]}
+{"kind":"textbox","id":"sh/q1gjux4r","slide":7,"text":"Interactive 3D viewer","textPreview":"Interactive 3D viewer","textChars":21,"textLines":1,"bbox":[64,245,340,76]}
+{"kind":"textbox","id":"sh/d4725cn2","slide":7,"text":"Customers rotate and zoom licensed branded shoe models before selecting a variant.","textPreview":"Customers rotate and zoom licensed branded shoe models before selecting a variant.","textChars":82,"textLines":1,"bbox":[64,348,335,150]}
+{"kind":"shape","id":"sh/s3y1w7mh","slide":7,"bbox":[428,172,1,400]}
+{"kind":"textbox","id":"sh/3y5kzi50","slide":7,"text":"02","textPreview":"02","textChars":2,"textLines":1,"bbox":[454,165,80,50]}
+{"kind":"textbox","id":"sh/ixwjqdof","slide":7,"text":"Stock-linked reservation","textPreview":"Stock-linked reservation","textChars":24,"textLines":1,"bbox":[454,245,340,76]}
+{"kind":"textbox","id":"sh/g7q5sryp","slide":7,"text":"Customers select a size and color, then reserve an available pair for store pickup.","textPreview":"Customers select a size and color, then reserve an available pair for store pickup.","textChars":83,"textLines":1,"bbox":[454,348,335,150]}
+{"kind":"shape","id":"sh/18z6lwfa","slide":7,"bbox":[818,172,1,400]}
+{"kind":"textbox","id":"sh/e58nqhgj","slide":7,"text":"03","textPreview":"03","textChars":2,"textLines":1,"bbox":[844,165,80,50]}
+{"kind":"textbox","id":"sh/f6h4jmx4","slide":7,"text":"Secure owner management","textPreview":"Secure owner management","textChars":23,"textLines":1,"bbox":[844,245,340,76]}
+{"kind":"textbox","id":"sh/s3q5o7yd","slide":7,"text":"The owner logs in to manage products, GLB files, stock, and reservation statuses.","textPreview":"The owner logs in to manage products, GLB files, stock, and reservation statuses.","textChars":81,"textLines":1,"bbox":[844,348,335,150]}
+{"kind":"shape","id":"sh/t4zmhcfy","slide":7,"bbox":[64,610,1152,2]}
+{"kind":"textbox","id":"sh/6h8nmhgn","slide":7,"text":"Customers browse and reserve without an account. Only the owner requires login.","textPreview":"Customers browse and reserve without an account. Only the owner requires login.","textChars":79,"textLines":1,"bbox":[64,630,1020,30]}
+{"kind":"textbox","id":"sh/r2h4fmxs","slide":7,"text":"SoleView proposal","textPreview":"SoleView proposal","textChars":17,"textLines":1,"bbox":[64,680,300,20]}
+{"kind":"notes","id":"nt/fbxcsz","slide":7,"text":"Sample GLB source used in prototype: https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/MaterialsVariantsShoe\nLicense: Creative Commons Attribution 4.0 International, © 2021 Shopify."}
+{"kind":"slide","id":"sl/2ozh1d","slide":8,"title":"Scope and limitations","textShapes":8}
+{"kind":"textbox","id":"sh/6x8fedsv","slide":8,"text":"Scope and limitations","textPreview":"Scope and limitations","textChars":21,"textLines":1,"bbox":[64,42,1060,56]}
+{"kind":"textbox","id":"sh/t0jypsb6","slide":8,"text":"08","textPreview":"08","textChars":2,"textLines":1,"bbox":[1160,52,56,32]}
+{"kind":"shape","id":"sh/szaxgna1","slide":8,"bbox":[64,112,1152,2]}
+{"kind":"shape","id":"sh/jahgjit4","slide":8,"bbox":[64,150,548,455]}
+{"kind":"shape","id":"sh/i98fadcj","slide":8,"bbox":[668,150,548,455]}
+{"kind":"textbox","id":"sh/5czyl8ba","slide":8,"text":"Included","textPreview":"Included","textChars":8,"textLines":1,"bbox":[92,180,220,42]}
+{"kind":"textbox","id":"sh/4bqxc3up","slide":8,"text":"Public catalog for one shoe store\nInteractive GLB model viewing\nStock by size and color\nGuest pickup reservation\nReservation reference and status\nOwner login and management tools","textPreview":"Public catalog for one shoe store | Interactive GLB model viewing | Stock by size and color | Guest pickup reservation | Reservation refe...","textChars":178,"textLines":6,"bbox":[92,248,470,305]}
+{"kind":"textbox","id":"sh/v6xgfyt8","slide":8,"text":"Excluded from first version","textPreview":"Excluded from first version","textChars":27,"textLines":1,"bbox":[696,180,430,42]}
+{"kind":"textbox","id":"sh/u5of6tcn","slide":8,"text":"Online payment processing\nDelivery and courier tracking\nMultiple stores or seller accounts\nCustomer login and loyalty program\nAugmented-reality fitting\nAutomatic 3D model generation","textPreview":"Online payment processing | Delivery and courier tracking | Multiple stores or seller accounts | Customer login and loyalty program | Aug...","textChars":181,"textLines":6,"bbox":[696,248,470,305]}
+{"kind":"textbox","id":"sh/s365kb6x","slide":8,"text":"Branded sample models require a valid asset license, creator attribution, and an academic-use disclaimer.","textPreview":"Branded sample models require a valid asset license, creator attribution, and an academic-use disclaimer.","textChars":105,"textLines":1,"bbox":[64,628,1152,40]}
+{"kind":"textbox","id":"sh/t4fmdg7i","slide":8,"text":"SoleView proposal","textPreview":"SoleView proposal","textChars":17,"textLines":1,"bbox":[64,680,300,20]}
+{"kind":"notes","id":"nt/2ozh1d","slide":8,"text":"Scope follows the two-week implementation limit described in the project guide.\nBrand and asset guidance: https://www.nike.com/help/a/nike-corporate-details/app\nSketchfab license guidance: https://sketchfab.com/licenses\nDownloaded Creative Commons models require the attribution shown on each model page. A model license does not by itself grant brand authorization."}
+{"kind":"slide","id":"sl/jid5iv","slide":9,"title":"UI design and prototype","textShapes":4}
+{"kind":"textbox","id":"sh/pw7y1kvq","slide":9,"text":"UI design and prototype","textPreview":"UI design and prototype","textChars":23,"textLines":1,"bbox":[64,42,1060,56]}
+{"kind":"textbox","id":"sh/2tgz6pcz","slide":9,"text":"09","textPreview":"09","textChars":2,"textLines":1,"bbox":[1160,52,56,32]}
+{"kind":"shape","id":"sh/3upgzadk","slide":9,"bbox":[64,112,1152,2]}
+{"kind":"textbox","id":"sh/czyhczu1","slide":9,"text":"Customer product-viewing screen","textPreview":"Customer product-viewing screen","textChars":31,"textLines":1,"bbox":[64,137,450,34]}
+{"kind":"textbox","id":"sh/qxgzapcv","slide":9,"text":"SoleView proposal","textPreview":"SoleView proposal","textChars":17,"textLines":1,"bbox":[64,680,300,20]}
+{"kind":"image","id":"im/knehkfu5","slide":9,"name":"","alt":"SoleView product page prototype with large 3D shoe viewer and product controls","bbox":[64,185,1152,480]}
+{"kind":"notes","id":"nt/jid5iv","slide":9,"text":"UI concept generated for the SoleView prototype. The reservation form and owner confirmation screen follow this product-viewing step."}
+{"kind":"slide","id":"sl/rl85yq","slide":10,"title":"SOLEVIEW","textShapes":12}
+{"kind":"textbox","id":"sh/jmdwnuhg","slide":10,"text":"SOLEVIEW","textPreview":"SOLEVIEW","textChars":8,"textLines":1,"bbox":[64,54,260,36]}
+{"kind":"textbox","id":"sh/knmdgzi1","slide":10,"text":"Closing summary","textPreview":"Closing summary","textChars":15,"textLines":1,"bbox":[64,128,700,65]}
+{"kind":"textbox","id":"sh/5ofep4zm","slide":10,"text":"Problem","textPreview":"Problem","textChars":7,"textLines":1,"bbox":[72,245,145,32]}
+{"kind":"textbox","id":"sh/6povi907","slide":10,"text":"Static photos and manual stock inquiries slow customer decisions.","textPreview":"Static photos and manual stock inquiries slow customer decisions.","textChars":65,"textLines":1,"bbox":[245,243,790,48]}
+{"kind":"shape","id":"sh/7qxwruhs","slide":10,"bbox":[72,298,963,1]}
+{"kind":"textbox","id":"sh/sr6dkzid","slide":10,"text":"Solution","textPreview":"Solution","textChars":8,"textLines":1,"bbox":[72,327,145,32]}
+{"kind":"textbox","id":"sh/tsfet4zy","slide":10,"text":"3D viewing connects variant selection with pickup reservation.","textPreview":"3D viewing connects variant selection with pickup reservation.","textChars":62,"textLines":1,"bbox":[245,325,790,48]}
+{"kind":"shape","id":"sh/utovm903","slide":10,"bbox":[72,380,963,1]}
+{"kind":"textbox","id":"sh/fuxwveho","slide":10,"text":"Innovation","textPreview":"Innovation","textChars":10,"textLines":1,"bbox":[72,409,145,32]}
+{"kind":"textbox","id":"sh/ri9w7apk","slide":10,"text":"Customers inspect and secure an available pair in one workflow.","textPreview":"Customers inspect and secure an available pair in one workflow.","textChars":63,"textLines":1,"bbox":[245,407,790,48]}
+{"kind":"shape","id":"sh/qh0fy5oz","slide":10,"bbox":[72,462,963,1]}
+{"kind":"textbox","id":"sh/dkbe907q","slide":10,"text":"Scope","textPreview":"Scope","textChars":5,"textLines":1,"bbox":[72,491,145,32]}
+{"kind":"textbox","id":"sh/cjix0v65","slide":10,"text":"One shoe store with public browsing and secure owner tools.","textPreview":"One shoe store with public browsing and secure owner tools.","textChars":59,"textLines":1,"bbox":[245,489,790,48]}
+{"kind":"shape","id":"sh/3e9w3qpo","slide":10,"bbox":[72,544,963,1]}
+{"kind":"textbox","id":"sh/2d0fulo3","slide":10,"text":"Questions?","textPreview":"Questions?","textChars":10,"textLines":1,"bbox":[1060,555,150,40]}
+{"kind":"textbox","id":"sh/pgre507e","slide":10,"text":"Ready to explain reservation states, stock handling, GLB licensing, and project boundaries.","textPreview":"Ready to explain reservation states, stock handling, GLB licensing, and project boundaries.","textChars":91,"textLines":1,"bbox":[72,610,900,50]}
+{"kind":"notes","id":"nt/rl85yq","slide":10,"text":"Closing slide. Invite questions about implementation, risk, testing, and scope."}
