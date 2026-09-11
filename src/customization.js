@@ -35,7 +35,7 @@ export const SHOES = [
     summary: 'Air Max model · 3 customizable parts',
     description: 'A 3D shoe with three simple customization zones.',
     price: '₱4,890',
-    image: null,
+    image: '/images/nike-air-max-card.png',
     src: '/models/nike-air-max-custom.glb',
     parts: AIR_MAX_PARTS,
     charmOffset: '0.003800 0.005100 0.085800',
