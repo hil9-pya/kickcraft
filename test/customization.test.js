@@ -1,40 +1,54 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { CHARMS, PARTS, SHOES, charmScale, materialName, setMaterialColor } from '../src/customization.js'
+import { AIR_MAX_PARTS, CHARMS, PARTS, SHOES, charmScale, charmSource, setMaterialColor } from '../src/customization.js'
 
-test('maps all shoe parts and updates only the requested material', () => {
-  // PARTS still has all 8 entries with id and label
-  assert.deepEqual(PARTS.map(({ id }) => id), [
-    'upper', 'toe-cap', 'tongue', 'laces',
-    'heel-panel', 'side-accents', 'midsole', 'outsole',
+test('keeps the original eight-part shoe and adds the three-part Air Max', () => {
+  assert.deepEqual(PARTS.map(({ material }) => material), [
+    'UpperMaterial',
+    'ToeCapMaterial',
+    'TongueMaterial',
+    'LacesMaterial',
+    'HeelPanelMaterial',
+    'SideAccentsMaterial',
+    'MidsoleMaterial',
+    'OutsoleMaterial',
   ])
 
-  // shoe-one uses the "Material" suffix
-  assert.deepEqual(PARTS.map(p => materialName(p.id, 'one')), [
-    'UpperMaterial', 'ToeCapMaterial', 'TongueMaterial', 'LacesMaterial',
-    'HeelPanelMaterial', 'SideAccentsMaterial', 'MidsoleMaterial', 'OutsoleMaterial',
+  assert.deepEqual(AIR_MAX_PARTS.map(({ material }) => material), [
+    'UpperMaterial',
+    'LacesMaterial',
+    'MidsoleMaterial',
   ])
 
-  // shoe-two uses plain names (no suffix)
-  assert.deepEqual(PARTS.map(p => materialName(p.id, 'two')), [
-    'Upper', 'ToeCap', 'Tongue', 'Laces',
-    'HeelPanel', 'SideAccents', 'Midsole', 'Outsole',
+  assert.deepEqual(SHOES.map(({ id, src }) => ({ id, src })), [
+    { id: 'kickcraft-one', src: '/models/shoe-soleview-final.glb' },
+    { id: 'nike-air-max', src: '/models/nike-air-max-custom.glb' },
   ])
 
-  // setMaterialColor still works the same way
+  assert.equal(SHOES[0].charmOffset, null)
+  assert.equal(SHOES[1].charmOffset, '0.003800 0.005100 0.085800')
+  assert.equal(SHOES[0].charmScale, '1 1 1')
+  assert.equal(SHOES[1].charmScale, '0.25 0.25 0.25')
+  assert.equal(SHOES[0].charmDir, null)
+  assert.equal(SHOES[1].charmDir, '/models/charms/air-max/')
+
+  assert.equal(charmSource(CHARMS[1], SHOES[0]), '/models/charms/star-charm.glb')
+  assert.equal(charmSource(CHARMS[1], SHOES[1]), '/models/charms/air-max/star-charm.glb')
+
   const calls = []
-  const upper = { pbrMetallicRoughness: { setBaseColorFactor: color => calls.push(color) } }
-  const model = { getMaterialByName: name => name === 'UpperMaterial' ? upper : null }
+  const upper = {
+    pbrMetallicRoughness: {
+      setBaseColorFactor: color => calls.push(color),
+    },
+  }
+  const model = {
+    getMaterialByName: name => name === 'UpperMaterial' ? upper : null,
+  }
 
   assert.equal(setMaterialColor(model, 'UpperMaterial', '#245fa8'), true)
   assert.deepEqual(calls, ['#245fa8'])
   assert.equal(setMaterialColor(model, 'MissingMaterial', '#ffffff'), false)
-
-  // SHOES catalog has both entries with correct paths
-  assert.ok(SHOES.one.src.includes('shoe-soleview-final.glb'))
-  assert.ok(SHOES.two.src.includes('shoe-kickcraft-ready.glb'))
 })
-
 
 test('shows only the selected charm and hides every charm for none', () => {
   assert.deepEqual(CHARMS, [
@@ -45,6 +59,7 @@ test('shows only the selected charm and hides every charm for none', () => {
   ])
 
   assert.equal(charmScale('star', 'star'), '1 1 1')
+  assert.equal(charmScale('star', 'star', '0.25 0.25 0.25'), '0.25 0.25 0.25')
   assert.equal(charmScale('lightning', 'star'), '0 0 0')
   assert.equal(charmScale('k-tag', 'none'), '0 0 0')
 })
