@@ -1,6 +1,6 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import { CHARMS, PARTS, charmScale, setMaterialColor } from './customization.js'
+import { CHARMS, SHOES, charmScale, charmSource, setMaterialColor } from './customization.js'
 
 const sizes = [7, 8, 9, 10, 11]
 const colors = [
@@ -13,7 +13,10 @@ const colors = [
 ]
 
 const modelViewer = ref(null)
-const selectedPartId = ref(PARTS[0].id)
+const selectedShoeId = ref(SHOES[0].id)
+const selectedShoe = computed(() => SHOES.find(shoe => shoe.id === selectedShoeId.value) || SHOES[0])
+const selectedParts = computed(() => selectedShoe.value.parts)
+const selectedPartId = ref(selectedParts.value[0].id)
 const selectedCharmId = ref('none')
 const partColors = ref({})
 const selectedSize = ref(9)
@@ -21,15 +24,17 @@ const modelReady = ref(false)
 const modelError = ref('')
 const reserved = ref(false)
 
-const selectedPart = computed(() => PARTS.find(part => part.id === selectedPartId.value))
+const selectedPart = computed(() => selectedParts.value.find(part => part.id === selectedPartId.value))
 const selectedCharm = computed(() => CHARMS.find(charm => charm.id === selectedCharmId.value))
 const customizedCount = computed(() => Object.keys(partColors.value).length)
 const selectedColor = computed(() => partColors.value[selectedPartId.value])
-const charmModels = CHARMS.filter(charm => charm.src)
+const charmModels = computed(() => CHARMS
+  .filter(charm => charm.src)
+  .map(charm => ({ ...charm, src: charmSource(charm, selectedShoe.value) })))
 
 function handleModelLoad() {
   const model = modelViewer.value?.model
-  const missingPart = PARTS.find(part => !model?.getMaterialByName(part.material))
+  const missingPart = selectedParts.value.find(part => !model?.getMaterialByName(part.material))
 
   if (missingPart) {
     modelError.value = 'This shoe model cannot be customized because a required part is missing.'
@@ -40,7 +45,7 @@ function handleModelLoad() {
   modelError.value = ''
 
   for (const [partId, color] of Object.entries(partColors.value)) {
-    const part = PARTS.find(p => p.id === partId)
+    const part = selectedParts.value.find(p => p.id === partId)
     if (part && color?.value) {
       setMaterialColor(model, part.material, color.value)
     }
@@ -61,7 +66,7 @@ function chooseColor(color) {
 
 function resetDesign() {
   if (!modelReady.value) return
-  if (PARTS.every(part => setMaterialColor(modelViewer.value.model, part.material, '#ffffff'))) {
+  if (selectedParts.value.every(part => setMaterialColor(modelViewer.value.model, part.material, '#ffffff'))) {
     partColors.value = {}
   }
 }
@@ -82,18 +87,25 @@ function submitReservation() {
 // ── View routing ──────────────────────────────────────────────
 const view = ref('shop') // 'shop' | 'studio'
 
-function goToStudio() {
-  view.value = 'studio'
-}
-
-function goToShop() {
+function resetStudioState() {
   partColors.value = {}
   selectedCharmId.value = 'none'
-  selectedPartId.value = PARTS[0].id
+  selectedPartId.value = selectedParts.value[0].id
   selectedSize.value = 9
   modelReady.value = false
   modelError.value = ''
   reserved.value = false
+}
+
+function goToStudio(shoeId) {
+  selectedShoeId.value = shoeId
+  resetStudioState()
+  view.value = 'studio'
+}
+
+function goToShop() {
+  selectedShoeId.value = SHOES[0].id
+  resetStudioState()
   view.value = 'shop'
 }
 </script>
@@ -144,79 +156,86 @@ function goToShop() {
 
       <!-- Hero -->
       <div class="mb-10 border-b border-[#cfd2ce] pb-10">
-        <p class="mb-2 text-sm font-semibold text-[#6a6e6a]">Original concept / KickCraft One</p>
+        <p class="mb-2 text-sm font-semibold text-[#6a6e6a]">Two shoes / One design studio</p>
         <h1 class="font-display max-w-3xl text-4xl font-black leading-[0.95] tracking-[-0.045em] text-[#202220] sm:text-5xl lg:text-6xl">
           Shape the color.<br>Keep the character.
         </h1>
         <p class="mt-5 max-w-md text-sm leading-6 text-[#5f635f]">
-          Design your own KickCraft sneaker by recoloring eight independent parts, attaching a 3D charm, and reserving it for in-store pickup.
+          Design your own sneaker by recoloring its editable parts, attaching a 3D charm, and reserving it for in-store pickup.
         </p>
       </div>
 
       <!-- Catalog grid -->
       <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 
-        <!-- KickCraft One card — entire card is clickable -->
-        <button
-          type="button"
-          class="group flex flex-col border border-[#bfc3bf] bg-[#fcfdfb] overflow-hidden text-left transition-all duration-200 hover:border-[#292b2d] hover:shadow-[0_4px_20px_rgba(0,0,0,0.10)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
-          @click="goToStudio"
-          aria-label="Customize and reserve KickCraft One"
-        >
-          <!-- Thumbnail — KickCraft One product photo -->
-          <div class="relative h-64 overflow-hidden bg-[#e9ece9]">
-            <img
-              src="/images/kickcraft-one-card.png"
-              alt="KickCraft One — customizable concept sneaker"
-              class="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.04]"
-            />
-            <!-- Hover overlay -->
-            <div class="pointer-events-none absolute inset-0 bg-[#292b2d]/0 transition-colors duration-200 group-hover:bg-[#292b2d]/10" />
-            <div class="pointer-events-none absolute left-3 top-3 bg-[#b94d27] px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white">
-              Customize
-            </div>
-            <!-- Arrow hint that appears on hover -->
-            <div class="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1.5 bg-[#292b2d] px-3 py-1.5 text-xs font-bold text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
-              Open studio
-              <svg class="size-3" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                <path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-            </div>
-          </div>
-
-          <!-- Card body -->
-          <div class="flex flex-1 flex-col p-5">
-            <div class="flex items-start justify-between gap-3">
-              <div>
-                <h2 class="font-display text-xl font-black tracking-[-0.03em] text-[#202220]">KickCraft One</h2>
-                <p class="mt-0.5 text-xs text-[#6a6e6a]">Original concept · 8 customizable parts</p>
-              </div>
-              <p class="shrink-0 text-lg font-black text-[#b94d27]">₱4,890</p>
-            </div>
-
-            <!-- Part color preview dots -->
-            <div class="mt-3 flex items-center gap-1">
-              <span v-for="part in PARTS" :key="part.id"
-                class="size-3 border border-black/10"
-                :style="{ backgroundColor: partColors[part.id]?.value || '#e9ece9' }"
-                :title="part.label"
+        <!-- Shoe cards — each opens its own model and part list -->
+        <template v-for="shoe in SHOES" :key="shoe.id">
+          <button
+            type="button"
+            class="group flex flex-col overflow-hidden border border-[#bfc3bf] bg-[#fcfdfb] text-left transition-all duration-200 hover:border-[#292b2d] hover:shadow-[0_4px_20px_rgba(0,0,0,0.10)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
+            @click="goToStudio(shoe.id)"
+            :aria-label="`Customize and reserve ${shoe.name}`"
+          >
+            <!-- Thumbnail -->
+            <div class="relative grid h-64 place-items-center overflow-hidden bg-[#e9ece9]">
+              <img
+                v-if="shoe.image"
+                :src="shoe.image"
+                :alt="`${shoe.name} customizable sneaker`"
+                class="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.04]"
               />
-              <span class="ml-1.5 text-[10px] text-[#6a6e6a]">{{ customizedCount > 0 ? customizedCount + ' parts styled' : 'Default colors' }}</span>
+              <div v-else class="text-center text-[#6a6e6a]">
+                <div class="mx-auto mb-3 grid size-16 place-items-center border border-[#bfc3bf] bg-[#fcfdfb] text-2xl">3D</div>
+                <p class="text-xs font-bold uppercase tracking-widest">{{ shoe.name }}</p>
+              </div>
+            <!-- Hover overlay -->
+              <div class="pointer-events-none absolute inset-0 bg-[#292b2d]/0 transition-colors duration-200 group-hover:bg-[#292b2d]/10" />
+              <div class="pointer-events-none absolute left-3 top-3 bg-[#b94d27] px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white">
+                Customize
+              </div>
+              <!-- Arrow hint that appears on hover -->
+              <div class="pointer-events-none absolute bottom-3 right-3 flex items-center gap-1.5 bg-[#292b2d] px-3 py-1.5 text-xs font-bold text-white opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+                Open studio
+                <svg class="size-3" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                  <path d="M2 6h8M6 2l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
             </div>
 
-            <!-- CTA row -->
-            <div class="mt-5 flex h-12 w-full items-center justify-between bg-[#292b2d] px-5 text-sm font-bold text-white transition-colors duration-200 group-hover:bg-[#404345]">
-              Customize &amp; Reserve
-              <svg class="size-4 transition-transform duration-200 group-hover:translate-x-1" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
+            <!-- Card body -->
+            <div class="flex flex-1 flex-col p-5">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h2 class="font-display text-xl font-black tracking-[-0.03em] text-[#202220]">{{ shoe.name }}</h2>
+                  <p class="mt-0.5 text-xs text-[#6a6e6a]">{{ shoe.summary }}</p>
+                </div>
+                <p class="shrink-0 text-lg font-black text-[#b94d27]">{{ shoe.price }}</p>
+              </div>
+
+              <!-- Part color preview dots -->
+              <div class="mt-3 flex items-center gap-1">
+                <span v-for="part in shoe.parts" :key="part.id"
+                  class="size-3 border border-black/10"
+                  :style="{ backgroundColor: selectedShoeId === shoe.id ? partColors[part.id]?.value || '#e9ece9' : '#e9ece9' }"
+                  :title="part.label"
+                />
+                <span class="ml-1.5 text-[10px] text-[#6a6e6a]">{{ selectedShoeId === shoe.id && customizedCount > 0 ? customizedCount + ' parts styled' : 'Default colors' }}</span>
+              </div>
+
+              <!-- CTA row -->
+              <div class="mt-5 flex h-12 w-full items-center justify-between bg-[#292b2d] px-5 text-sm font-bold text-white transition-colors duration-200 group-hover:bg-[#404345]">
+                Customize &amp; Reserve
+                <svg class="size-4 transition-transform duration-200 group-hover:translate-x-1" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </div>
             </div>
-          </div>
-        </button>
+          </button>
+        </template>
 
         <!-- Placeholder slots (coming soon) -->
         <div
-          v-for="n in 3"
+          v-for="n in 2"
           :key="n"
           class="flex min-h-[360px] flex-col items-center justify-center border border-dashed border-[#bfc3bf] bg-[#f5f6f4] p-8 text-center text-sm text-[#9b9f9b]"
         >
@@ -227,7 +246,7 @@ function goToShop() {
 
       <!-- How it works strip -->
       <section class="mt-10 grid border border-[#bfc3bf] bg-[#292b2d] text-white sm:grid-cols-3" aria-label="How KickCraft works">
-        <div class="border-b border-white/20 p-5 sm:border-b-0 sm:border-r"><p class="font-display font-bold">1. Customize</p><p class="mt-1 text-sm text-white/65">Color any of the eight shoe parts.</p></div>
+        <div class="border-b border-white/20 p-5 sm:border-b-0 sm:border-r"><p class="font-display font-bold">1. Customize</p><p class="mt-1 text-sm text-white/65">Color the editable parts.</p></div>
         <div class="border-b border-white/20 p-5 sm:border-b-0 sm:border-r"><p class="font-display font-bold">2. Inspect</p><p class="mt-1 text-sm text-white/65">Rotate and zoom the 3D model before choosing a size.</p></div>
         <div class="p-5"><p class="font-display font-bold">3. Reserve</p><p class="mt-1 text-sm text-white/65">Save your design for in-store pickup.</p></div>
       </section>
@@ -243,7 +262,7 @@ function goToShop() {
       <!-- Compact title row -->
       <div class="mb-4 flex flex-wrap items-end justify-between gap-3 shrink-0">
         <div>
-          <p class="text-xs font-semibold text-[#6a6e6a]">KickCraft One · Design studio</p>
+          <p class="text-xs font-semibold text-[#6a6e6a]">{{ selectedShoe.name }} · Design studio</p>
           <h1 class="font-display text-2xl font-black leading-tight tracking-[-0.04em] text-[#202220] sm:text-3xl">Shape the color. Keep the character.</h1>
         </div>
         <!-- Mobile back link -->
@@ -260,8 +279,8 @@ function goToShop() {
         <div class="relative border-b border-[#bfc3bf] bg-[#e9ece9] lg:border-b-0 lg:border-r" style="height:580px;">
           <model-viewer
             ref="modelViewer"
-            src="/models/shoe-soleview-final.glb"
-            alt="Interactive customizable 3D KickCraft concept shoe"
+            :src="selectedShoe.src"
+            :alt="`Interactive customizable 3D ${selectedShoe.name}`"
             camera-controls
             touch-action="pan-y"
             shadow-intensity="1"
@@ -277,7 +296,8 @@ function goToShop() {
               v-for="charm in charmModels"
               :key="charm.id"
               :src="charm.src"
-              :scale="charmScale(charm.id, selectedCharmId)"
+              :offset="selectedShoe.charmOffset"
+              :scale="charmScale(charm.id, selectedCharmId, selectedShoe.charmScale)"
             />
           </model-viewer>
 
@@ -308,10 +328,10 @@ function goToShop() {
           <div class="shrink-0 border-b border-[#d9dcd8] p-5 lg:p-6">
             <div class="flex items-start justify-between gap-4">
               <div>
-                <h2 class="font-display text-2xl font-black tracking-[-0.04em] text-[#202220]">KickCraft One</h2>
-                <p class="mt-1 text-sm leading-6 text-[#626662]">Our first original customizable sneaker concept.</p>
+                <h2 class="font-display text-2xl font-black tracking-[-0.04em] text-[#202220]">{{ selectedShoe.name }}</h2>
+                <p class="mt-1 text-sm leading-6 text-[#626662]">{{ selectedShoe.description }}</p>
               </div>
-              <p class="shrink-0 text-xl font-black text-[#b94d27]">₱4,890</p>
+              <p class="shrink-0 text-xl font-black text-[#b94d27]">{{ selectedShoe.price }}</p>
             </div>
           </div>
 
@@ -325,7 +345,7 @@ function goToShop() {
               </div>
               <div class="grid grid-cols-2 gap-2">
                 <button
-                  v-for="part in PARTS"
+                  v-for="part in selectedParts"
                   :key="part.id"
                   type="button"
                   class="flex min-h-10 items-center justify-between border px-3 text-left text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
@@ -382,7 +402,7 @@ function goToShop() {
 
             <!-- Reset / summary row -->
             <div class="flex items-center justify-between border-y border-[#d9dcd8] py-3 text-sm">
-              <span><strong>{{ customizedCount }}</strong> of {{ PARTS.length }} parts · {{ selectedCharm.label }} accessory</span>
+              <span><strong>{{ customizedCount }}</strong> of {{ selectedParts.length }} parts · {{ selectedCharm.label }} accessory</span>
               <button
                 type="button"
                 class="font-semibold text-[#245fa8] underline underline-offset-4 disabled:cursor-not-allowed disabled:text-[#9b9f9b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
@@ -428,22 +448,22 @@ function goToShop() {
 
         <!-- About the shoe -->
         <div class="bg-[#fcfdfb] p-7 lg:p-9">
-          <p class="mb-1 text-xs font-semibold uppercase tracking-widest text-[#b94d27]">About the KickCraft One</p>
-          <h2 class="font-display mt-2 text-2xl font-black tracking-[-0.04em] text-[#202220] lg:text-3xl">Built from an original idea — nothing borrowed.</h2>
+          <p class="mb-1 text-xs font-semibold uppercase tracking-widest text-[#b94d27]">About this shoe</p>
+          <h2 class="font-display mt-2 text-2xl font-black tracking-[-0.04em] text-[#202220] lg:text-3xl">Choose a look that fits you.</h2>
           <p class="mt-4 text-sm leading-7 text-[#5f635f]">
-            The KickCraft One is our first original silhouette — designed from the ground up with eight independent zones that you can recolor to make it entirely yours. The low-profile midsole keeps the stance clean while the outsole grip pattern stays functional on everyday surfaces.
+            {{ selectedShoe.name }} gives customers {{ selectedParts.length }} editable zones. The remaining shoe details stay fixed so the editing stays quick.
           </p>
           <p class="mt-3 text-sm leading-7 text-[#5f635f]">
-            Every part of the shoe — from the rubber outsole to the fabric tongue — is individually addressable in the 3D studio. Rotate the model to inspect your color choices from every angle before you commit.
+            Rotate the model to inspect your color choices from every angle before you commit. Add a charm near the laces, choose a size, and reserve the design for pickup.
           </p>
         </div>
 
         <!-- Feature list -->
         <div class="bg-[#f5f6f4] p-7 lg:p-9">
           <p class="mb-1 text-xs font-semibold uppercase tracking-widest text-[#b94d27]">What you're designing</p>
-          <h2 class="font-display mt-2 text-2xl font-black tracking-[-0.04em] text-[#202220] lg:text-3xl">Eight zones. Infinite combinations.</h2>
+          <h2 class="font-display mt-2 text-2xl font-black tracking-[-0.04em] text-[#202220] lg:text-3xl">{{ selectedParts.length }} zones. Your combination.</h2>
           <ul class="mt-5 space-y-3">
-            <li v-for="part in PARTS" :key="part.id" class="flex items-center gap-3 text-sm">
+            <li v-for="part in selectedParts" :key="part.id" class="flex items-center gap-3 text-sm">
               <span
                 class="size-4 shrink-0 border border-black/10"
                 :style="{ backgroundColor: partColors[part.id]?.value || '#e9ece9' }"
@@ -460,8 +480,8 @@ function goToShop() {
       <!-- ── Why KickCraft strip ──────────────────────────── -->
       <div class="grid border-x border-b border-[#bfc3bf] bg-[#292b2d] text-white sm:grid-cols-3">
         <div class="border-b border-white/20 p-6 sm:border-b-0 sm:border-r">
-          <p class="font-display text-base font-bold">Original silhouette</p>
-          <p class="mt-1.5 text-sm leading-6 text-white/65">Every curve, line, and proportion was drawn fresh — no borrowed designs, no licensed shapes.</p>
+          <p class="font-display text-base font-bold">Fixed details</p>
+          <p class="mt-1.5 text-sm leading-6 text-white/65">Style the editable zones while the remaining shoe details stay fixed.</p>
         </div>
         <div class="border-b border-white/20 p-6 sm:border-b-0 sm:border-r">
           <p class="font-display text-base font-bold">Live 3D preview</p>
@@ -479,7 +499,7 @@ function goToShop() {
     <dialog id="reservation-dialog" class="m-auto w-[calc(100%_-_32px)] max-w-md border border-[#8e938e] bg-[#fcfdfb] p-0 text-[#292b2d]">
       <div v-if="!reserved" class="p-6">
         <div class="flex items-start justify-between gap-4 border-b border-[#d9dcd8] pb-4">
-          <div><h2 class="font-display text-xl font-black">Reserve your KickCraft One</h2><p class="mt-1 text-sm text-[#626662]">Size {{ selectedSize }} · {{ customizedCount }} customized parts · {{ selectedCharm.label }} accessory</p></div>
+          <div><h2 class="font-display text-xl font-black">Reserve your {{ selectedShoe.name }}</h2><p class="mt-1 text-sm text-[#626662]">Size {{ selectedSize }} · {{ customizedCount }} customized parts · {{ selectedCharm.label }} accessory</p></div>
           <button class="grid size-9 place-items-center border border-[#bfc3bf] text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" aria-label="Close reservation" @click="closeReservation">×</button>
         </div>
         <form class="space-y-4 pt-5" @submit.prevent="submitReservation">
@@ -492,7 +512,7 @@ function goToShop() {
       <div v-else class="p-8 text-center">
         <div class="mx-auto grid size-12 place-items-center bg-[#3f7652] text-xl font-black text-white">✓</div>
         <h2 class="font-display mt-5 text-xl font-black">Reservation confirmed</h2>
-        <p class="mt-2 text-sm leading-6 text-[#626662]">Your custom KickCraft One in size {{ selectedSize }} with {{ selectedCharm.label }} accessory is recorded for pickup.</p>
+        <p class="mt-2 text-sm leading-6 text-[#626662]">Your custom {{ selectedShoe.name }} in size {{ selectedSize }} with {{ selectedCharm.label }} accessory is recorded for pickup.</p>
         <button class="mt-6 h-11 w-full border border-[#8e938e] font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" @click="closeReservation">Continue designing</button>
       </div>
     </dialog>
