@@ -66,3 +66,116 @@ export function charmSource(charm, shoe) {
 export function charmScale(charmId, selectedCharmId, scale = '1 1 1') {
   return charmId === selectedCharmId ? scale : '0 0 0'
 }
+
+export const CATEGORIES = [
+  { id: 'all', label: 'All' },
+  { id: 'kickcraft', label: 'KickCraft Original' },
+  { id: 'fashion', label: 'Fashion' },
+  { id: 'sneakers', label: 'Sneakers' },
+  { id: 'basketball', label: 'Basketball Shoes' },
+  { id: 'running', label: 'Running Shoes' },
+]
+
+export const CATALOG = [
+  {
+    id: 'kickcraft-one',
+    name: 'KickCraft One',
+    subtitle: 'Original concept · 8 customizable parts',
+    price: '₱4,890',
+    categories: ['kickcraft', 'sneakers'],
+    image: '/images/kickcraft-one-card.png',
+    shoeId: 'kickcraft-one',
+    status: 'live',
+  },
+  {
+    id: 'nike-air-max',
+    name: 'Nike Air Max',
+    subtitle: 'Air Max model · 3 customizable parts',
+    price: '₱4,890',
+    categories: ['sneakers', 'running', 'fashion'],
+    image: '/images/nike-air-max-card.png',
+    shoeId: 'nike-air-max',
+    status: 'live',
+  },
+  {
+    id: 'hoop-one',
+    name: 'KickCraft Hoop',
+    subtitle: 'High-top basketball · ankle support',
+    price: '₱5,290',
+    categories: ['kickcraft', 'basketball'],
+    image: null,
+    shoeId: null,
+    status: 'soon',
+  },
+  {
+    id: 'hoop-two',
+    name: 'KickCraft Court',
+    subtitle: 'Low-cut basketball · lightweight grip',
+    price: '₱5,190',
+    categories: ['kickcraft', 'basketball'],
+    image: null,
+    shoeId: null,
+    status: 'soon',
+  },
+  {
+    id: 'run-one',
+    name: 'KickCraft Stride',
+    subtitle: 'Road running · responsive cushion',
+    price: '₱5,490',
+    categories: ['kickcraft', 'running'],
+    image: null,
+    shoeId: null,
+    status: 'soon',
+  },
+  {
+    id: 'run-two',
+    name: 'KickCraft Pace',
+    subtitle: 'Trail running · rugged outsole',
+    price: '₱5,390',
+    categories: ['kickcraft', 'running'],
+    image: null,
+    shoeId: null,
+    status: 'soon',
+  },
+  {
+    id: 'fashion-one',
+    name: 'KickCraft Luxe',
+    subtitle: 'Fashion · premium leather upper',
+    price: '₱6,290',
+    categories: ['kickcraft', 'fashion'],
+    image: null,
+    shoeId: null,
+    status: 'soon',
+  },
+  {
+    id: 'fashion-two',
+    name: 'KickCraft Drift',
+    subtitle: 'Fashion · canvas slip-on silhouette',
+    price: '₱5,890',
+    categories: ['kickcraft', 'fashion'],
+    image: null,
+    shoeId: null,
+    status: 'soon',
+  },
+]
+
+export function filterCatalog(catalog, query = '', category = 'all') {
+  const q = query.trim().toLowerCase()
+  return catalog.filter(card => {
+    const matchesCategory =
+      category === 'all'
+        ? true
+        : category === 'kickcraft'
+          ? card.categories.includes('kickcraft') || card.name.toLowerCase().includes('kickcraft')
+          : card.categories.includes(category)
+
+    const matchesSearch =
+      !q ||
+      card.name.toLowerCase().includes(q) ||
+      card.subtitle.toLowerCase().includes(q) ||
+      card.categories.some(c => c.toLowerCase().includes(q))
+
+    return matchesCategory && matchesSearch
+  })
+}
+
