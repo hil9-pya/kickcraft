@@ -106,7 +106,72 @@ function submitReservation() {
 }
 
 // ── View routing ──────────────────────────────────────────────
-const view = ref('shop') // 'shop' | 'studio'
+const view = ref('shop') // 'shop' | 'studio' | 'login' | 'register'
+
+// ── Auth state (prepared for future PHP / MySQL API) ──────────
+const authRole = ref('customer') // 'customer' | 'owner'
+const loginEmail = ref('')
+const loginPassword = ref('')
+const loginRemember = ref(false)
+const loginFeedback = ref('')
+const loginError = ref('')
+
+const registerName = ref('')
+const registerEmail = ref('')
+const registerPassword = ref('')
+const registerConfirmPassword = ref('')
+const registerAgreed = ref(false)
+const registerFeedback = ref('')
+const registerError = ref('')
+
+function goToLogin(role = 'customer') {
+  authRole.value = role
+  loginFeedback.value = ''
+  loginError.value = ''
+  view.value = 'login'
+  scrollToTop()
+}
+
+function goToRegister() {
+  registerFeedback.value = ''
+  registerError.value = ''
+  view.value = 'register'
+  scrollToTop()
+}
+
+function handleLoginSubmit() {
+  loginError.value = ''
+  loginFeedback.value = ''
+  if (!loginEmail.value || !loginPassword.value) {
+    loginError.value = 'Please enter both your email and password.'
+    return
+  }
+  // Frontend prototype feedback — ready for backend POST /api/auth/login.php
+  loginFeedback.value = `Logged in successfully as ${authRole.value === 'owner' ? 'Owner / Admin' : 'Customer'}. (Frontend prototype — ready for PHP backend sync)`
+}
+
+function handleRegisterSubmit() {
+  registerError.value = ''
+  registerFeedback.value = ''
+  if (!registerName.value || !registerEmail.value || !registerPassword.value) {
+    registerError.value = 'All fields are required.'
+    return
+  }
+  if (registerPassword.value !== registerConfirmPassword.value) {
+    registerError.value = 'Passwords do not match. Please verify your password.'
+    return
+  }
+  if (registerPassword.value.length < 6) {
+    registerError.value = 'Password must be at least 6 characters long.'
+    return
+  }
+  // Frontend prototype feedback — ready for backend POST /api/auth/register.php
+  registerFeedback.value = 'Account created successfully! Redirecting to sign in…'
+  setTimeout(() => {
+    loginEmail.value = registerEmail.value
+    goToLogin('customer')
+  }, 1200)
+}
 
 function resetStudioState() {
   partColors.value = {}
@@ -122,12 +187,14 @@ function goToStudio(shoeId) {
   selectedShoeId.value = shoeId
   resetStudioState()
   view.value = 'studio'
+  scrollToTop()
 }
 
 function goToShop() {
   selectedShoeId.value = SHOES[0].id
   resetStudioState()
   view.value = 'shop'
+  scrollToTop()
 }
 
 function scrollToTop() {
@@ -148,28 +215,62 @@ function scrollToTop() {
           <span class="grid size-8 place-items-center bg-[#292b2d] text-sm font-black text-white">K</span>
           <span class="font-display text-lg font-extrabold tracking-[-0.03em]">KickCraft</span>
         </button>
-        <nav class="flex items-center gap-6 text-sm font-semibold" aria-label="Main navigation">
-          <!-- Shop view nav -->
-          <template v-if="view === 'shop'">
-            <span class="hidden border-b-2 border-[#b94d27] py-5 sm:block">Shop</span>
-          </template>
-          <!-- Studio view nav -->
-          <template v-else>
-            <button
-              class="hidden items-center gap-1.5 text-[#5f635f] hover:text-[#292b2d] sm:flex focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
-              @click="goToShop"
-            >
-              <svg class="size-3.5" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                <path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              Back to shop
-            </button>
-            <span class="hidden border-b-2 border-[#b94d27] py-5 sm:block">Design studio</span>
-            <button
-              class="h-10 border border-[#aeb2ae] px-4 hover:border-[#292b2d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
-              @click="openReservation"
-            >Order</button>
-          </template>
+        <nav class="flex items-center gap-4 text-sm font-semibold sm:gap-6" aria-label="Main navigation">
+          <!-- Shop link -->
+          <button
+            type="button"
+            class="transition-colors hover:text-[#b94d27] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+            :class="view === 'shop' ? 'border-b-2 border-[#b94d27] py-5 text-[#202220]' : 'text-[#5f635f]'"
+            @click="goToShop"
+          >
+            Shop
+          </button>
+
+          <!-- Back to shop (if in studio, login, or register) -->
+          <button
+            v-if="view !== 'shop'"
+            class="hidden items-center gap-1.5 text-[#5f635f] transition-colors hover:text-[#202220] sm:flex focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
+            @click="goToShop"
+          >
+            <svg class="size-3.5" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            Back to shop
+          </button>
+
+          <!-- Studio active tab label (if in studio) -->
+          <span v-if="view === 'studio'" class="hidden border-b-2 border-[#b94d27] py-5 text-[#202220] sm:block">
+            Design studio
+          </span>
+
+          <!-- Log in link -->
+          <button
+            type="button"
+            class="transition-colors hover:text-[#b94d27] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+            :class="view === 'login' ? 'border-b-2 border-[#b94d27] py-5 text-[#202220]' : 'text-[#5f635f]'"
+            @click="goToLogin('customer')"
+          >
+            Log in
+          </button>
+
+          <!-- Register link -->
+          <button
+            type="button"
+            class="hidden transition-colors hover:text-[#b94d27] sm:block focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+            :class="view === 'register' ? 'border-b-2 border-[#b94d27] py-5 text-[#202220]' : 'text-[#5f635f]'"
+            @click="goToRegister"
+          >
+            Register
+          </button>
+
+          <!-- Order button (when in studio) -->
+          <button
+            v-if="view === 'studio'"
+            class="h-10 border border-[#aeb2ae] px-4 hover:border-[#292b2d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
+            @click="openReservation"
+          >
+            Order
+          </button>
         </nav>
       </div>
     </header>
@@ -384,7 +485,7 @@ function scrollToTop() {
       <section class="mt-10 grid border border-[#bfc3bf] bg-[#292b2d] text-white sm:grid-cols-3" aria-label="How KickCraft works">
         <div class="border-b border-white/20 p-5 sm:border-b-0 sm:border-r"><p class="font-display font-bold">1. Customize</p><p class="mt-1 text-sm text-white/65">Color the editable parts.</p></div>
         <div class="border-b border-white/20 p-5 sm:border-b-0 sm:border-r"><p class="font-display font-bold">2. Inspect</p><p class="mt-1 text-sm text-white/65">Rotate and zoom the 3D model before choosing a size.</p></div>
-        <div class="p-5"><p class="font-display font-bold">3. Reserve</p><p class="mt-1 text-sm text-white/65">Save your design for in-store pickup.</p></div>
+        <div class="p-5"><p class="font-display font-bold">3. Order</p><p class="mt-1 text-sm text-white/65">Place your design order for in-store pickup.</p></div>
       </section>
     </main>
 
@@ -392,7 +493,7 @@ function scrollToTop() {
     <!-- STUDIO VIEW — viewport-locked, right panel scrollable  -->
     <!-- ══════════════════════════════════════════════════════ -->
     <div
-      v-else
+      v-else-if="view === 'studio'"
       class="mx-auto max-w-[1480px] flex-col px-5 py-5 lg:px-8 lg:py-6"
     >
       <!-- Compact title row -->
@@ -631,6 +732,266 @@ function scrollToTop() {
 
     </div>
 
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- LOGIN VIEW                                             -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <main v-else-if="view === 'login'" class="mx-auto max-w-md px-5 py-12 lg:py-16">
+      <div class="border border-[#bfc3bf] bg-[#fcfdfb] p-6 sm:p-8">
+
+        <!-- Back to shop link -->
+        <button
+          type="button"
+          class="mb-6 inline-flex items-center gap-1.5 text-xs font-semibold text-[#5f635f] transition-colors hover:text-[#202220] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+          @click="goToShop"
+        >
+          <svg class="size-3.5" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Back to shop
+        </button>
+
+        <!-- Header -->
+        <div class="border-b border-[#d9dcd8] pb-4">
+          <div class="flex items-center gap-2">
+            <span class="grid size-7 place-items-center bg-[#292b2d] text-xs font-black text-white">K</span>
+            <span class="font-display text-base font-extrabold tracking-[-0.03em]">KickCraft</span>
+          </div>
+          <h1 class="font-display mt-3 text-2xl font-black tracking-[-0.03em] text-[#202220]">
+            Log in to KickCraft
+          </h1>
+          <p class="mt-1 text-xs text-[#6a6e6a]">
+            Access your saved shoe customizations or management portal.
+          </p>
+        </div>
+
+        <!-- Role Toggle (Customer vs Owner/Admin) -->
+        <div class="mt-5">
+          <label class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#404345]">Account Type</label>
+          <div class="grid grid-cols-2 gap-2 text-xs font-bold">
+            <button
+              type="button"
+              class="h-10 border text-center transition-colors focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+              :class="authRole === 'customer'
+                ? 'border-[#292b2d] bg-[#292b2d] text-white'
+                : 'border-[#bfc3bf] bg-white text-[#5f635f] hover:border-[#292b2d]'"
+              @click="authRole = 'customer'; loginFeedback = ''; loginError = ''"
+            >
+              Customer
+            </button>
+            <button
+              type="button"
+              class="h-10 border text-center transition-colors focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+              :class="authRole === 'owner'
+                ? 'border-[#292b2d] bg-[#292b2d] text-white'
+                : 'border-[#bfc3bf] bg-white text-[#5f635f] hover:border-[#292b2d]'"
+              @click="authRole = 'owner'; loginFeedback = ''; loginError = ''"
+            >
+              Owner / Admin
+            </button>
+          </div>
+        </div>
+
+        <!-- Feedback alerts -->
+        <div v-if="loginFeedback" class="mt-4 border border-[#3f7652]/30 bg-[#edf5f0] p-3 text-xs text-[#2a593a]">
+          {{ loginFeedback }}
+        </div>
+        <div v-if="loginError" class="mt-4 border border-[#b94d27]/30 bg-[#fdf2ef] p-3 text-xs text-[#963a20]">
+          {{ loginError }}
+        </div>
+
+        <!-- Login form -->
+        <form class="mt-5 space-y-4" @submit.prevent="handleLoginSubmit">
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#404345]">Email address</span>
+            <input
+              v-model="loginEmail"
+              required
+              type="email"
+              autocomplete="email"
+              placeholder="user@kickcraft.local"
+              class="h-11 w-full border border-[#bfc3bf] bg-white px-3 text-sm outline-none transition-colors focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+            />
+          </label>
+
+          <label class="block">
+            <div class="mb-1.5 flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider text-[#404345]">Password</span>
+            </div>
+            <input
+              v-model="loginPassword"
+              required
+              type="password"
+              autocomplete="current-password"
+              placeholder="••••••••"
+              class="h-11 w-full border border-[#bfc3bf] bg-white px-3 text-sm outline-none transition-colors focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+            />
+          </label>
+
+          <div class="flex items-center justify-between text-xs">
+            <label class="flex items-center gap-2 cursor-pointer select-none">
+              <input v-model="loginRemember" type="checkbox" class="size-4 accent-[#292b2d]" />
+              <span class="text-[#5f635f]">Remember me</span>
+            </label>
+          </div>
+
+          <button
+            type="submit"
+            class="h-12 w-full bg-[#292b2d] font-bold text-white transition-colors hover:bg-[#404345] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+          >
+            Sign In as {{ authRole === 'owner' ? 'Owner / Admin' : 'Customer' }}
+          </button>
+        </form>
+
+        <!-- Register link (for customers) -->
+        <div class="mt-6 border-t border-[#d9dcd8] pt-4 text-center text-xs text-[#6a6e6a]">
+          <template v-if="authRole === 'customer'">
+            Don't have an account?
+            <button
+              type="button"
+              class="font-bold text-[#b94d27] underline hover:text-[#963a20] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+              @click="goToRegister"
+            >
+              Create customer account
+            </button>
+          </template>
+          <template v-else>
+            <p class="text-[11px] text-[#8e938e]">Owner and store manager portal requires administrative credentials.</p>
+          </template>
+        </div>
+
+        <!-- Backend notice -->
+        <div class="mt-4 bg-[#f1f3f0] p-3 text-center text-[10px] text-[#6a6e6a]">
+          Backend architecture: Prepared for <span class="font-semibold text-[#202220]">PHP / MySQL API</span> (<code class="text-[#b94d27]">POST /api/auth/login.php</code>)
+        </div>
+
+      </div>
+    </main>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- REGISTER VIEW                                          -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <main v-else-if="view === 'register'" class="mx-auto max-w-md px-5 py-12 lg:py-16">
+      <div class="border border-[#bfc3bf] bg-[#fcfdfb] p-6 sm:p-8">
+
+        <!-- Back to shop link -->
+        <button
+          type="button"
+          class="mb-6 inline-flex items-center gap-1.5 text-xs font-semibold text-[#5f635f] transition-colors hover:text-[#202220] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+          @click="goToShop"
+        >
+          <svg class="size-3.5" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Back to shop
+        </button>
+
+        <!-- Header -->
+        <div class="border-b border-[#d9dcd8] pb-4">
+          <div class="flex items-center gap-2">
+            <span class="grid size-7 place-items-center bg-[#b94d27] text-xs font-black text-white">K</span>
+            <span class="font-display text-base font-extrabold tracking-[-0.03em]">KickCraft</span>
+          </div>
+          <h1 class="font-display mt-3 text-2xl font-black tracking-[-0.03em] text-[#202220]">
+            Create an Account
+          </h1>
+          <p class="mt-1 text-xs text-[#6a6e6a]">
+            Register as a customer to track your customized shoes and in-store pickup orders.
+          </p>
+        </div>
+
+        <!-- Feedback alerts -->
+        <div v-if="registerFeedback" class="mt-4 border border-[#3f7652]/30 bg-[#edf5f0] p-3 text-xs text-[#2a593a]">
+          {{ registerFeedback }}
+        </div>
+        <div v-if="registerError" class="mt-4 border border-[#b94d27]/30 bg-[#fdf2ef] p-3 text-xs text-[#963a20]">
+          {{ registerError }}
+        </div>
+
+        <!-- Register form -->
+        <form class="mt-5 space-y-4" @submit.prevent="handleRegisterSubmit">
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#404345]">Full name</span>
+            <input
+              v-model="registerName"
+              required
+              type="text"
+              autocomplete="name"
+              placeholder="Juan dela Cruz"
+              class="h-11 w-full border border-[#bfc3bf] bg-white px-3 text-sm outline-none transition-colors focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+            />
+          </label>
+
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#404345]">Email address</span>
+            <input
+              v-model="registerEmail"
+              required
+              type="email"
+              autocomplete="email"
+              placeholder="name@example.com"
+              class="h-11 w-full border border-[#bfc3bf] bg-white px-3 text-sm outline-none transition-colors focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+            />
+          </label>
+
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#404345]">Password</span>
+            <input
+              v-model="registerPassword"
+              required
+              type="password"
+              autocomplete="new-password"
+              placeholder="Minimum 6 characters"
+              class="h-11 w-full border border-[#bfc3bf] bg-white px-3 text-sm outline-none transition-colors focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+            />
+          </label>
+
+          <label class="block">
+            <span class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#404345]">Confirm password</span>
+            <input
+              v-model="registerConfirmPassword"
+              required
+              type="password"
+              autocomplete="new-password"
+              placeholder="Repeat your password"
+              class="h-11 w-full border border-[#bfc3bf] bg-white px-3 text-sm outline-none transition-colors focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+            />
+          </label>
+
+          <label class="flex items-start gap-2 pt-1 text-xs cursor-pointer select-none">
+            <input v-model="registerAgreed" required type="checkbox" class="mt-0.5 size-4 accent-[#292b2d]" />
+            <span class="text-[#5f635f]">
+              I agree to the KickCraft custom shoe order and in-store pickup policies.
+            </span>
+          </label>
+
+          <button
+            type="submit"
+            class="h-12 w-full bg-[#b94d27] font-bold text-white transition-colors hover:bg-[#963a20] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+          >
+            Create Customer Account
+          </button>
+        </form>
+
+        <!-- Login link -->
+        <div class="mt-6 border-t border-[#d9dcd8] pt-4 text-center text-xs text-[#6a6e6a]">
+          Already have an account?
+          <button
+            type="button"
+            class="font-bold text-[#245fa8] underline hover:text-[#184478] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+            @click="goToLogin('customer')"
+          >
+            Log in here
+          </button>
+        </div>
+
+        <!-- Backend notice -->
+        <div class="mt-4 bg-[#f1f3f0] p-3 text-center text-[10px] text-[#6a6e6a]">
+          Backend architecture: Prepared for <span class="font-semibold text-[#202220]">PHP / MySQL API</span> (<code class="text-[#b94d27]">POST /api/auth/register.php</code>)
+        </div>
+
+      </div>
+    </main>
+
     <!-- ── Footer ───────────────────────────────────────────── -->
     <footer class="mt-20 border-t border-[#383a38] bg-[#202220] text-white">
       <div class="mx-auto max-w-[1480px] px-5 py-12 lg:px-8 lg:py-16">
@@ -693,20 +1054,39 @@ function scrollToTop() {
             </ul>
           </div>
 
-          <!-- Col 4: Store Pickup & Support -->
+          <!-- Col 4: Account & Support -->
           <div>
-            <h3 class="font-display text-xs font-bold uppercase tracking-widest text-[#b94d27]">In-Store Pickup</h3>
+            <h3 class="font-display text-xs font-bold uppercase tracking-widest text-[#b94d27]">Account &amp; Portal</h3>
             <ul class="mt-4 space-y-2.5 text-xs text-white/75">
               <li>
-                <span class="block font-semibold text-white/90">KickCraft Pickup Counter</span>
-                <span class="text-white/60">123 Craft Studio Way, Manila</span>
+                <button
+                  type="button"
+                  class="font-semibold text-white/80 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-[#b94d27]"
+                  @click="goToLogin('customer')"
+                >
+                  Customer Log In
+                </button>
               </li>
               <li>
-                <span class="block font-semibold text-white/90">Customer Support</span>
-                <span class="text-white/60">support@kickcraft.local</span>
+                <button
+                  type="button"
+                  class="font-semibold text-white/80 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-[#b94d27]"
+                  @click="goToRegister"
+                >
+                  Customer Registration
+                </button>
               </li>
-              <li class="pt-1 text-[11px] text-white/50">
-                Zero shipping wait. Each custom design is inspected and assembled on-site.
+              <li>
+                <button
+                  type="button"
+                  class="font-semibold text-white/80 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-[#b94d27]"
+                  @click="goToLogin('owner')"
+                >
+                  Owner / Admin Portal
+                </button>
+              </li>
+              <li class="border-t border-white/10 pt-2 text-[11px] text-white/50">
+                In-store Pickup · 123 Craft Studio Way, Manila
               </li>
             </ul>
           </div>
@@ -716,9 +1096,11 @@ function scrollToTop() {
         <!-- Bottom bar -->
         <div class="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 text-xs text-white/50 sm:flex-row">
           <p>© 2026 KickCraft. All rights reserved.</p>
-          <div class="flex items-center gap-6">
-            <button type="button" class="hover:text-white" @click="goToShop(); scrollToTop()">Catalog</button>
-            <button type="button" class="hover:text-white" @click="goToStudio('kickcraft-one'); scrollToTop()">3D Studio</button>
+          <div class="flex flex-wrap items-center justify-center gap-6">
+            <button type="button" class="hover:text-white" @click="goToShop">Catalog</button>
+            <button type="button" class="hover:text-white" @click="goToStudio('kickcraft-one')">3D Studio</button>
+            <button type="button" class="hover:text-white" @click="goToLogin('customer')">Log In</button>
+            <button type="button" class="hover:text-white" @click="goToRegister">Register</button>
             <button type="button" class="hover:text-white" @click="openReservation">Order</button>
           </div>
         </div>
