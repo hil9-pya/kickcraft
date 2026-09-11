@@ -129,6 +129,10 @@ function goToShop() {
   resetStudioState()
   view.value = 'shop'
 }
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
 </script>
 
 <template>
@@ -164,7 +168,7 @@ function goToShop() {
             <button
               class="h-10 border border-[#aeb2ae] px-4 hover:border-[#292b2d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
               @click="openReservation"
-            >Reserve</button>
+            >Order</button>
           </template>
         </nav>
       </div>
@@ -182,7 +186,7 @@ function goToShop() {
           Shape the color.<br>Keep the character.
         </h1>
         <p class="mt-5 max-w-md text-sm leading-6 text-[#5f635f]">
-          Design your own sneaker by recoloring its editable parts, attaching a 3D charm, and reserving it for in-store pickup.
+          Design your own sneaker by recoloring its editable parts, attaching a 3D charm, and ordering it for in-store pickup.
         </p>
       </div>
 
@@ -268,7 +272,7 @@ function goToShop() {
             type="button"
             class="group flex flex-col overflow-hidden border border-[#bfc3bf] bg-[#fcfdfb] text-left transition-all duration-200 hover:border-[#292b2d] hover:shadow-[0_4px_20px_rgba(0,0,0,0.10)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
             @click="goToStudio(card.shoeId)"
-            :aria-label="`Customize and reserve ${card.name}`"
+            :aria-label="`Customize and order ${card.name}`"
           >
             <!-- Thumbnail -->
             <div class="relative grid h-64 place-items-center overflow-hidden bg-[#e9ece9]">
@@ -320,7 +324,7 @@ function goToShop() {
 
               <!-- CTA row -->
               <div class="mt-5 mt-auto flex h-12 w-full items-center justify-between bg-[#292b2d] px-5 text-sm font-bold text-white transition-colors duration-200 group-hover:bg-[#404345]">
-                Customize &amp; Reserve
+                Customize &amp; Order
                 <svg class="size-4 transition-transform duration-200 group-hover:translate-x-1" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
@@ -563,14 +567,14 @@ function goToShop() {
             </fieldset>
           </div>
 
-          <!-- Reserve CTA — pinned to bottom of panel -->
+          <!-- Order CTA — pinned to bottom of panel -->
           <div class="mt-auto shrink-0 border-t border-[#d9dcd8] bg-[#f1f3f0] p-5 lg:p-6">
-            <p class="mb-3 text-sm text-[#5f635f]">Pickup reservation · Your colors, accessory, and size are included.</p>
+            <p class="mb-3 text-sm text-[#5f635f]">Pickup order · Your colors, accessory, and size are included.</p>
             <button
               type="button"
               class="h-12 w-full bg-[#b94d27] px-5 font-bold text-white hover:bg-[#963a20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
               @click="openReservation"
-            >Reserve this design</button>
+            >Order this design</button>
           </div>
         </div>
       </section>
@@ -586,7 +590,7 @@ function goToShop() {
             {{ selectedShoe.name }} gives customers {{ selectedParts.length }} editable zones. The remaining shoe details stay fixed so the editing stays quick.
           </p>
           <p class="mt-3 text-sm leading-7 text-[#5f635f]">
-            Rotate the model to inspect your color choices from every angle before you commit. Add a charm near the laces, choose a size, and reserve the design for pickup.
+            Rotate the model to inspect your color choices from every angle before you commit. Add a charm near the laces, choose a size, and place your order for pickup.
           </p>
         </div>
 
@@ -621,30 +625,124 @@ function goToShop() {
         </div>
         <div class="p-6">
           <p class="font-display text-base font-bold">In-store pickup</p>
-          <p class="mt-1.5 text-sm leading-6 text-white/65">Reserve your exact design online and pick it up at the KickCraft store — no shipping wait, no surprises.</p>
+          <p class="mt-1.5 text-sm leading-6 text-white/65">Order your exact design online and pick it up at the KickCraft store — no shipping wait, no surprises.</p>
         </div>
       </div>
 
     </div>
 
-    <!-- ── Reservation dialog (shared between views) ───────── -->
+    <!-- ── Footer ───────────────────────────────────────────── -->
+    <footer class="mt-20 border-t border-[#383a38] bg-[#202220] text-white">
+      <div class="mx-auto max-w-[1480px] px-5 py-12 lg:px-8 lg:py-16">
+        <div class="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
+
+          <!-- Col 1: Brand & Studio Flagship -->
+          <div class="space-y-4">
+            <div class="flex items-center gap-3">
+              <span class="grid size-8 place-items-center bg-[#b94d27] text-sm font-black text-white">K</span>
+              <span class="font-display text-lg font-extrabold tracking-[-0.03em] text-white">KickCraft</span>
+            </div>
+            <p class="text-xs leading-6 text-white/70">
+              Interactive 3D shoe customization and store pickup system. Directly recolor independent shoe parts, attach interchangeable 3D charms, and order your custom pair for pickup.
+            </p>
+            <div class="border-t border-white/10 pt-3 text-xs text-white/50">
+              <p class="font-semibold text-white/80">KickCraft Flagship Studio</p>
+              <p class="mt-0.5">Mon–Sat · 10:00 AM – 8:00 PM</p>
+            </div>
+          </div>
+
+          <!-- Col 2: Silhouettes / Catalog -->
+          <div>
+            <h3 class="font-display text-xs font-bold uppercase tracking-widest text-[#b94d27]">Silhouettes</h3>
+            <ul class="mt-4 space-y-2 text-xs font-semibold">
+              <li>
+                <button
+                  type="button"
+                  class="flex items-center gap-1.5 text-white/75 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-[#b94d27]"
+                  @click="goToStudio('kickcraft-one'); scrollToTop()"
+                >
+                  <span>KickCraft One</span>
+                  <span class="bg-[#b94d27] px-1.5 py-0.5 text-[9px] font-black uppercase text-white">Live</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  class="flex items-center gap-1.5 text-white/75 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-[#b94d27]"
+                  @click="goToStudio('nike-air-max'); scrollToTop()"
+                >
+                  <span>Nike Air Max</span>
+                  <span class="bg-[#b94d27] px-1.5 py-0.5 text-[9px] font-black uppercase text-white">Live</span>
+                </button>
+              </li>
+              <li class="text-white/40">KickCraft Hoop <span class="ml-1 text-[10px] uppercase">(Basketball)</span></li>
+              <li class="text-white/40">KickCraft Stride <span class="ml-1 text-[10px] uppercase">(Running)</span></li>
+              <li class="text-white/40">KickCraft Luxe <span class="ml-1 text-[10px] uppercase">(Fashion)</span></li>
+            </ul>
+          </div>
+
+          <!-- Col 3: 3D Studio Features -->
+          <div>
+            <h3 class="font-display text-xs font-bold uppercase tracking-widest text-[#b94d27]">3D Studio</h3>
+            <ul class="mt-4 space-y-2 text-xs text-white/75">
+              <li>Independently Addressable Mesh Parts</li>
+              <li>Interchangeable Metal 3D Charms</li>
+              <li>Interactive 3D Orbit &amp; Zoom Preview</li>
+              <li>US Sizes 7 through 11 Available</li>
+              <li>Direct Store Pickup Assembly</li>
+            </ul>
+          </div>
+
+          <!-- Col 4: Store Pickup & Support -->
+          <div>
+            <h3 class="font-display text-xs font-bold uppercase tracking-widest text-[#b94d27]">In-Store Pickup</h3>
+            <ul class="mt-4 space-y-2.5 text-xs text-white/75">
+              <li>
+                <span class="block font-semibold text-white/90">KickCraft Pickup Counter</span>
+                <span class="text-white/60">123 Craft Studio Way, Manila</span>
+              </li>
+              <li>
+                <span class="block font-semibold text-white/90">Customer Support</span>
+                <span class="text-white/60">support@kickcraft.local</span>
+              </li>
+              <li class="pt-1 text-[11px] text-white/50">
+                Zero shipping wait. Each custom design is inspected and assembled on-site.
+              </li>
+            </ul>
+          </div>
+
+        </div>
+
+        <!-- Bottom bar -->
+        <div class="mt-12 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 text-xs text-white/50 sm:flex-row">
+          <p>© 2026 KickCraft. All rights reserved.</p>
+          <div class="flex items-center gap-6">
+            <button type="button" class="hover:text-white" @click="goToShop(); scrollToTop()">Catalog</button>
+            <button type="button" class="hover:text-white" @click="goToStudio('kickcraft-one'); scrollToTop()">3D Studio</button>
+            <button type="button" class="hover:text-white" @click="openReservation">Order</button>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- ── Order dialog (shared between views) ─────────────── -->
     <dialog id="reservation-dialog" class="m-auto w-[calc(100%_-_32px)] max-w-md border border-[#8e938e] bg-[#fcfdfb] p-0 text-[#292b2d]">
       <div v-if="!reserved" class="p-6">
         <div class="flex items-start justify-between gap-4 border-b border-[#d9dcd8] pb-4">
-          <div><h2 class="font-display text-xl font-black">Reserve your {{ selectedShoe.name }}</h2><p class="mt-1 text-sm text-[#626662]">Size {{ selectedSize }} · {{ customizedCount }} customized parts · {{ selectedCharm.label }} accessory</p></div>
-          <button class="grid size-9 place-items-center border border-[#bfc3bf] text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" aria-label="Close reservation" @click="closeReservation">×</button>
+          <div><h2 class="font-display text-xl font-black">Order your {{ selectedShoe.name }}</h2><p class="mt-1 text-sm text-[#626662]">Size {{ selectedSize }} · {{ customizedCount }} customized parts · {{ selectedCharm.label }} accessory</p></div>
+          <button class="grid size-9 place-items-center border border-[#bfc3bf] text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" aria-label="Close order modal" @click="closeReservation">×</button>
         </div>
         <form class="space-y-4 pt-5" @submit.prevent="submitReservation">
           <label class="block"><span class="mb-1.5 block text-sm font-bold">Full name</span><input required autocomplete="name" class="h-11 w-full border border-[#bfc3bf] bg-white px-3 outline-none focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]" /></label>
           <label class="block"><span class="mb-1.5 block text-sm font-bold">Email address</span><input required type="email" autocomplete="email" class="h-11 w-full border border-[#bfc3bf] bg-white px-3 outline-none focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]" /></label>
           <label class="block"><span class="mb-1.5 block text-sm font-bold">Pickup date</span><input required type="date" class="h-11 w-full border border-[#bfc3bf] bg-white px-3 outline-none focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]" /></label>
-          <button class="h-12 w-full bg-[#b94d27] font-bold text-white hover:bg-[#963a20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]">Confirm reservation</button>
+          <button class="h-12 w-full bg-[#b94d27] font-bold text-white hover:bg-[#963a20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]">Confirm order</button>
         </form>
       </div>
       <div v-else class="p-8 text-center">
         <div class="mx-auto grid size-12 place-items-center bg-[#3f7652] text-xl font-black text-white">✓</div>
-        <h2 class="font-display mt-5 text-xl font-black">Reservation confirmed</h2>
-        <p class="mt-2 text-sm leading-6 text-[#626662]">Your custom {{ selectedShoe.name }} in size {{ selectedSize }} with {{ selectedCharm.label }} accessory is recorded for pickup.</p>
+        <h2 class="font-display mt-5 text-xl font-black">Order confirmed</h2>
+        <p class="mt-2 text-sm leading-6 text-[#626662]">Your custom {{ selectedShoe.name }} in size {{ selectedSize }} with {{ selectedCharm.label }} accessory is placed for store pickup.</p>
         <button class="mt-6 h-11 w-full border border-[#8e938e] font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" @click="closeReservation">Continue designing</button>
       </div>
     </dialog>
