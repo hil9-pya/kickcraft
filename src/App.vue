@@ -1,6 +1,15 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
-import { CHARMS, SHOES, charmScale, charmSource, setMaterialColor } from './customization.js'
+import {
+  CATALOG,
+  CATEGORIES,
+  CHARMS,
+  SHOES,
+  charmScale,
+  charmSource,
+  filterCatalog,
+  setMaterialColor,
+} from './customization.js'
 
 const sizes = [7, 8, 9, 10, 11]
 const colors = [
@@ -31,6 +40,18 @@ const selectedColor = computed(() => partColors.value[selectedPartId.value])
 const charmModels = computed(() => CHARMS
   .filter(charm => charm.src)
   .map(charm => ({ ...charm, src: charmSource(charm, selectedShoe.value) })))
+
+const searchQuery = ref('')
+const activeCategory = ref('all')
+
+const filteredCatalog = computed(() => {
+  return filterCatalog(CATALOG, searchQuery.value, activeCategory.value)
+})
+
+function clearFilters() {
+  searchQuery.value = ''
+  activeCategory.value = 'all'
+}
 
 function handleModelLoad() {
   const model = modelViewer.value?.model
@@ -156,7 +177,7 @@ function goToShop() {
 
       <!-- Hero -->
       <div class="mb-10 border-b border-[#cfd2ce] pb-10">
-        <p class="mb-2 text-sm font-semibold text-[#6a6e6a]">Two shoes / One design studio</p>
+        <p class="mb-2 text-sm font-semibold text-[#6a6e6a]">Original silhouettes / One design studio</p>
         <h1 class="font-display max-w-3xl text-4xl font-black leading-[0.95] tracking-[-0.045em] text-[#202220] sm:text-5xl lg:text-6xl">
           Shape the color.<br>Keep the character.
         </h1>
@@ -165,30 +186,103 @@ function goToShop() {
         </p>
       </div>
 
-      <!-- Catalog grid -->
-      <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <!-- Search & Filters Toolbar -->
+      <div class="mb-8 space-y-4">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <!-- Search input -->
+          <div class="relative w-full sm:max-w-md">
+            <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[#6a6e6a]">
+              <svg class="size-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
+              </svg>
+            </span>
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="Search styles by name or description…"
+              class="h-11 w-full border border-[#bfc3bf] bg-[#fcfdfb] pl-10 pr-10 text-sm text-[#292b2d] placeholder-[#8e938e] outline-none transition-colors focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+              aria-label="Search styles by name or description"
+            />
+            <button
+              v-if="searchQuery"
+              type="button"
+              class="absolute inset-y-0 right-0 flex items-center pr-3 text-[#6a6e6a] hover:text-[#292b2d] focus-visible:outline-none"
+              aria-label="Clear search"
+              @click="searchQuery = ''"
+            >
+              <svg class="size-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+              </svg>
+            </button>
+          </div>
 
-        <!-- Shoe cards — each opens its own model and part list -->
-        <template v-for="shoe in SHOES" :key="shoe.id">
+          <!-- Results counter -->
+          <div class="text-xs font-semibold text-[#6a6e6a]">
+            Showing <span class="font-bold text-[#202220]">{{ filteredCatalog.length }}</span> {{ filteredCatalog.length === 1 ? 'shoe' : 'shoes' }}
+          </div>
+        </div>
+
+        <!-- Category pills -->
+        <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Category filter pills">
           <button
+            v-for="cat in CATEGORIES"
+            :key="cat.id"
+            type="button"
+            class="px-3.5 py-1.5 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
+            :class="activeCategory === cat.id ? 'bg-[#292b2d] text-white' : 'bg-[#fcfdfb] text-[#5f635f] border border-[#bfc3bf] hover:border-[#292b2d]'"
+            :aria-pressed="activeCategory === cat.id"
+            @click="activeCategory = cat.id"
+          >
+            {{ cat.label }}
+          </button>
+        </div>
+      </div>
+
+      <!-- Empty state -->
+      <div
+        v-if="filteredCatalog.length === 0"
+        class="flex flex-col items-center justify-center border border-dashed border-[#bfc3bf] bg-[#fcfdfb] px-6 py-16 text-center"
+      >
+        <div class="mb-4 grid size-12 place-items-center rounded-full bg-[#f1f3f0] text-[#6a6e6a]">
+          <svg class="size-6" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
+          </svg>
+        </div>
+        <h3 class="font-display text-lg font-bold text-[#202220]">No styles match your search or filter.</h3>
+        <p class="mt-1 max-w-sm text-xs text-[#6a6e6a]">Try adjusting your search terms or selecting a different category to explore available styles.</p>
+        <button
+          type="button"
+          class="mt-5 border border-[#292b2d] bg-[#292b2d] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#404345] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
+          @click="clearFilters"
+        >
+          Clear filters
+        </button>
+      </div>
+
+      <!-- Catalog grid -->
+      <div v-else class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <template v-for="card in filteredCatalog" :key="card.id">
+          <!-- Live shoe card -->
+          <button
+            v-if="card.status === 'live'"
             type="button"
             class="group flex flex-col overflow-hidden border border-[#bfc3bf] bg-[#fcfdfb] text-left transition-all duration-200 hover:border-[#292b2d] hover:shadow-[0_4px_20px_rgba(0,0,0,0.10)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
-            @click="goToStudio(shoe.id)"
-            :aria-label="`Customize and reserve ${shoe.name}`"
+            @click="goToStudio(card.shoeId)"
+            :aria-label="`Customize and reserve ${card.name}`"
           >
             <!-- Thumbnail -->
             <div class="relative grid h-64 place-items-center overflow-hidden bg-[#e9ece9]">
               <img
-                v-if="shoe.image"
-                :src="shoe.image"
-                :alt="`${shoe.name} customizable sneaker`"
+                v-if="card.image"
+                :src="card.image"
+                :alt="`${card.name} customizable sneaker`"
                 class="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.04]"
               />
               <div v-else class="text-center text-[#6a6e6a]">
                 <div class="mx-auto mb-3 grid size-16 place-items-center border border-[#bfc3bf] bg-[#fcfdfb] text-2xl">3D</div>
-                <p class="text-xs font-bold uppercase tracking-widest">{{ shoe.name }}</p>
+                <p class="text-xs font-bold uppercase tracking-widest">{{ card.name }}</p>
               </div>
-            <!-- Hover overlay -->
+              <!-- Hover overlay -->
               <div class="pointer-events-none absolute inset-0 bg-[#292b2d]/0 transition-colors duration-200 group-hover:bg-[#292b2d]/10" />
               <div class="pointer-events-none absolute left-3 top-3 bg-[#b94d27] px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white">
                 Customize
@@ -206,24 +300,26 @@ function goToShop() {
             <div class="flex flex-1 flex-col p-5">
               <div class="flex items-start justify-between gap-3">
                 <div>
-                  <h2 class="font-display text-xl font-black tracking-[-0.03em] text-[#202220]">{{ shoe.name }}</h2>
-                  <p class="mt-0.5 text-xs text-[#6a6e6a]">{{ shoe.summary }}</p>
+                  <h2 class="font-display text-xl font-black tracking-[-0.03em] text-[#202220]">{{ card.name }}</h2>
+                  <p class="mt-0.5 text-xs text-[#6a6e6a]">{{ card.subtitle }}</p>
                 </div>
-                <p class="shrink-0 text-lg font-black text-[#b94d27]">{{ shoe.price }}</p>
+                <p class="shrink-0 text-lg font-black text-[#b94d27]">{{ card.price }}</p>
               </div>
 
               <!-- Part color preview dots -->
-              <div class="mt-3 flex items-center gap-1">
-                <span v-for="part in shoe.parts" :key="part.id"
+              <div v-if="SHOES.find(s => s.id === card.shoeId)" class="mt-3 flex items-center gap-1">
+                <span
+                  v-for="part in SHOES.find(s => s.id === card.shoeId).parts"
+                  :key="part.id"
                   class="size-3 border border-black/10"
-                  :style="{ backgroundColor: selectedShoeId === shoe.id ? partColors[part.id]?.value || '#e9ece9' : '#e9ece9' }"
+                  :style="{ backgroundColor: selectedShoeId === card.shoeId ? partColors[part.id]?.value || '#e9ece9' : '#e9ece9' }"
                   :title="part.label"
                 />
-                <span class="ml-1.5 text-[10px] text-[#6a6e6a]">{{ selectedShoeId === shoe.id && customizedCount > 0 ? customizedCount + ' parts styled' : 'Default colors' }}</span>
+                <span class="ml-1.5 text-[10px] text-[#6a6e6a]">{{ selectedShoeId === card.shoeId && customizedCount > 0 ? customizedCount + ' parts styled' : 'Default colors' }}</span>
               </div>
 
               <!-- CTA row -->
-              <div class="mt-5 flex h-12 w-full items-center justify-between bg-[#292b2d] px-5 text-sm font-bold text-white transition-colors duration-200 group-hover:bg-[#404345]">
+              <div class="mt-5 mt-auto flex h-12 w-full items-center justify-between bg-[#292b2d] px-5 text-sm font-bold text-white transition-colors duration-200 group-hover:bg-[#404345]">
                 Customize &amp; Reserve
                 <svg class="size-4 transition-transform duration-200 group-hover:translate-x-1" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
@@ -231,17 +327,53 @@ function goToShop() {
               </div>
             </div>
           </button>
-        </template>
 
-        <!-- Placeholder slots (coming soon) -->
-        <div
-          v-for="n in 2"
-          :key="n"
-          class="flex min-h-[360px] flex-col items-center justify-center border border-dashed border-[#bfc3bf] bg-[#f5f6f4] p-8 text-center text-sm text-[#9b9f9b]"
-        >
-          <span class="mb-2 text-2xl">+</span>
-          More styles coming soon
-        </div>
+          <!-- Coming Soon card -->
+          <div
+            v-else
+            class="flex flex-col overflow-hidden border border-[#bfc3bf] bg-[#fcfdfb] text-left opacity-90 transition-all duration-200"
+          >
+            <!-- Placeholder thumbnail area -->
+            <div class="relative grid h-64 place-items-center overflow-hidden bg-[#ebeeed]">
+              <div class="text-center text-[#8e938e]">
+                <div class="mx-auto mb-2 grid size-16 place-items-center border border-dashed border-[#bfc3bf] bg-[#f5f6f4] text-xl font-bold tracking-wider text-[#6a6e6a]">
+                  3D
+                </div>
+                <p class="text-[11px] font-bold uppercase tracking-widest text-[#7a7e7a]">Coming Soon</p>
+              </div>
+              <div class="pointer-events-none absolute left-3 top-3 bg-[#6a6e6a] px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white">
+                Coming Soon
+              </div>
+            </div>
+
+            <!-- Card body -->
+            <div class="flex flex-1 flex-col p-5">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <h2 class="font-display text-xl font-black tracking-[-0.03em] text-[#404345]">{{ card.name }}</h2>
+                  <p class="mt-0.5 text-xs text-[#6a6e6a]">{{ card.subtitle }}</p>
+                </div>
+                <p class="shrink-0 text-lg font-bold text-[#6a6e6a]">{{ card.price }}</p>
+              </div>
+
+              <!-- Categories preview tags -->
+              <div class="mt-3 flex flex-wrap items-center gap-1.5">
+                <span
+                  v-for="cat in card.categories"
+                  :key="cat"
+                  class="border border-[#cfd2ce] bg-[#f5f6f4] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-[#6a6e6a]"
+                >
+                  {{ cat }}
+                </span>
+              </div>
+
+              <!-- Disabled indicator row -->
+              <div class="mt-5 mt-auto flex h-12 w-full items-center justify-center border border-[#cfd2ce] bg-[#f1f3f0] px-5 text-sm font-semibold text-[#8e938e] select-none">
+                Available Soon
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
 
       <!-- How it works strip -->
