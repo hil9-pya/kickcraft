@@ -9,6 +9,7 @@ import {
   deleteShoeRecord,
   restockShoeRecord,
   highlightMaterial,
+  adminShoeToCatalogCard,
 } from '../src/admin.js'
 
 test('slugify generates kebab-case IDs from part and shoe names', () => {
@@ -115,4 +116,42 @@ test('highlightMaterial sets red highlight factor on target material and neutral
     { mat: 'UpperMaterial', color: '#ff0000' },
     { mat: 'MidsoleMaterial', color: '#ffffff' },
   ])
+})
+
+test('adminShoeToCatalogCard correctly maps admin shoes to customer catalog cards', () => {
+  const availableShoe = {
+    id: 'stride-shoe',
+    name: 'KickCraft Stride',
+    description: 'Road running sneaker',
+    price: 5490,
+    formattedPrice: '₱5,490',
+    status: 'available',
+    stock: 20,
+    thumbnailPath: '/images/stride.png',
+    categories: ['kickcraft', 'running'],
+    parts: [{ id: 'upper', label: 'Upper', material: 'UpperMaterial' }],
+  }
+  const card1 = adminShoeToCatalogCard(availableShoe)
+  assert.equal(card1.id, 'stride-shoe')
+  assert.equal(card1.name, 'KickCraft Stride')
+  assert.equal(card1.status, 'live')
+  assert.equal(card1.shoeId, 'stride-shoe')
+  assert.equal(card1.price, '₱5,490')
+
+  const outOfStockShoe = {
+    ...availableShoe,
+    id: 'sold-out-shoe',
+    status: 'out_of_stock',
+    stock: 0,
+  }
+  const card2 = adminShoeToCatalogCard(outOfStockShoe)
+  assert.equal(card2.status, 'out_of_stock')
+
+  const comingSoonShoe = {
+    ...availableShoe,
+    id: 'future-shoe',
+    status: 'coming_soon',
+  }
+  const card3 = adminShoeToCatalogCard(comingSoonShoe)
+  assert.equal(card3.status, 'soon')
 })

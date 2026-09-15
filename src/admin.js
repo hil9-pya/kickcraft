@@ -178,3 +178,17 @@ export function highlightMaterial(model, materialName, highlightColor = '#ff2222
     }
   }
 }
+
+export function adminShoeToCatalogCard(shoe) {
+  return {
+    id: shoe.id,
+    name: shoe.name,
+    subtitle: shoe.description || `${shoe.parts?.length || 0} customizable parts`,
+    price: shoe.formattedPrice || `₱${Number(shoe.price || 4890).toLocaleString()}`,
+    categories: shoe.categories || ['kickcraft'],
+    image: shoe.thumbnailPath || '/images/kickcraft-one-card.png',
+    shoeId: shoe.id,
+    status: shoe.status === 'available' ? 'live' : (shoe.status === 'out_of_stock' ? 'out_of_stock' : 'soon'),
+    stock: shoe.stock,
+  }
+}

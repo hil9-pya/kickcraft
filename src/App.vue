@@ -1,5 +1,7 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
+import AdminPanel from './components/AdminPanel.vue'
+import { adminShoeToCatalogCard, getStoredShoes } from './admin.js'
 import {
   CATALOG,
   CATEGORIES,
@@ -21,11 +23,36 @@ const colors = [
   { name: 'Burgundy', value: '#713741' },
 ]
 
+const adminShoes = ref(getStoredShoes())
+const currentUser = ref(null) // { email, role: 'customer' | 'owner' }
+
+function onShoesChanged(updatedShoes) {
+  adminShoes.value = updatedShoes
+}
+
 const modelViewer = ref(null)
 const selectedShoeId = ref(SHOES[0].id)
-const selectedShoe = computed(() => SHOES.find(shoe => shoe.id === selectedShoeId.value) || SHOES[0])
-const selectedParts = computed(() => selectedShoe.value.parts)
-const selectedPartId = ref(selectedParts.value[0].id)
+const selectedShoe = computed(() => {
+  const foundInAdmin = adminShoes.value.find(shoe => shoe.id === selectedShoeId.value)
+  if (foundInAdmin) {
+    return {
+      ...foundInAdmin,
+      src: foundInAdmin.glbPath,
+      image: foundInAdmin.thumbnailPath,
+    }
+  }
+  return SHOES.find(shoe => shoe.id === selectedShoeId.value) || SHOES[0]
+})
+
+const shoeColors = computed(() => {
+  if (selectedShoe.value?.colors && selectedShoe.value.colors.length) {
+    return selectedShoe.value.colors
+  }
+  return colors
+})
+
+const selectedParts = computed(() => selectedShoe.value.parts || [])
+const selectedPartId = ref(selectedParts.value[0]?.id || 'upper')
 const selectedCharmId = ref('none')
 const partColors = ref({})
 const selectedSize = ref(9)
@@ -33,7 +60,7 @@ const modelReady = ref(false)
 const modelError = ref('')
 const reserved = ref(false)
 
-const selectedPart = computed(() => selectedParts.value.find(part => part.id === selectedPartId.value))
+const selectedPart = computed(() => selectedParts.value.find(part => part.id === selectedPartId.value) || selectedParts.value[0])
 const selectedCharm = computed(() => CHARMS.find(charm => charm.id === selectedCharmId.value))
 const customizedCount = computed(() => Object.keys(partColors.value).length)
 const selectedColor = computed(() => partColors.value[selectedPartId.value])
@@ -44,8 +71,16 @@ const charmModels = computed(() => CHARMS
 const searchQuery = ref('')
 const activeCategory = ref('all')
 
+const dynamicCatalog = computed(() => {
+  const adminIds = new Set(adminShoes.value.map(s => s.id))
+  const cardsFromAdmin = adminShoes.value.map(adminShoeToCatalogCard)
+
+  const remaining = CATALOG.filter(c => !adminIds.has(c.id))
+  return [...cardsFromAdmin, ...remaining]
+})
+
 const filteredCatalog = computed(() => {
-  return filterCatalog(CATALOG, searchQuery.value, activeCategory.value)
+  return filterCatalog(dynamicCatalog.value, searchQuery.value, activeCategory.value)
 })
 
 function clearFilters() {
@@ -106,7 +141,19 @@ function submitReservation() {
 }
 
 // ── View routing ──────────────────────────────────────────────
-const view = ref('shop') // 'shop' | 'studio' | 'login' | 'register'
+const view = ref('shop') // 'shop' | 'studio' | 'login' | 'register' | 'admin'
+
+function goToAdmin() {
+  view.value = 'admin'
+  scrollToTop()
+}
+
+function handleLogout() {
+  currentUser.value = null
+  loginEmail.value = ''
+  loginPassword.value = ''
+  goToShop()
+}
 
 // ── Auth state (prepared for future PHP / MySQL API) ──────────
 const authRole = ref('customer') // 'customer' | 'owner'
@@ -146,8 +193,19 @@ function handleLoginSubmit() {
     loginError.value = 'Please enter both your email and password.'
     return
   }
-  // Frontend prototype feedback — ready for backend POST /api/auth/login.php
-  loginFeedback.value = `Logged in successfully as ${authRole.value === 'owner' ? 'Owner / Admin' : 'Customer'}. (Frontend prototype — ready for PHP backend sync)`
+  if (authRole.value === 'owner') {
+    currentUser.value = { email: loginEmail.value, role: 'owner' }
+    loginFeedback.value = 'Logged in successfully as Owner / Admin. Redirecting to admin portal…'
+    setTimeout(() => {
+      goToAdmin()
+    }, 500)
+  } else {
+    currentUser.value = { email: loginEmail.value, role: 'customer' }
+    loginFeedback.value = 'Logged in successfully as Customer. Redirecting to shop…'
+    setTimeout(() => {
+      goToShop()
+    }, 500)
+  }
 }
 
 function handleRegisterSubmit() {
@@ -243,25 +301,51 @@ function scrollToTop() {
             Design studio
           </span>
 
-          <!-- Log in link -->
+          <!-- Admin link (shown if logged in as owner or in admin view) -->
           <button
+            v-if="currentUser?.role === 'owner' || view === 'admin'"
             type="button"
             class="transition-colors hover:text-[#b94d27] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
-            :class="view === 'login' ? 'border-b-2 border-[#b94d27] py-5 text-[#202220]' : 'text-[#5f635f]'"
-            @click="goToLogin('customer')"
+            :class="view === 'admin' ? 'border-b-2 border-[#b94d27] py-5 text-[#202220]' : 'text-[#5f635f]'"
+            @click="goToAdmin"
           >
-            Log in
+            Admin Portal
           </button>
 
-          <!-- Register link -->
-          <button
-            type="button"
-            class="hidden transition-colors hover:text-[#b94d27] sm:block focus-visible:outline-2 focus-visible:outline-[#245fa8]"
-            :class="view === 'register' ? 'border-b-2 border-[#b94d27] py-5 text-[#202220]' : 'text-[#5f635f]'"
-            @click="goToRegister"
-          >
-            Register
-          </button>
+          <!-- User session / Auth buttons -->
+          <template v-if="currentUser">
+            <span class="hidden text-xs text-[#6a6e6a] sm:inline">
+              {{ currentUser.email }}
+            </span>
+            <button
+              type="button"
+              class="text-xs font-semibold text-[#8e938e] transition-colors hover:text-[#b94d27]"
+              @click="handleLogout"
+            >
+              Sign out
+            </button>
+          </template>
+          <template v-else>
+            <!-- Log in link -->
+            <button
+              type="button"
+              class="transition-colors hover:text-[#b94d27] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+              :class="view === 'login' ? 'border-b-2 border-[#b94d27] py-5 text-[#202220]' : 'text-[#5f635f]'"
+              @click="goToLogin('customer')"
+            >
+              Log in
+            </button>
+
+            <!-- Register link -->
+            <button
+              type="button"
+              class="hidden transition-colors hover:text-[#b94d27] sm:block focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+              :class="view === 'register' ? 'border-b-2 border-[#b94d27] py-5 text-[#202220]' : 'text-[#5f635f]'"
+              @click="goToRegister"
+            >
+              Register
+            </button>
+          </template>
 
           <!-- Order button (when in studio) -->
           <button
@@ -412,9 +496,9 @@ function scrollToTop() {
               </div>
 
               <!-- Part color preview dots -->
-              <div v-if="SHOES.find(s => s.id === card.shoeId)" class="mt-3 flex items-center gap-1">
+              <div v-if="(adminShoes.find(s => s.id === card.shoeId) || SHOES.find(s => s.id === card.shoeId))" class="mt-3 flex items-center gap-1">
                 <span
-                  v-for="part in SHOES.find(s => s.id === card.shoeId).parts"
+                  v-for="part in (adminShoes.find(s => s.id === card.shoeId) || SHOES.find(s => s.id === card.shoeId)).parts"
                   :key="part.id"
                   class="size-3 border border-black/10"
                   :style="{ backgroundColor: selectedShoeId === card.shoeId ? partColors[part.id]?.value || '#e9ece9' : '#e9ece9' }"
@@ -433,21 +517,32 @@ function scrollToTop() {
             </div>
           </button>
 
-          <!-- Coming Soon card -->
+          <!-- Out of Stock or Coming Soon card -->
           <div
             v-else
             class="flex flex-col overflow-hidden border border-[#bfc3bf] bg-[#fcfdfb] text-left opacity-90 transition-all duration-200"
           >
-            <!-- Placeholder thumbnail area -->
+            <!-- Thumbnail / Placeholder -->
             <div class="relative grid h-64 place-items-center overflow-hidden bg-[#ebeeed]">
-              <div class="text-center text-[#8e938e]">
+              <img
+                v-if="card.image"
+                :src="card.image"
+                :alt="card.name"
+                class="h-full w-full object-contain opacity-60 grayscale"
+              />
+              <div v-else class="text-center text-[#8e938e]">
                 <div class="mx-auto mb-2 grid size-16 place-items-center border border-dashed border-[#bfc3bf] bg-[#f5f6f4] text-xl font-bold tracking-wider text-[#6a6e6a]">
                   3D
                 </div>
-                <p class="text-[11px] font-bold uppercase tracking-widest text-[#7a7e7a]">Coming Soon</p>
+                <p class="text-[11px] font-bold uppercase tracking-widest text-[#7a7e7a]">
+                  {{ card.status === 'out_of_stock' ? 'Out of Stock' : 'Coming Soon' }}
+                </p>
               </div>
-              <div class="pointer-events-none absolute left-3 top-3 bg-[#6a6e6a] px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white">
-                Coming Soon
+              <div
+                class="pointer-events-none absolute left-3 top-3 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-white"
+                :class="card.status === 'out_of_stock' ? 'bg-[#b94d27]' : 'bg-[#6a6e6a]'"
+              >
+                {{ card.status === 'out_of_stock' ? 'Out of Stock' : 'Coming Soon' }}
               </div>
             </div>
 
@@ -473,8 +568,11 @@ function scrollToTop() {
               </div>
 
               <!-- Disabled indicator row -->
-              <div class="mt-5 mt-auto flex h-12 w-full items-center justify-center border border-[#cfd2ce] bg-[#f1f3f0] px-5 text-sm font-semibold text-[#8e938e] select-none">
-                Available Soon
+              <div
+                class="mt-5 mt-auto flex h-12 w-full items-center justify-center border px-5 text-sm font-semibold select-none"
+                :class="card.status === 'out_of_stock' ? 'border-[#b94d27]/30 bg-[#fdf2ef] text-[#963a20]' : 'border-[#cfd2ce] bg-[#f1f3f0] text-[#8e938e]'"
+              >
+                {{ card.status === 'out_of_stock' ? 'Temporarily Out of Stock' : 'Available Soon' }}
               </div>
             </div>
           </div>
@@ -604,7 +702,7 @@ function scrollToTop() {
               </div>
               <div class="grid grid-cols-3 gap-2">
                 <button
-                  v-for="color in colors"
+                  v-for="color in shoeColors"
                   :key="color.name"
                   type="button"
                   class="flex min-h-11 items-center gap-2 border bg-white px-2.5 text-left text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
@@ -731,6 +829,17 @@ function scrollToTop() {
       </div>
 
     </div>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- OWNER ADMIN PORTAL VIEW                                 -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <AdminPanel
+      v-else-if="view === 'admin'"
+      :current-user="currentUser"
+      @back-to-shop="goToShop"
+      @open-studio="goToStudio"
+      @shoes-changed="onShoesChanged"
+    />
 
     <!-- ══════════════════════════════════════════════════════ -->
     <!-- LOGIN VIEW                                             -->
@@ -1080,7 +1189,7 @@ function scrollToTop() {
                 <button
                   type="button"
                   class="font-semibold text-white/80 transition-colors hover:text-white focus-visible:outline-2 focus-visible:outline-[#b94d27]"
-                  @click="goToLogin('owner')"
+                  @click="currentUser?.role === 'owner' ? goToAdmin() : goToLogin('owner')"
                 >
                   Owner / Admin Portal
                 </button>
