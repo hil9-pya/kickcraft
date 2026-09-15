@@ -130,19 +130,56 @@ function handleFileInputChange(event) {
   processSelectedFiles(Array.from(fileList))
 }
 
-function handleDrop(event) {
+async function handleDrop(event) {
   event.preventDefault()
   uploadError.value = ''
   const dt = event.dataTransfer
   if (!dt) return
 
-  const items = []
-  if (dt.files && dt.files.length) {
+  const extractedFiles = []
+
+  if (dt.items && dt.items.length) {
+    const promises = []
+    for (let i = 0; i < dt.items.length; i++) {
+      const item = dt.items[i]
+      if (item.webkitGetAsEntry) {
+        const entry = item.webkitGetAsEntry()
+        if (entry) {
+          promises.push(readEntryRecursive(entry, extractedFiles))
+          continue
+        }
+      }
+      const file = item.getAsFile()
+      if (file) extractedFiles.push(file)
+    }
+    await Promise.all(promises)
+  } else if (dt.files && dt.files.length) {
     for (let i = 0; i < dt.files.length; i++) {
-      items.push(dt.files[i])
+      extractedFiles.push(dt.files[i])
     }
   }
-  processSelectedFiles(items)
+
+  processSelectedFiles(extractedFiles)
+}
+
+function readEntryRecursive(entry, files) {
+  return new Promise(resolve => {
+    if (entry.isFile) {
+      entry.file(file => {
+        files.push(file)
+        resolve()
+      }, () => resolve())
+    } else if (entry.isDirectory) {
+      const dirReader = entry.createReader()
+      dirReader.readEntries(async entries => {
+        const entryPromises = entries.map(child => readEntryRecursive(child, files))
+        await Promise.all(entryPromises)
+        resolve()
+      }, () => resolve())
+    } else {
+      resolve()
+    }
+  })
 }
 
 function processSelectedFiles(fileList) {
