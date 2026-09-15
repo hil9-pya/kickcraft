@@ -1,7 +1,8 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
 import AdminPanel from './components/AdminPanel.vue'
-import { adminShoeToCatalogCard, getStoredShoes } from './admin.js'
+import { adminShoeToCatalogCard, getStoredShoes, setStoredShoes } from './admin.js'
+import { createOrder, getStoredOrders, setStoredOrders } from './financials.js'
 import {
   CATALOG,
   CATEGORIES,
@@ -59,6 +60,10 @@ const selectedSize = ref(9)
 const modelReady = ref(false)
 const modelError = ref('')
 const reserved = ref(false)
+const customerName = ref('')
+const customerEmail = ref('')
+const pickupDate = ref('')
+const reservationReceipt = ref(null)
 
 const selectedPart = computed(() => selectedParts.value.find(part => part.id === selectedPartId.value) || selectedParts.value[0])
 const selectedCharm = computed(() => CHARMS.find(charm => charm.id === selectedCharmId.value))
@@ -129,6 +134,13 @@ function resetDesign() {
 
 function openReservation() {
   reserved.value = false
+  reservationReceipt.value = null
+  if (!pickupDate.value) {
+    pickupDate.value = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  }
+  if (currentUser.value?.email) {
+    customerEmail.value = currentUser.value.email
+  }
   nextTick(() => document.querySelector('#reservation-dialog')?.showModal())
 }
 
@@ -137,6 +149,39 @@ function closeReservation() {
 }
 
 function submitReservation() {
+  if (!customerName.value.trim() || !customerEmail.value.trim() || !pickupDate.value) {
+    return
+  }
+
+  const orders = getStoredOrders()
+  const newOrder = createOrder(orders, {
+    customerName: customerName.value.trim(),
+    customerEmail: customerEmail.value.trim(),
+    pickupDate: pickupDate.value,
+    shoeId: selectedShoe.value.id,
+    shoeName: selectedShoe.value.name,
+    size: selectedSize.value,
+    price: selectedShoe.value.price || 4890,
+    partColors: { ...partColors.value },
+    charmId: selectedCharm.value.id,
+    charmLabel: selectedCharm.value.label,
+    status: 'pending', // Starts pending until verified/paid upon store pickup
+    paymentMethod: 'in_store',
+    notes: 'Online custom reservation placed via 3D Studio. Store pickup.',
+  })
+  setStoredOrders(orders)
+
+  // Decrement inventory stock if present in admin catalog
+  const shoeIndex = adminShoes.value.findIndex(s => s.id === selectedShoe.value.id)
+  if (shoeIndex !== -1 && adminShoes.value[shoeIndex].stock > 0) {
+    adminShoes.value[shoeIndex].stock -= 1
+    if (adminShoes.value[shoeIndex].stock === 0) {
+      adminShoes.value[shoeIndex].status = 'out_of_stock'
+    }
+    setStoredShoes(adminShoes.value)
+  }
+
+  reservationReceipt.value = newOrder
   reserved.value = true
 }
 
@@ -239,6 +284,7 @@ function resetStudioState() {
   modelReady.value = false
   modelError.value = ''
   reserved.value = false
+  reservationReceipt.value = null
 }
 
 function goToStudio(shoeId) {
@@ -1220,21 +1266,68 @@ function scrollToTop() {
     <dialog id="reservation-dialog" class="m-auto w-[calc(100%_-_32px)] max-w-md border border-[#8e938e] bg-[#fcfdfb] p-0 text-[#292b2d]">
       <div v-if="!reserved" class="p-6">
         <div class="flex items-start justify-between gap-4 border-b border-[#d9dcd8] pb-4">
-          <div><h2 class="font-display text-xl font-black">Order your {{ selectedShoe.name }}</h2><p class="mt-1 text-sm text-[#626662]">Size {{ selectedSize }} · {{ customizedCount }} customized parts · {{ selectedCharm.label }} accessory</p></div>
+          <div>
+            <h2 class="font-display text-xl font-black">Reserve {{ selectedShoe.name }}</h2>
+            <p class="mt-1 text-sm text-[#626662]">Size {{ selectedSize }} · {{ customizedCount }} customized parts · {{ selectedCharm.label }} accessory</p>
+          </div>
           <button class="grid size-9 place-items-center border border-[#bfc3bf] text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" aria-label="Close order modal" @click="closeReservation">×</button>
         </div>
         <form class="space-y-4 pt-5" @submit.prevent="submitReservation">
-          <label class="block"><span class="mb-1.5 block text-sm font-bold">Full name</span><input required autocomplete="name" class="h-11 w-full border border-[#bfc3bf] bg-white px-3 outline-none focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]" /></label>
-          <label class="block"><span class="mb-1.5 block text-sm font-bold">Email address</span><input required type="email" autocomplete="email" class="h-11 w-full border border-[#bfc3bf] bg-white px-3 outline-none focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]" /></label>
-          <label class="block"><span class="mb-1.5 block text-sm font-bold">Pickup date</span><input required type="date" class="h-11 w-full border border-[#bfc3bf] bg-white px-3 outline-none focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]" /></label>
-          <button class="h-12 w-full bg-[#b94d27] font-bold text-white hover:bg-[#963a20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]">Confirm order</button>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-bold">Full name</span>
+            <input
+              v-model="customerName"
+              required
+              autocomplete="name"
+              placeholder="e.g. Maria Santos"
+              class="h-11 w-full border border-[#bfc3bf] bg-white px-3 outline-none focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+            />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-bold">Email address</span>
+            <input
+              v-model="customerEmail"
+              required
+              type="email"
+              autocomplete="email"
+              placeholder="e.g. maria@example.com"
+              class="h-11 w-full border border-[#bfc3bf] bg-white px-3 outline-none focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+            />
+          </label>
+          <label class="block">
+            <span class="mb-1.5 block text-sm font-bold">Pickup date</span>
+            <input
+              v-model="pickupDate"
+              required
+              type="date"
+              class="h-11 w-full border border-[#bfc3bf] bg-white px-3 outline-none focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+            />
+          </label>
+          <div class="border-t border-[#e2e5e1] pt-3 flex items-center justify-between text-sm">
+            <span class="text-[#626662]">Estimated Total:</span>
+            <span class="font-bold text-[#292b2d]">{{ selectedShoe.formattedPrice || '₱4,890' }}</span>
+          </div>
+          <p class="text-xs text-[#737773]">No online charge today. Payment is collected upon inspection and pickup in-store.</p>
+          <button type="submit" class="h-12 w-full bg-[#b94d27] font-bold text-white hover:bg-[#963a20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]">
+            Confirm pickup reservation
+          </button>
         </form>
       </div>
       <div v-else class="p-8 text-center">
         <div class="mx-auto grid size-12 place-items-center bg-[#3f7652] text-xl font-black text-white">✓</div>
-        <h2 class="font-display mt-5 text-xl font-black">Order confirmed</h2>
-        <p class="mt-2 text-sm leading-6 text-[#626662]">Your custom {{ selectedShoe.name }} in size {{ selectedSize }} with {{ selectedCharm.label }} accessory is placed for store pickup.</p>
-        <button class="mt-6 h-11 w-full border border-[#8e938e] font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" @click="closeReservation">Continue designing</button>
+        <h2 class="font-display mt-5 text-xl font-black">Reservation placed!</h2>
+        <div v-if="reservationReceipt" class="mt-3 inline-block bg-[#f1f3f0] border border-[#d9dcd8] px-3 py-1 font-mono text-xs font-bold text-[#292b2d]">
+          Receipt Reference: {{ reservationReceipt.id }}
+        </div>
+        <p class="mt-3 text-sm leading-6 text-[#626662]">
+          Your custom {{ selectedShoe.name }} (Size {{ selectedSize }}) with {{ selectedCharm.label }} accessory has been logged for pickup on <strong class="text-[#292b2d]">{{ pickupDate }}</strong>.
+        </p>
+        <p class="mt-2 text-xs text-[#8e938e]">
+          Status: <span class="font-semibold text-[#b94d27]">Pending Payment</span> · Logged into owner inventory &amp; sales ledger.
+        </p>
+        <button class="mt-6 h-11 w-full border border-[#8e938e] font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" @click="closeReservation">
+          Continue designing
+        </button>
       </div>
     </dialog>
   </div>
