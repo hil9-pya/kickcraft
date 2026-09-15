@@ -23,6 +23,7 @@ test('keeps the original eight-part shoe and adds the three-part Air Max', () =>
   assert.deepEqual(SHOES.map(({ id, src }) => ({ id, src })), [
     { id: 'kickcraft-one', src: '/models/shoe-soleview-final.glb' },
     { id: 'nike-air-max', src: '/models/nike-air-max-custom.glb' },
+    { id: 'nike-dunk', src: '/models/nike-dunk.glb' },
   ])
 
   assert.equal(SHOES[0].charmOffset, null)

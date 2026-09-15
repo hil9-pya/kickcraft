@@ -15,8 +15,8 @@ test('defines all 6 required categories', () => {
   assert.equal(CATEGORIES[0].label, 'All')
 })
 
-test('defines catalog with 8 shoes and correct schema', () => {
-  assert.equal(CATALOG.length, 8)
+test('defines catalog with 9 shoes and correct schema', () => {
+  assert.equal(CATALOG.length, 9)
   for (const card of CATALOG) {
     assert.ok(card.id, 'card must have id')
     assert.ok(card.name, 'card must have name')
@@ -27,8 +27,8 @@ test('defines catalog with 8 shoes and correct schema', () => {
   }
 
   const liveShoes = CATALOG.filter(c => c.status === 'live')
-  assert.equal(liveShoes.length, 2)
-  assert.deepEqual(liveShoes.map(c => c.id), ['kickcraft-one', 'nike-air-max'])
+  assert.equal(liveShoes.length, 3)
+  assert.deepEqual(liveShoes.map(c => c.id), ['kickcraft-one', 'nike-air-max', 'nike-dunk'])
 
   const soonShoes = CATALOG.filter(c => c.status === 'soon')
   assert.equal(soonShoes.length, 6)

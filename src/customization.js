@@ -15,6 +15,12 @@ export const AIR_MAX_PARTS = [
   { id: 'midsole', label: 'Midsole', material: 'MidsoleMaterial' },
 ]
 
+export const DUNK_PARTS = [
+  { id: 'upper', label: 'Upper', material: 'UpperMaterial' },
+  { id: 'laces', label: 'Laces', material: 'LacesMaterial' },
+  { id: 'midsole', label: 'Midsole', material: 'MidsoleMaterial' },
+]
+
 export const SHOES = [
   {
     id: 'kickcraft-one',
@@ -41,6 +47,19 @@ export const SHOES = [
     charmOffset: '0.003800 0.005100 0.085800',
     charmScale: '0.25 0.25 0.25',
     charmDir: '/models/charms/air-max/',
+  },
+  {
+    id: 'nike-dunk',
+    name: 'Nike Dunk',
+    summary: 'Dunk Low model · 3 customizable parts',
+    description: 'An iconic silhouette with customizable upper, laces, and midsole.',
+    price: '₱4,890',
+    image: '/images/nike-dunk-card.png',
+    src: '/models/nike-dunk.glb',
+    parts: DUNK_PARTS,
+    charmOffset: null,
+    charmScale: '0.35 0.35 0.35',
+    charmDir: null,
   },
 ]
 
@@ -95,6 +114,16 @@ export const CATALOG = [
     categories: ['sneakers', 'running', 'fashion'],
     image: '/images/nike-air-max-card.png',
     shoeId: 'nike-air-max',
+    status: 'live',
+  },
+  {
+    id: 'nike-dunk',
+    name: 'Nike Dunk',
+    subtitle: 'Dunk Low model · 3 customizable parts',
+    price: '₱4,890',
+    categories: ['sneakers', 'fashion', 'basketball'],
+    image: '/images/nike-dunk-card.png',
+    shoeId: 'nike-dunk',
     status: 'live',
   },
   {
