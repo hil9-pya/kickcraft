@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, ref } from 'vue'
 import AdminPanel from './components/AdminPanel.vue'
+import ConfirmModal from './components/ConfirmModal.vue'
 import { adminShoeToCatalogCard, getStoredShoes, setStoredShoes } from './admin.js'
 import { createOrder, getStoredOrders, setStoredOrders } from './financials.js'
 import {
@@ -64,6 +65,28 @@ const customerName = ref('')
 const customerEmail = ref('')
 const pickupDate = ref('')
 const reservationReceipt = ref(null)
+
+const confirmModal = ref({
+  show: false,
+  title: '',
+  message: '',
+  confirmText: 'Confirm',
+  cancelText: 'Cancel',
+  variant: 'default',
+  icon: 'warning',
+  onConfirm: null,
+})
+
+function handleModalConfirm() {
+  if (confirmModal.value.onConfirm) {
+    confirmModal.value.onConfirm()
+  }
+  confirmModal.value.show = false
+}
+
+function handleModalCancel() {
+  confirmModal.value.show = false
+}
 
 const selectedPart = computed(() => selectedParts.value.find(part => part.id === selectedPartId.value) || selectedParts.value[0])
 const selectedCharm = computed(() => CHARMS.find(charm => charm.id === selectedCharmId.value))
@@ -129,6 +152,24 @@ function resetDesign() {
   if (!modelReady.value) return
   if (selectedParts.value.every(part => setMaterialColor(modelViewer.value.model, part.material, '#ffffff'))) {
     partColors.value = {}
+  }
+}
+
+function requestResetDesign() {
+  if (customizedCount.value === 0) return
+  confirmModal.value = {
+    show: true,
+    title: 'Reset Custom Design?',
+    message: 'This will reset all custom color choices back to original white/chalk. Your current combination will be lost.',
+    confirmText: 'Reset to White',
+    cancelText: 'Keep My Design',
+    variant: 'warning',
+    icon: 'reset',
+    onConfirm: () => {
+      if (selectedParts.value.every(part => setMaterialColor(modelViewer.value.model, part.material, '#ffffff'))) {
+        partColors.value = {}
+      }
+    },
   }
 }
 
@@ -198,6 +239,21 @@ function handleLogout() {
   loginEmail.value = ''
   loginPassword.value = ''
   goToShop()
+}
+
+function requestLogout() {
+  confirmModal.value = {
+    show: true,
+    title: 'Sign Out of KickCraft?',
+    message: 'You will be signed out of your current session. You can sign back in at any time to access the Owner Portal or customer features.',
+    confirmText: 'Sign Out',
+    cancelText: 'Stay Logged In',
+    variant: 'default',
+    icon: 'logout',
+    onConfirm: () => {
+      handleLogout()
+    },
+  }
 }
 
 // ── Auth state (prepared for future PHP / MySQL API) ──────────
@@ -366,7 +422,7 @@ function scrollToTop() {
             <button
               type="button"
               class="text-xs font-semibold text-[#8e938e] transition-colors hover:text-[#b94d27]"
-              @click="handleLogout"
+              @click="requestLogout"
             >
               Sign out
             </button>
@@ -788,7 +844,7 @@ function scrollToTop() {
                 type="button"
                 class="font-semibold text-[#245fa8] underline underline-offset-4 disabled:cursor-not-allowed disabled:text-[#9b9f9b] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
                 :disabled="!modelReady || customizedCount === 0"
-                @click="resetDesign"
+                @click="requestResetDesign"
               >Reset design</button>
             </div>
 
@@ -1330,5 +1386,17 @@ function scrollToTop() {
         </button>
       </div>
     </dialog>
+
+    <ConfirmModal
+      :show="confirmModal.show"
+      :title="confirmModal.title"
+      :message="confirmModal.message"
+      :confirm-text="confirmModal.confirmText"
+      :cancel-text="confirmModal.cancelText"
+      :variant="confirmModal.variant"
+      :icon="confirmModal.icon"
+      @confirm="handleModalConfirm"
+      @cancel="handleModalCancel"
+    />
   </div>
 </template>
