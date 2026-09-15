@@ -1,5 +1,6 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import ConfirmModal from './ConfirmModal.vue'
 import {
   createShoeRecord,
   deleteShoeRecord,
@@ -29,6 +30,29 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['backToShop', 'openStudio', 'shoesChanged'])
+
+// ── Confirmation Modal State ──────────────────────────────────
+const adminConfirm = ref({
+  show: false,
+  title: '',
+  message: '',
+  confirmText: 'Confirm',
+  cancelText: 'Cancel',
+  variant: 'default',
+  icon: 'warning',
+  onConfirm: null,
+})
+
+function handleAdminModalConfirm() {
+  if (adminConfirm.value.onConfirm) {
+    adminConfirm.value.onConfirm()
+  }
+  adminConfirm.value.show = false
+}
+
+function handleAdminModalCancel() {
+  adminConfirm.value.show = false
+}
 
 // ── Navigation Section ─────────────────────────────────────────
 const adminSection = ref('inventory') // 'inventory' | 'financials'
@@ -176,6 +200,26 @@ function handleOrderStatusChange(orderId, newStatus) {
       ...selectedOrderForReceipt.value,
       status: newStatus,
     }
+  }
+}
+
+const handleStatusChange = handleOrderStatusChange
+
+function requestCancelOrder(order) {
+  adminConfirm.value = {
+    show: true,
+    title: 'Cancel Sales Order?',
+    message: `Are you sure you want to cancel order ${order.id} for ${order.customerName}? This will mark the reservation as cancelled.`,
+    confirmText: 'Cancel Order',
+    cancelText: 'Keep Order Active',
+    variant: 'danger',
+    icon: 'trash',
+    onConfirm: () => {
+      handleStatusChange(order.id, 'cancelled')
+      if (selectedOrderForReceipt.value && selectedOrderForReceipt.value.id === order.id) {
+        selectedOrderForReceipt.value.status = 'cancelled'
+      }
+    },
   }
 }
 
@@ -410,6 +454,25 @@ function closeEditor() {
   saveFeedback.value = ''
 }
 
+function cancelEdit() {
+  if (form.value.glbPath || form.value.name) {
+    adminConfirm.value = {
+      show: true,
+      title: 'Discard Unsaved Changes?',
+      message: 'You have unsaved edits in the 3D shoe editor. Any customized materials or model settings will be discarded.',
+      confirmText: 'Discard & Exit',
+      cancelText: 'Continue Editing',
+      variant: 'warning',
+      icon: 'reset',
+      onConfirm: () => {
+        closeEditor()
+      },
+    }
+  } else {
+    closeEditor()
+  }
+}
+
 // ── Model Material Auto-Detection & Highlighting ──────────────
 function handleEditorModelLoad() {
   editorModelReady.value = true
@@ -557,12 +620,24 @@ function confirmRestock() {
   restockTargetShoe.value = null
 }
 
-function handleDeleteShoe(shoe) {
-  if (confirm(`Are you sure you want to delete "${shoe.name}"? This action cannot be undone.`)) {
-    shoes.value = deleteShoeRecord(shoes.value, shoe.id)
-    persistShoes()
+function deleteShoe(shoe) {
+  adminConfirm.value = {
+    show: true,
+    title: 'Delete Shoe Silhouette?',
+    message: `Are you sure you want to delete "${shoe.name}"? This silhouette will be permanently removed from the catalog.`,
+    confirmText: 'Delete Permanently',
+    cancelText: 'Keep Shoe',
+    variant: 'danger',
+    icon: 'trash',
+    onConfirm: () => {
+      shoes.value = deleteShoeRecord(shoes.value, shoe.id)
+      persistShoes()
+      saveFeedback.value = `"${shoe.name}" has been deleted.`
+    },
   }
 }
+
+const handleDeleteShoe = deleteShoe
 </script>
 
 <template>
@@ -812,7 +887,7 @@ function handleDeleteShoe(shoe) {
                 <button
                   type="button"
                   class="h-8 border border-[#bfc3bf] bg-white text-[11px] font-bold text-[#b94d27] transition-colors hover:border-[#b94d27] hover:bg-[#fdf2ef]"
-                  @click="handleDeleteShoe(shoe)"
+                  @click="deleteShoe(shoe)"
                 >
                   Delete
                 </button>
@@ -859,7 +934,7 @@ function handleDeleteShoe(shoe) {
             <button
               type="button"
               class="flex items-center gap-1.5 text-xs font-bold text-[#5f635f] hover:text-[#202220]"
-              @click="closeEditor"
+              @click="cancelEdit"
             >
               ← Back to Shoe Inventory
             </button>
@@ -872,7 +947,7 @@ function handleDeleteShoe(shoe) {
             <button
               type="button"
               class="border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#5f635f] hover:border-[#292b2d]"
-              @click="closeEditor"
+              @click="cancelEdit"
             >
               Cancel
             </button>
@@ -1331,7 +1406,7 @@ function handleDeleteShoe(shoe) {
               <button
                 type="button"
                 class="border border-[#bfc3bf] bg-white px-5 py-2.5 text-xs font-bold text-[#5f635f] hover:border-[#292b2d]"
-                @click="closeEditor"
+                @click="cancelEdit"
               >
                 Cancel
               </button>
@@ -1585,6 +1660,15 @@ function handleDeleteShoe(shoe) {
                     @click="handleOrderStatusChange(order.id, 'paid')"
                   >
                     Mark Paid
+                  </button>
+
+                  <button
+                    v-if="order.status !== 'cancelled'"
+                    type="button"
+                    class="border border-[#b94d27] bg-white px-2.5 py-1 text-[11px] font-bold text-[#b94d27] hover:bg-[#fdf2ef]"
+                    @click="requestCancelOrder(order)"
+                  >
+                    Cancel
                   </button>
                 </div>
               </td>
@@ -1875,9 +1959,9 @@ function handleDeleteShoe(shoe) {
               v-if="selectedOrderForReceipt.status !== 'cancelled'"
               type="button"
               class="border border-[#b94d27] bg-white px-2.5 py-1.5 text-xs font-bold text-[#b94d27] hover:bg-[#fdf2ef]"
-              @click="handleOrderStatusChange(selectedOrderForReceipt.id, 'cancelled')"
+              @click="requestCancelOrder(selectedOrderForReceipt)"
             >
-              Cancel
+              Cancel Order
             </button>
           </div>
 
@@ -1905,5 +1989,16 @@ function handleDeleteShoe(shoe) {
       </div>
     </div>
 
+    <ConfirmModal
+      :show="adminConfirm.show"
+      :title="adminConfirm.title"
+      :message="adminConfirm.message"
+      :confirm-text="adminConfirm.confirmText"
+      :cancel-text="adminConfirm.cancelText"
+      :variant="adminConfirm.variant"
+      :icon="adminConfirm.icon"
+      @confirm="handleAdminModalConfirm"
+      @cancel="handleAdminModalCancel"
+    />
   </div>
 </template>

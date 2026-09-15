@@ -120,3 +120,59 @@ test('App.vue mounts ConfirmModal with props and event listeners', () => {
   assert.match(content, /<ConfirmModal[\s\S]*?:show="confirmModal\.show"[\s\S]*?:title="confirmModal\.title"[\s\S]*?:message="confirmModal\.message"/, 'ConfirmModal must bind show, title, message props')
   assert.match(content, /<ConfirmModal[\s\S]*?@confirm="handleModalConfirm"[\s\S]*?@cancel="handleModalCancel"/, 'ConfirmModal must bind @confirm and @cancel events')
 })
+
+test('AdminPanel.vue does not use window.confirm and imports ConfirmModal', () => {
+  const filePath = path.resolve('src/components/AdminPanel.vue')
+  assert.ok(fs.existsSync(filePath), 'AdminPanel.vue must exist')
+  const content = fs.readFileSync(filePath, 'utf8')
+
+  assert.doesNotMatch(content, /window\.confirm\s*\(/, 'AdminPanel.vue must not use window.confirm(')
+  assert.doesNotMatch(content, /\bconfirm\s*\(/, 'AdminPanel.vue must not call confirm(')
+  assert.match(content, /import\s+ConfirmModal\s+from\s+['"]\.\/ConfirmModal\.vue['"]/, 'AdminPanel.vue must import ConfirmModal')
+  assert.match(content, /const\s+adminConfirm\s*=\s*ref\(/, 'AdminPanel.vue must declare adminConfirm reactive state')
+  assert.match(content, /function\s+handleAdminModalConfirm\s*\(/, 'AdminPanel.vue must declare handleAdminModalConfirm')
+  assert.match(content, /function\s+handleAdminModalCancel\s*\(/, 'AdminPanel.vue must declare handleAdminModalCancel')
+})
+
+test('AdminPanel.vue defines deleteShoe using adminConfirm and binds to delete button', () => {
+  const filePath = path.resolve('src/components/AdminPanel.vue')
+  const content = fs.readFileSync(filePath, 'utf8')
+
+  assert.match(content, /function\s+deleteShoe\s*\(\s*shoe\s*\)/, 'AdminPanel.vue must define deleteShoe(shoe)')
+  assert.match(content, /title:\s*['"]Delete Shoe Silhouette\?['"]/, 'deleteShoe must configure delete confirmation title')
+  assert.match(content, /variant:\s*['"]danger['"]/, 'deleteShoe must use danger variant')
+  assert.match(content, /icon:\s*['"]trash['"]/, 'deleteShoe must use trash icon')
+  assert.match(content, /@click=["']deleteShoe\(shoe\)["']/, 'Shoe card delete button must call deleteShoe(shoe)')
+})
+
+test('AdminPanel.vue implements cancelEdit guard before discarding 3D editor changes', () => {
+  const filePath = path.resolve('src/components/AdminPanel.vue')
+  const content = fs.readFileSync(filePath, 'utf8')
+
+  assert.match(content, /function\s+cancelEdit\s*\(\s*\)/, 'AdminPanel.vue must define cancelEdit()')
+  assert.match(content, /title:\s*['"]Discard Unsaved Changes\?['"]/, 'cancelEdit must configure discard title')
+  assert.match(content, /variant:\s*['"]warning['"]/, 'cancelEdit must use warning variant')
+  assert.match(content, /icon:\s*['"]reset['"]/, 'cancelEdit must use reset icon')
+  assert.match(content, /@click=["']cancelEdit["']/, 'Editor cancel buttons must call cancelEdit')
+})
+
+test('AdminPanel.vue implements requestCancelOrder and wires cancel buttons in orders table and receipt', () => {
+  const filePath = path.resolve('src/components/AdminPanel.vue')
+  const content = fs.readFileSync(filePath, 'utf8')
+
+  assert.match(content, /function\s+requestCancelOrder\s*\(\s*order\s*\)/, 'AdminPanel.vue must define requestCancelOrder(order)')
+  assert.match(content, /title:\s*['"]Cancel Sales Order\?['"]/, 'requestCancelOrder must configure order cancellation title')
+  assert.match(content, /variant:\s*['"]danger['"]/, 'requestCancelOrder must use danger variant')
+  assert.match(content, /icon:\s*['"]trash['"]/, 'requestCancelOrder must use trash icon')
+  assert.match(content, /@click=["']requestCancelOrder\(order\)["']/, 'Order table row action must call requestCancelOrder(order)')
+  assert.match(content, /@click=["']requestCancelOrder\(selectedOrderForReceipt\)["']/, 'Receipt modal cancel action must call requestCancelOrder')
+})
+
+test('AdminPanel.vue mounts ConfirmModal with adminConfirm bindings', () => {
+  const filePath = path.resolve('src/components/AdminPanel.vue')
+  const content = fs.readFileSync(filePath, 'utf8')
+
+  assert.match(content, /<ConfirmModal[\s\S]*?:show="adminConfirm\.show"[\s\S]*?:title="adminConfirm\.title"[\s\S]*?:message="adminConfirm\.message"/, 'ConfirmModal must bind adminConfirm props')
+  assert.match(content, /<ConfirmModal[\s\S]*?@confirm="handleAdminModalConfirm"[\s\S]*?@cancel="handleAdminModalCancel"/, 'ConfirmModal must bind @confirm and @cancel events')
+})
+
