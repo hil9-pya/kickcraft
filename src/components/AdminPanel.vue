@@ -36,7 +36,6 @@ const restockTargetShoe = ref(null)
 const restockAmount = ref(10)
 
 // Folder & Model Upload
-const showUploadZone = ref(false)
 const detectedFiles = ref([])
 const uploadError = ref('')
 const folderInput = ref(null)
@@ -56,7 +55,7 @@ const defaultForm = () => ({
   stock: 25,
   status: 'available',
   categories: ['kickcraft', 'sneakers'],
-  glbPath: '/models/shoe-soleview-final.glb',
+  glbPath: '', // Empty initially — owner must drop model first!
   thumbnailPath: '/images/kickcraft-one-card.png',
   charmsEnabled: true,
   parts: [],
@@ -155,12 +154,18 @@ function processSelectedFiles(fileList) {
     return
   }
 
-  detectedFiles.value = glbList.map(f => ({
+  const detected = glbList.map(f => ({
     name: f.name,
     sizeFormatted: formatFileSize(f.size),
     rawFile: f,
     blobUrl: URL.createObjectURL(f),
   }))
+
+  if (detected.length === 1) {
+    configureDetectedModel(detected[0])
+  } else {
+    detectedFiles.value = detected
+  }
 }
 
 function formatFileSize(bytes) {
@@ -178,25 +183,36 @@ function configureDetectedModel(detected) {
     .map(w => w.charAt(0).toUpperCase() + w.slice(1))
     .join(' ')
 
-  form.value = {
-    ...defaultForm(),
-    name: capitalized.startsWith('KickCraft') ? capitalized : `KickCraft ${capitalized}`,
-    description: `Original silhouette crafted from ${detected.name}.`,
-    glbPath: detected.blobUrl,
-    parts: [],
-  }
+  form.value.name = capitalized.startsWith('KickCraft') ? capitalized : `KickCraft ${capitalized}`
+  form.value.description = `Customizable silhouette based on ${detected.name}.`
+  form.value.glbPath = detected.blobUrl
+  form.value.parts = []
+  detectedFiles.value = []
+  uploadError.value = ''
+}
 
-  isEditing.value = false
-  editingShoeId.value = null
-  validationErrors.value = []
-  saveFeedback.value = ''
-  showUploadZone.value = false
-  editorMode.value = true
+function selectLibraryModel(path, name) {
+  form.value.name = name
+  form.value.description = `Customizable silhouette based on ${name}.`
+  form.value.glbPath = path
+  form.value.parts = []
+  detectedFiles.value = []
+  uploadError.value = ''
+}
+
+function changeModel() {
+  form.value.glbPath = ''
+  form.value.parts = []
+  detectedFiles.value = []
+  editorModelReady.value = false
+  activeHighlightedMaterial.value = null
 }
 
 // ── Shoe Editor Actions ────────────────────────────────────────
 function openNewShoeEditor() {
   form.value = defaultForm()
+  detectedFiles.value = []
+  uploadError.value = ''
   isEditing.value = false
   editingShoeId.value = null
   validationErrors.value = []
@@ -220,6 +236,8 @@ function openEditShoe(shoe) {
   }
   isEditing.value = true
   editingShoeId.value = shoe.id
+  detectedFiles.value = []
+  uploadError.value = ''
   validationErrors.value = []
   saveFeedback.value = ''
   editorMode.value = true
@@ -229,6 +247,8 @@ function closeEditor() {
   editorMode.value = false
   isEditing.value = false
   editingShoeId.value = null
+  detectedFiles.value = []
+  uploadError.value = ''
   activeHighlightedMaterial.value = null
   validationErrors.value = []
   saveFeedback.value = ''
@@ -243,10 +263,8 @@ function handleEditorModelLoad() {
   const modelMats = model.materials || []
   if (!modelMats.length) return
 
-  // If this shoe has no parts mapped yet, auto-populate from detected materials
   if (!form.value.parts || form.value.parts.length === 0) {
     form.value.parts = modelMats.map(mat => {
-      // Create user-friendly label from PascalCase/camelCase or snake_case
       const cleanLabel = mat.name
         .replace(/Material$/i, '')
         .replace(/([A-Z])/g, ' $1')
@@ -260,7 +278,6 @@ function handleEditorModelLoad() {
       }
     })
   } else {
-    // Reconcile existing mapped parts with newly detected materials if any were missing
     for (const mat of modelMats) {
       if (!form.value.parts.some(p => p.material === mat.name)) {
         const cleanLabel = mat.name
@@ -322,7 +339,11 @@ function handleSaveShoe() {
   validationErrors.value = []
   saveFeedback.value = ''
 
-  // Filter only customizable parts for customer studio
+  if (!form.value.glbPath) {
+    validationErrors.value = ['Please drop or select a 3D shoe model (.glb) first.']
+    return
+  }
+
   const customizableParts = form.value.parts.filter(p => p.customizable !== false)
 
   const candidate = {
@@ -417,33 +438,22 @@ function handleDeleteShoe(shoe) {
     </div>
 
     <!-- ══════════════════════════════════════════════════════════ -->
-    <!-- VIEW 1: SHOE LIST & MANAGEMENT                            -->
+    <!-- VIEW 1: SHOE LIST & INVENTORY                             -->
     <!-- ══════════════════════════════════════════════════════════ -->
     <div v-if="!editorMode" class="space-y-6">
 
-      <!-- Header & Quick Stats -->
+      <!-- Header & Action Button -->
       <div class="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <h1 class="font-display text-3xl font-black tracking-[-0.04em] text-[#202220]">
-            Shoe Catalog & Inventory
+            Shoe Catalog &amp; Inventory
           </h1>
           <p class="mt-1 text-sm text-[#5f635f]">
-            Manage available shoe models, upload 3D assets, auto-detect customizable parts, and restock.
+            Manage existing silhouettes, view stock levels, or configure new 3D shoe models.
           </p>
         </div>
 
-        <div class="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            class="flex items-center gap-2 border border-[#bfc3bf] bg-white px-4 py-2.5 text-xs font-bold text-[#292b2d] shadow-sm transition-colors hover:border-[#292b2d] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
-            @click="showUploadZone = !showUploadZone"
-          >
-            <svg class="size-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" />
-            </svg>
-            {{ showUploadZone ? 'Hide Upload Zone' : 'Folder / File Dropzone' }}
-          </button>
-
+        <div class="flex items-center gap-3">
           <button
             type="button"
             class="flex items-center gap-2 bg-[#292b2d] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#b94d27] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
@@ -452,7 +462,7 @@ function handleDeleteShoe(shoe) {
             <svg class="size-4" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
             </svg>
-            + Add New Shoe
+            Add New Shoe
           </button>
         </div>
       </div>
@@ -474,97 +484,6 @@ function handleDeleteShoe(shoe) {
         <div class="border border-[#cfd2ce] bg-white p-4">
           <p class="text-[11px] font-bold uppercase tracking-wider text-[#b94d27]">Out of Stock</p>
           <p class="mt-1 text-2xl font-black text-[#b94d27]">{{ stats.outOfStock }}</p>
-        </div>
-      </div>
-
-      <!-- ── Collapsible Folder / File Upload Zone ──────────────── -->
-      <div
-        v-if="showUploadZone"
-        class="border-2 border-dashed border-[#b94d27] bg-[#fcfdfb] p-6 transition-all"
-        @dragover.prevent
-        @drop="handleDrop"
-      >
-        <div class="text-center">
-          <div class="mx-auto grid size-12 place-items-center bg-[#fdf2ef] text-[#b94d27]">
-            <svg class="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
-          </div>
-          <h3 class="mt-3 font-display text-lg font-bold text-[#202220]">
-            Drag & Drop a Folder or 3D Models Here
-          </h3>
-          <p class="mt-1 text-xs text-[#5f635f]">
-            Accepts folder containing 3D shoe models (.glb) or individual .glb files.
-          </p>
-
-          <!-- Hidden inputs -->
-          <input
-            ref="folderInput"
-            type="file"
-            webkitdirectory
-            directory
-            multiple
-            class="hidden"
-            @change="handleFileInputChange"
-          />
-          <input
-            ref="fileInput"
-            type="file"
-            multiple
-            accept=".glb"
-            class="hidden"
-            @change="handleFileInputChange"
-          />
-
-          <!-- Upload buttons -->
-          <div class="mt-4 flex flex-wrap justify-center gap-3">
-            <button
-              type="button"
-              class="border border-[#292b2d] bg-[#292b2d] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#b94d27]"
-              @click="triggerFolderPicker"
-            >
-              Browse Folder
-            </button>
-            <button
-              type="button"
-              class="border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#202220] transition-colors hover:border-[#292b2d]"
-              @click="triggerFilePicker"
-            >
-              Select .GLB Files
-            </button>
-          </div>
-
-          <div v-if="uploadError" class="mt-3 text-xs font-semibold text-[#b94d27]">
-            {{ uploadError }}
-          </div>
-        </div>
-
-        <!-- Detected Models Strip -->
-        <div v-if="detectedFiles.length" class="mt-6 border-t border-[#d9dcd8] pt-4">
-          <h4 class="font-display text-xs font-bold uppercase tracking-wider text-[#404345]">
-            Detected 3D Models ({{ detectedFiles.length }})
-          </h4>
-          <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            <div
-              v-for="(detected, idx) in detectedFiles"
-              :key="idx"
-              class="flex items-center justify-between border border-[#cfd2ce] bg-white p-3"
-            >
-              <div class="overflow-hidden pr-2">
-                <p class="truncate text-xs font-bold text-[#202220]" :title="detected.name">
-                  {{ detected.name }}
-                </p>
-                <p class="text-[10px] text-[#6a6e6a]">{{ detected.sizeFormatted }}</p>
-              </div>
-              <button
-                type="button"
-                class="shrink-0 bg-[#245fa8] px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-[#184478]"
-                @click="configureDetectedModel(detected)"
-              >
-                Configure & Publish →
-              </button>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -724,20 +643,23 @@ function handleDeleteShoe(shoe) {
       <!-- Empty state -->
       <div v-else class="border border-[#cfd2ce] bg-white p-12 text-center">
         <p class="font-display text-lg font-bold text-[#202220]">No shoes match your filter</p>
-        <p class="mt-1 text-xs text-[#5f635f]">Try adjusting your search query or upload a new 3D model.</p>
+        <p class="mt-1 text-xs text-[#5f635f]">Try adjusting your search query or add a new 3D model.</p>
         <button
           type="button"
-          class="mt-4 bg-[#292b2d] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#b94d27]"
+          class="mt-4 flex items-center gap-2 mx-auto bg-[#292b2d] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#b94d27]"
           @click="openNewShoeEditor"
         >
-          + Add New Shoe
+          <svg class="size-4" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+          </svg>
+          Add New Shoe
         </button>
       </div>
 
     </div>
 
     <!-- ══════════════════════════════════════════════════════════ -->
-    <!-- VIEW 2: 3D SHOE EDITOR & MATERIAL DETECTOR                 -->
+    <!-- VIEW 2: 3D SHOE CONFIGURATION & EDITOR                     -->
     <!-- ══════════════════════════════════════════════════════════ -->
     <div v-else class="space-y-6">
 
@@ -752,11 +674,11 @@ function handleDeleteShoe(shoe) {
             ← Back to Shoe Inventory
           </button>
           <h2 class="font-display mt-2 text-2xl font-black tracking-[-0.03em] text-[#202220]">
-            {{ isEditing ? `Edit: ${form.name}` : 'Configure New 3D Shoe Model' }}
+            {{ isEditing ? `Edit: ${form.name}` : (form.glbPath ? `Configure: ${form.name}` : 'Add New 3D Shoe Model') }}
           </h2>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div v-if="form.glbPath" class="flex items-center gap-2">
           <button
             type="button"
             class="border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#5f635f] hover:border-[#292b2d]"
@@ -785,8 +707,130 @@ function handleDeleteShoe(shoe) {
         </ul>
       </div>
 
-      <!-- Two Column Layout: 3D Model on Left, Form on Right -->
-      <div class="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(380px,1fr)]">
+      <!-- ── STEP 1: DROPZONE VIEW (When no 3D model is loaded yet) ── -->
+      <div
+        v-if="!form.glbPath"
+        class="border-2 border-dashed border-[#b94d27] bg-[#fcfdfb] p-8 sm:p-14 text-center transition-all"
+        @dragover.prevent
+        @drop="handleDrop"
+      >
+        <div class="mx-auto grid size-16 place-items-center bg-[#fdf2ef] text-[#b94d27]">
+          <svg class="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+          </svg>
+        </div>
+
+        <h3 class="mt-4 font-display text-2xl font-black text-[#202220]">
+          Upload 3D Shoe Model or Folder
+        </h3>
+        <p class="mx-auto mt-2 max-w-md text-xs leading-5 text-[#5f635f]">
+          Drag and drop a folder of 3D shoes or an individual <code class="bg-[#f1f3f0] px-1 py-0.5 font-bold text-[#202220]">.glb</code> model file here. Customization options will appear once the file is loaded.
+        </p>
+
+        <!-- Hidden inputs -->
+        <input
+          ref="folderInput"
+          type="file"
+          webkitdirectory
+          directory
+          multiple
+          class="hidden"
+          @change="handleFileInputChange"
+        />
+        <input
+          ref="fileInput"
+          type="file"
+          multiple
+          accept=".glb"
+          class="hidden"
+          @change="handleFileInputChange"
+        />
+
+        <!-- Action buttons -->
+        <div class="mt-6 flex flex-wrap justify-center gap-3">
+          <button
+            type="button"
+            class="border border-[#292b2d] bg-[#292b2d] px-5 py-2.5 text-xs font-bold text-white transition-colors hover:bg-[#b94d27]"
+            @click="triggerFolderPicker"
+          >
+            Browse Folder
+          </button>
+          <button
+            type="button"
+            class="border border-[#bfc3bf] bg-white px-5 py-2.5 text-xs font-bold text-[#202220] transition-colors hover:border-[#292b2d]"
+            @click="triggerFilePicker"
+          >
+            Choose .GLB File
+          </button>
+        </div>
+
+        <div v-if="uploadError" class="mt-4 text-xs font-semibold text-[#b94d27]">
+          {{ uploadError }}
+        </div>
+
+        <!-- Detected Models from Folder Selection -->
+        <div v-if="detectedFiles.length > 1" class="mt-8 border-t border-[#d9dcd8] pt-6 text-left">
+          <h4 class="font-display text-xs font-bold uppercase tracking-wider text-[#404345]">
+            Detected 3D Models in Folder ({{ detectedFiles.length }})
+          </h4>
+          <p class="text-xs text-[#6a6e6a]">Select which model to customize:</p>
+
+          <div class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            <div
+              v-for="(detected, idx) in detectedFiles"
+              :key="idx"
+              class="flex items-center justify-between border border-[#cfd2ce] bg-white p-3 shadow-sm"
+            >
+              <div class="overflow-hidden pr-2">
+                <p class="truncate text-xs font-bold text-[#202220]" :title="detected.name">
+                  {{ detected.name }}
+                </p>
+                <p class="text-[10px] text-[#6a6e6a]">{{ detected.sizeFormatted }}</p>
+              </div>
+              <button
+                type="button"
+                class="shrink-0 bg-[#245fa8] px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-[#184478]"
+                @click="configureDetectedModel(detected)"
+              >
+                Customize →
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Or Choose from Existing Model Library -->
+        <div class="mt-10 border-t border-[#d9dcd8] pt-6">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-[#8e938e]">
+            Or choose an existing 3D model from the library
+          </p>
+          <div class="mt-3 flex flex-wrap justify-center gap-3">
+            <button
+              type="button"
+              class="border border-[#cfd2ce] bg-white px-3 py-1.5 text-xs font-semibold text-[#5f635f] hover:border-[#292b2d] hover:text-[#202220]"
+              @click="selectLibraryModel('/models/shoe-soleview-final.glb', 'KickCraft One Silhouette')"
+            >
+              KickCraft One (.glb)
+            </button>
+            <button
+              type="button"
+              class="border border-[#cfd2ce] bg-white px-3 py-1.5 text-xs font-semibold text-[#5f635f] hover:border-[#292b2d] hover:text-[#202220]"
+              @click="selectLibraryModel('/models/nike-air-max-custom.glb', 'Air Max Silhouette')"
+            >
+              Air Max (.glb)
+            </button>
+            <button
+              type="button"
+              class="border border-[#cfd2ce] bg-white px-3 py-1.5 text-xs font-semibold text-[#5f635f] hover:border-[#292b2d] hover:text-[#202220]"
+              @click="selectLibraryModel('/models/nike-dunk.glb', 'Dunk Silhouette')"
+            >
+              Nike Dunk (.glb)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── STEP 2: CUSTOMIZATION VIEW (Shown after model is dropped/loaded) ── -->
+      <div v-else class="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(380px,1fr)]">
 
         <!-- Left Column: 3D Model Preview & Material Highlighting Guide -->
         <div class="flex flex-col space-y-3">
@@ -806,10 +850,19 @@ function handleDeleteShoe(shoe) {
               @load="handleEditorModelLoad"
             />
 
-            <!-- Top Indicator -->
-            <div class="pointer-events-none absolute left-3 top-3 flex items-center gap-2 bg-white/95 px-3 py-1.5 text-xs font-semibold shadow-sm">
-              <span class="size-2 bg-[#3f7652]" />
-              Interactive 3D Preview
+            <!-- Top Indicator & Change Model button -->
+            <div class="absolute left-3 top-3 flex items-center gap-2">
+              <span class="flex items-center gap-1.5 bg-white/95 px-3 py-1.5 text-xs font-semibold shadow-sm">
+                <span class="size-2 bg-[#3f7652]" />
+                Interactive 3D Preview
+              </span>
+              <button
+                type="button"
+                class="border border-[#bfc3bf] bg-white/95 px-2.5 py-1.5 text-xs font-bold text-[#5f635f] shadow-sm hover:border-[#292b2d] hover:text-[#202220]"
+                @click="changeModel"
+              >
+                Change 3D Model
+              </button>
             </div>
 
             <!-- Material highlight banner -->
@@ -831,7 +884,7 @@ function handleDeleteShoe(shoe) {
           </div>
 
           <div class="border border-[#cfd2ce] bg-[#fcfdfb] p-3 text-xs text-[#5f635f]">
-            <strong class="text-[#202220]">Point & Verify:</strong> Click any material button in the "Customizable Parts" section below. The corresponding mesh will glow red in the 3D viewer above so you can easily identify each part.
+            <strong class="text-[#202220]">Point &amp; Verify:</strong> Click any material button in the "Customizable Parts" section on the right. The corresponding mesh will glow red in the 3D viewer above so you can easily identify each part.
           </div>
         </div>
 
@@ -1023,7 +1076,7 @@ function handleDeleteShoe(shoe) {
             </div>
           </div>
 
-          <!-- Section 3: Color Palette Builder -->
+          <!-- Section 3: Color Palette Configuration -->
           <div class="border border-[#cfd2ce] bg-white p-5">
             <h3 class="font-display text-sm font-bold uppercase tracking-wider text-[#202220]">
               3. Color Palette Configuration
