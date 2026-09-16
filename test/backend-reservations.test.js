@@ -11,9 +11,10 @@ const REQUIRED_FILES = [
   'create.php',
   'list.php',
   'update-status.php',
+  'delete.php',
 ]
 
-test('all 3 reservation endpoint files exist', () => {
+test('all 4 reservation endpoint files exist', () => {
   for (const file of REQUIRED_FILES) {
     const filePath = path.join(RESERVATIONS_DIR, file)
     assert.ok(fs.existsSync(filePath), `Expected endpoint file to exist: api/reservations/${file}`)
@@ -454,3 +455,194 @@ require __DIR__ . '/create.php';
   })
   assert.equal(resValid.error, 'Shoe ID is required')
 })
+
+test('setup.sql defines arrived status and soft-delete columns on reservations table', () => {
+  const sqlPath = path.join(ROOT_DIR, 'api', 'database', 'setup.sql')
+  assert.ok(fs.existsSync(sqlPath), 'setup.sql must exist')
+  const sql = fs.readFileSync(sqlPath, 'utf8')
+
+  assert.match(
+    sql,
+    /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?reservations[\s\S]*?deleted_at\s+(?:DATETIME|TIMESTAMP)\s+NULL\s+DEFAULT\s+NULL/i,
+    'setup.sql must define deleted_at in reservations table'
+  )
+  assert.match(
+    sql,
+    /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?reservations[\s\S]*?permanently_deleted\s+TINYINT\(1\)\s+NOT\s+NULL\s+DEFAULT\s+0/i,
+    'setup.sql must define permanently_deleted in reservations table'
+  )
+  assert.match(
+    sql,
+    /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?reservations[\s\S]*?status\s+ENUM\([^)]*['"]arrived['"][^)]*\)/i,
+    "setup.sql must include 'arrived' in reservations status ENUM"
+  )
+})
+
+test('delete.php enforces POST, requireAdmin, prepared statements, and soft-delete', () => {
+  const filePath = path.join(RESERVATIONS_DIR, 'delete.php')
+  assert.ok(fs.existsSync(filePath), 'delete.php must exist')
+  const code = fs.readFileSync(filePath, 'utf8')
+
+  assert.match(code, /requireMethod\s*\(\s*['"]POST['"]\s*\)/i, 'Must enforce POST method')
+  assert.match(code, /requireAdmin\s*\(\s*\)/i, 'Must require owner admin privileges')
+  assert.match(code, /prepare\s*\(/i, 'Must use PDO prepare')
+  assert.doesNotMatch(code, /\bDELETE\s+FROM\b/i, 'Must not use physical DELETE FROM')
+  assert.match(
+    code,
+    /UPDATE\s+reservations\s+SET\s+deleted_at\s*=\s*NOW\(\)\s*,\s*permanently_deleted\s*=\s*1\s*,\s*updated_at\s*=\s*NOW\(\)\s+WHERE\s+id\s*=\s*\?/i,
+    'Must soft-delete reservation by setting deleted_at = NOW(), permanently_deleted = 1, updated_at = NOW() WHERE id = ?'
+  )
+})
+
+test('runtime: delete.php enforces POST, auth, owner role, and validates ID', () => {
+  const filePath = path.join(RESERVATIONS_DIR, 'delete.php')
+  assert.ok(fs.existsSync(filePath), 'delete.php must exist')
+
+  // 1. Rejects GET with 405
+  const runnerGet = path.join(RESERVATIONS_DIR, 'test_delete_get.php')
+  fs.writeFileSync(
+    runnerGet,
+    `<?php
+$_SERVER['REQUEST_METHOD'] = 'GET';
+require __DIR__ . '/delete.php';
+`
+  )
+  try {
+    const output = execSync(`php "${runnerGet}"`, { encoding: 'utf8' })
+    const json = JSON.parse(output)
+    assert.equal(json.error, 'Method not allowed')
+  } finally {
+    if (fs.existsSync(runnerGet)) fs.unlinkSync(runnerGet)
+  }
+
+  // 2. Rejects unauthenticated with 401
+  const runnerUnauth = path.join(RESERVATIONS_DIR, 'test_delete_unauth.php')
+  fs.writeFileSync(
+    runnerUnauth,
+    `<?php
+$_SERVER['REQUEST_METHOD'] = 'POST';
+require __DIR__ . '/delete.php';
+`
+  )
+  try {
+    const output = execSync(`php "${runnerUnauth}"`, { encoding: 'utf8' })
+    const json = JSON.parse(output)
+    assert.equal(json.error, 'Authentication required')
+  } finally {
+    if (fs.existsSync(runnerUnauth)) fs.unlinkSync(runnerUnauth)
+  }
+
+  // 3. Rejects customer with 403
+  const runnerCust = path.join(RESERVATIONS_DIR, 'test_delete_cust.php')
+  fs.writeFileSync(
+    runnerCust,
+    `<?php
+$_SERVER['REQUEST_METHOD'] = 'POST';
+require_once __DIR__ . '/../config.php';
+$_SESSION['user_id'] = 42;
+$_SESSION['user_role'] = 'customer';
+require __DIR__ . '/delete.php';
+`
+  )
+  try {
+    const output = execSync(`php "${runnerCust}"`, { encoding: 'utf8' })
+    const json = JSON.parse(output)
+    assert.equal(json.error, 'Owner privileges required')
+  } finally {
+    if (fs.existsSync(runnerCust)) fs.unlinkSync(runnerCust)
+  }
+
+  // 4. Validates missing ID
+  const runnerNoId = path.join(RESERVATIONS_DIR, 'test_delete_no_id.php')
+  fs.writeFileSync(
+    runnerNoId,
+    `<?php
+$_SERVER['REQUEST_METHOD'] = 'POST';
+require_once __DIR__ . '/../config.php';
+$_SESSION['user_id'] = 1;
+$_SESSION['user_role'] = 'owner';
+$GLOBALS['__JSON_BODY__'] = '{}';
+require __DIR__ . '/delete.php';
+`
+  )
+  try {
+    const output = execSync(`php "${runnerNoId}"`, { encoding: 'utf8' })
+    const json = JSON.parse(output)
+    assert.equal(json.error, 'Reservation ID is required')
+  } finally {
+    if (fs.existsSync(runnerNoId)) fs.unlinkSync(runnerNoId)
+  }
+})
+
+test('update-status.php supports arrived status, cancellation notes, customer self-cancellation, and stock restoral', () => {
+  const filePath = path.join(RESERVATIONS_DIR, 'update-status.php')
+  assert.ok(fs.existsSync(filePath), 'update-status.php must exist')
+  const code = fs.readFileSync(filePath, 'utf8')
+
+  assert.match(code, /['"]arrived['"]/i, "update-status.php must allow 'arrived' status")
+  assert.match(code, /notes/i, 'update-status.php must support notes parameter')
+  assert.match(code, /\$_SESSION\[['"]user_role['"]\]\s*===\s*['"]customer['"]/, 'Must check for customer role')
+  assert.match(code, /pending/i, 'Must check existing status is pending')
+  assert.match(
+    code,
+    /UPDATE\s+shoes\s+SET\s+stock\s*=\s*stock\s*\+\s*1/i,
+    'Must restore shoe stock on cancellation'
+  )
+})
+
+test('runtime: update-status.php allows arrived status and rejects non-cancellation for customers', () => {
+  const runStatus = (session, body) => {
+    const runner = path.join(RESERVATIONS_DIR, 'test_status_cases_tmp.php')
+    fs.writeFileSync(
+      runner,
+      `<?php
+$_SERVER['REQUEST_METHOD'] = 'POST';
+require_once __DIR__ . '/../config.php';
+${session.user_id ? `$_SESSION['user_id'] = ${session.user_id};` : ''}
+${session.user_role ? `$_SESSION['user_role'] = '${session.user_role}';` : ''}
+${session.user_email ? `$_SESSION['user_email'] = '${session.user_email}';` : ''}
+$GLOBALS['__JSON_BODY__'] = '${JSON.stringify(body).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}';
+require __DIR__ . '/update-status.php';
+`
+    )
+    try {
+      const out = execSync(`php "${runner}"`, { encoding: 'utf8' })
+      return JSON.parse(out)
+    } finally {
+      if (fs.existsSync(runner)) fs.unlinkSync(runner)
+    }
+  }
+
+  // 1. Owner can pass 'arrived' status and it validates status without 'Invalid status' error
+  // If id is empty, it should fail with "Reservation ID is required", showing 'arrived' was accepted as valid status
+  const ownerArrived = runStatus({ user_id: 1, user_role: 'owner' }, { id: '', status: 'arrived' })
+  assert.equal(ownerArrived.error, 'Reservation ID is required', "'arrived' status must be accepted as valid status")
+
+  // 2. Owner passing invalid status still fails with invalid status
+  const ownerInvalid = runStatus({ user_id: 1, user_role: 'owner' }, { id: 'KC-2026-1041', status: 'unknown_status' })
+  assert.match(ownerInvalid.error, /Invalid status/i)
+
+  // 3. Customer role attempting non-cancellation status is rejected with 403
+  const custArrived = runStatus({ user_id: 42, user_role: 'customer', user_email: 'cust@example.com' }, { id: 'KC-2026-1041', status: 'arrived' })
+  assert.equal(custArrived.error, 'Owner privileges required', 'Customer must not be allowed to set arrived status')
+
+  const custApproved = runStatus({ user_id: 42, user_role: 'customer', user_email: 'cust@example.com' }, { id: 'KC-2026-1041', status: 'approved' })
+  assert.equal(custApproved.error, 'Owner privileges required', 'Customer must not be allowed to approve reservations')
+
+  // 4. Customer role attempting cancellation without ID gets 400
+  const custCancelNoId = runStatus({ user_id: 42, user_role: 'customer', user_email: 'cust@example.com' }, { id: '', status: 'cancelled' })
+  assert.equal(custCancelNoId.error, 'Reservation ID is required')
+})
+
+test('list.php excludes soft-deleted and permanently deleted reservations', () => {
+  const filePath = path.join(RESERVATIONS_DIR, 'list.php')
+  assert.ok(fs.existsSync(filePath), 'list.php must exist')
+  const code = fs.readFileSync(filePath, 'utf8')
+
+  assert.match(
+    code,
+    /deleted_at\s+IS\s+NULL\s+AND\s+permanently_deleted\s*=\s*0/i,
+    'list.php must filter out deleted_at IS NULL AND permanently_deleted = 0'
+  )
+})
+

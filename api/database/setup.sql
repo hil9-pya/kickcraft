@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS shoes (
   description TEXT,
   price DECIMAL(10,2) NOT NULL DEFAULT 4890.00,
   stock INT NOT NULL DEFAULT 0,
-  status ENUM('available', 'coming_soon', 'out_of_stock') NOT NULL DEFAULT 'available',
+  status ENUM('available', 'in_stock', 'coming_soon', 'out_of_stock') NOT NULL DEFAULT 'available',
   glb_path VARCHAR(500) NOT NULL,
   thumbnail_path VARCHAR(500) DEFAULT '/images/kickcraft-one-card.png',
   charms_enabled TINYINT(1) NOT NULL DEFAULT 1,
@@ -59,11 +59,14 @@ CREATE TABLE IF NOT EXISTS reservations (
   part_colors JSON NOT NULL,
   charm_id VARCHAR(50) NOT NULL DEFAULT 'none',
   charm_label VARCHAR(50) NOT NULL DEFAULT 'None',
-  status ENUM('pending', 'paid', 'approved', 'ready', 'completed', 'cancelled') NOT NULL DEFAULT 'pending',
+  -- Schema: status ENUM('pending', 'paid', 'approved', 'ready', 'completed', 'cancelled')
+  status ENUM('pending', 'paid', 'approved', 'ready', 'completed', 'cancelled', 'arrived') NOT NULL DEFAULT 'pending',
   payment_method VARCHAR(50) NOT NULL DEFAULT 'in_store',
   notes TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL DEFAULT NULL,
+  permanently_deleted TINYINT(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- --------------------------------------------------------

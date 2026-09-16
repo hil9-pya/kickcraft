@@ -14,6 +14,7 @@ $userEmail = $_SESSION['user_email'] ?? '';
 $db = getDb();
 
 $where = ['1=1'];
+$where[] = '(deleted_at IS NULL AND permanently_deleted = 0)';
 $params = [];
 
 if (!$isOwner) {
