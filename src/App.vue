@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import AdminPanel from './components/AdminPanel.vue'
 import ConfirmModal from './components/ConfirmModal.vue'
+import KickCraftCalendar from './components/KickCraftCalendar.vue'
 import { api } from './api.js'
 import { adminShoeToCatalogCard, getStoredShoes, setStoredShoes } from './admin.js'
 import { createOrder, getStoredOrders, setStoredOrders } from './financials.js'
@@ -68,6 +69,18 @@ onMounted(async () => {
   } catch (_) {
     // Fallback to getStoredShoes() which initialized adminShoes
   }
+
+  // Pre-load saved guest profile if available
+  const savedGuest = loadGuestProfile()
+  if (savedGuest) {
+    rememberGuestProfile.value = true
+    if (savedGuest.name && !customerName.value) {
+      customerName.value = savedGuest.name
+    }
+    if (savedGuest.email && !customerEmail.value) {
+      customerEmail.value = savedGuest.email
+    }
+  }
 })
 
 function onShoesChanged(updatedShoes) {
@@ -109,6 +122,57 @@ const pickupDate = ref('')
 const reservationReceipt = ref(null)
 const isSubmitting = ref(false)
 const reservationError = ref('')
+
+const GUEST_PROFILE_KEY = 'kickcraft_guest_profile'
+const rememberGuestProfile = ref(false)
+
+function loadGuestProfile() {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(GUEST_PROFILE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      if (parsed && typeof parsed === 'object') {
+        return parsed
+      }
+    }
+  } catch (_) {}
+  return null
+}
+
+function saveGuestProfile(name, email) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    if (rememberGuestProfile.value) {
+      localStorage.setItem(
+        GUEST_PROFILE_KEY,
+        JSON.stringify({ name: name || '', email: email || '' })
+      )
+    } else {
+      localStorage.removeItem(GUEST_PROFILE_KEY)
+    }
+  } catch (_) {}
+}
+
+watch(rememberGuestProfile, (newVal) => {
+  if (!newVal && typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem(GUEST_PROFILE_KEY)
+    } catch (_) {}
+  }
+})
+
+function getPickupDateOffset(days) {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  const y = String(d.getFullYear())
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
+const minPickupDate = computed(() => getPickupDateOffset(7))
+const maxPickupDate = computed(() => getPickupDateOffset(365))
 
 const confirmModal = ref({
   show: false,
@@ -222,10 +286,26 @@ function openReservation() {
   reservationReceipt.value = null
   reservationError.value = ''
   if (!pickupDate.value) {
-    pickupDate.value = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+    pickupDate.value = minPickupDate.value
   }
-  if (currentUser.value?.email) {
-    customerEmail.value = currentUser.value.email
+  if (currentUser.value) {
+    if (currentUser.value.email) {
+      customerEmail.value = currentUser.value.email
+    }
+    if (currentUser.value.name && !customerName.value) {
+      customerName.value = currentUser.value.name
+    }
+  } else {
+    const guest = loadGuestProfile()
+    if (guest) {
+      rememberGuestProfile.value = true
+      if (guest.name && !customerName.value) {
+        customerName.value = guest.name
+      }
+      if (guest.email && !customerEmail.value) {
+        customerEmail.value = guest.email
+      }
+    }
   }
   nextTick(() => document.querySelector('#reservation-dialog')?.showModal())
 }
@@ -272,6 +352,8 @@ async function submitReservation() {
       orders.unshift(res.reservation)
       setStoredOrders(orders)
     } catch (_) {}
+
+    saveGuestProfile(customerName.value.trim(), customerEmail.value.trim())
 
     reservationReceipt.value = res.reservation
     reserved.value = true
@@ -505,18 +587,6 @@ function scrollToTop() {
             Shop
           </button>
 
-          <!-- Back to shop (only in studio, login, or register - NOT in admin) -->
-          <button
-            v-if="view !== 'shop' && view !== 'admin'"
-            class="hidden items-center gap-1.5 text-[#5f635f] transition-colors hover:text-[#202220] sm:flex focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
-            @click="goToShop"
-          >
-            <svg class="size-3.5" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-              <path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-            Back to shop
-          </button>
-
           <!-- Studio active tab label (if in studio) -->
           <span v-if="view === 'studio'" class="hidden border-b-2 border-[#b94d27] py-5 text-[#202220] sm:block">
             Design studio
@@ -567,15 +637,6 @@ function scrollToTop() {
               Register
             </button>
           </template>
-
-          <!-- Order button (when in studio) -->
-          <button
-            v-if="view === 'studio'"
-            class="h-10 border border-[#aeb2ae] px-4 hover:border-[#292b2d] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
-            @click="openReservation"
-          >
-            Order
-          </button>
         </nav>
       </div>
     </header>
@@ -592,7 +653,7 @@ function scrollToTop() {
           Shape the color.<br>Keep the character.
         </h1>
         <p class="mt-5 max-w-md text-sm leading-6 text-[#5f635f]">
-          Design your own sneaker by recoloring its editable parts, attaching a 3D charm, and ordering it for in-store pickup.
+          Design your own sneaker by recoloring its editable parts, attaching a 3D charm, and reserving it for in-store pickup.
         </p>
       </div>
 
@@ -678,7 +739,7 @@ function scrollToTop() {
             type="button"
             class="group flex flex-col overflow-hidden border border-[#bfc3bf] bg-[#fcfdfb] text-left transition-all duration-200 hover:border-[#292b2d] hover:shadow-[0_4px_20px_rgba(0,0,0,0.10)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
             @click="goToStudio(card.shoeId)"
-            :aria-label="`Customize and order ${card.name}`"
+            :aria-label="`Customize and reserve ${card.name}`"
           >
             <!-- Thumbnail -->
             <div class="relative grid h-64 place-items-center overflow-hidden bg-[#e9ece9]">
@@ -730,7 +791,7 @@ function scrollToTop() {
 
               <!-- CTA row -->
               <div class="mt-5 mt-auto flex h-12 w-full items-center justify-between bg-[#292b2d] px-5 text-sm font-bold text-white transition-colors duration-200 group-hover:bg-[#404345]">
-                Customize &amp; Order
+                Customize &amp; Reserve
                 <svg class="size-4 transition-transform duration-200 group-hover:translate-x-1" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
                 </svg>
@@ -804,7 +865,7 @@ function scrollToTop() {
       <section class="mt-10 grid border border-[#bfc3bf] bg-[#292b2d] text-white sm:grid-cols-3" aria-label="How KickCraft works">
         <div class="border-b border-white/20 p-5 sm:border-b-0 sm:border-r"><p class="font-display font-bold">1. Customize</p><p class="mt-1 text-sm text-white/65">Color the editable parts.</p></div>
         <div class="border-b border-white/20 p-5 sm:border-b-0 sm:border-r"><p class="font-display font-bold">2. Inspect</p><p class="mt-1 text-sm text-white/65">Rotate and zoom the 3D model before choosing a size.</p></div>
-        <div class="p-5"><p class="font-display font-bold">3. Order</p><p class="mt-1 text-sm text-white/65">Place your design order for in-store pickup.</p></div>
+        <div class="p-5"><p class="font-display font-bold">3. Reserve</p><p class="mt-1 text-sm text-white/65">Place your design reservation for in-store pickup.</p></div>
       </section>
     </main>
 
@@ -815,17 +876,21 @@ function scrollToTop() {
       v-else-if="view === 'studio'"
       class="mx-auto max-w-[1480px] flex-col px-5 py-5 lg:px-8 lg:py-6"
     >
+      <!-- Studio Breadcrumb -->
+      <nav class="mb-4 flex items-center gap-2 text-xs font-bold text-[#5f635f]" aria-label="Studio Breadcrumb">
+        <button type="button" class="transition-colors hover:text-[#202220] hover:underline" @click="goToShop">
+          ← Back to Catalog
+        </button>
+        <span class="text-[#cfd2ce]">/</span>
+        <span class="text-[#202220]">{{ selectedShoe.name }}</span>
+      </nav>
+
       <!-- Compact title row -->
       <div class="mb-4 flex flex-wrap items-end justify-between gap-3 shrink-0">
         <div>
           <p class="text-xs font-semibold text-[#6a6e6a]">{{ selectedShoe.name }} · Design studio</p>
           <h1 class="font-display text-2xl font-black leading-tight tracking-[-0.04em] text-[#202220] sm:text-3xl">Shape the color. Keep the character.</h1>
         </div>
-        <!-- Mobile back link -->
-        <button
-          class="flex items-center gap-1.5 text-sm text-[#5f635f] underline underline-offset-4 hover:text-[#292b2d] sm:hidden focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
-          @click="goToShop"
-        >← Back to shop</button>
       </div>
 
       <!-- Studio panel: 3D viewer + customization -->
@@ -987,14 +1052,22 @@ function scrollToTop() {
             </fieldset>
           </div>
 
-          <!-- Order CTA — pinned to bottom of panel -->
+          <!-- Reservation CTA — pinned to bottom of panel -->
           <div class="mt-auto shrink-0 border-t border-[#d9dcd8] bg-[#f1f3f0] p-5 lg:p-6">
-            <p class="mb-3 text-sm text-[#5f635f]">Pickup order · Your colors, accessory, and size are included.</p>
+            <p class="mb-2 text-sm text-[#5f635f]">Pickup reservation · Your colors, accessory, and size are included.</p>
+            <label class="mb-3 flex items-center gap-2 cursor-pointer select-none text-xs text-[#5f635f]">
+              <input
+                v-model="rememberGuestProfile"
+                type="checkbox"
+                class="size-4 accent-[#292b2d]"
+              />
+              <span>Remember my contact details on this device</span>
+            </label>
             <button
               type="button"
               class="h-12 w-full bg-[#b94d27] px-5 font-bold text-white hover:bg-[#963a20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
               @click="openReservation"
-            >Order this design</button>
+            >Reserve this design</button>
           </div>
         </div>
       </section>
@@ -1010,7 +1083,7 @@ function scrollToTop() {
             {{ selectedShoe.name }} gives customers {{ selectedParts.length }} editable zones. The remaining shoe details stay fixed so the editing stays quick.
           </p>
           <p class="mt-3 text-sm leading-7 text-[#5f635f]">
-            Rotate the model to inspect your color choices from every angle before you commit. Add a charm near the laces, choose a size, and place your order for pickup.
+            Rotate the model to inspect your color choices from every angle before you commit. Add a charm near the laces, choose a size, and place your reservation for pickup.
           </p>
         </div>
 
@@ -1045,7 +1118,7 @@ function scrollToTop() {
         </div>
         <div class="p-6">
           <p class="font-display text-base font-bold">In-store pickup</p>
-          <p class="mt-1.5 text-sm leading-6 text-white/65">Order your exact design online and pick it up at the KickCraft store — no shipping wait, no surprises.</p>
+          <p class="mt-1.5 text-sm leading-6 text-white/65">Reserve your exact design online and pick it up at the KickCraft store — no shipping wait, no surprises.</p>
         </div>
       </div>
 
@@ -1226,7 +1299,7 @@ function scrollToTop() {
             Create an Account
           </h1>
           <p class="mt-1 text-xs text-[#6a6e6a]">
-            Register as a customer to track your customized shoes and in-store pickup orders.
+            Register as a customer to track your customized shoes and in-store pickup reservations.
           </p>
         </div>
 
@@ -1291,7 +1364,7 @@ function scrollToTop() {
           <label class="flex items-start gap-2 pt-1 text-xs cursor-pointer select-none">
             <input v-model="registerAgreed" required type="checkbox" class="mt-0.5 size-4 accent-[#292b2d]" />
             <span class="text-[#5f635f]">
-              I agree to the KickCraft custom shoe order and in-store pickup policies.
+              I agree to the KickCraft custom shoe reservation and in-store pickup policies.
             </span>
           </label>
 
@@ -1336,7 +1409,7 @@ function scrollToTop() {
               <span class="font-display text-lg font-extrabold tracking-[-0.03em] text-white">KickCraft</span>
             </div>
             <p class="text-xs leading-6 text-white/70">
-              Interactive 3D shoe customization and store pickup system. Directly recolor independent shoe parts, attach interchangeable 3D charms, and order your custom pair for pickup.
+              Interactive 3D shoe customization and store pickup system. Directly recolor independent shoe parts, attach interchangeable 3D charms, and reserve your custom pair for pickup.
             </p>
             <div class="border-t border-white/10 pt-3 text-xs text-white/50">
               <p class="font-semibold text-white/80">KickCraft Flagship Studio</p>
@@ -1433,13 +1506,13 @@ function scrollToTop() {
             <button type="button" class="hover:text-white" @click="goToStudio('kickcraft-one')">3D Studio</button>
             <button type="button" class="hover:text-white" @click="goToLogin('customer')">Log In</button>
             <button type="button" class="hover:text-white" @click="goToRegister">Register</button>
-            <button type="button" class="hover:text-white" @click="openReservation">Order</button>
+            <button type="button" class="hover:text-white" @click="openReservation">Reserve</button>
           </div>
         </div>
       </div>
     </footer>
 
-    <!-- ── Order dialog (shared between views) ─────────────── -->
+    <!-- ── Reservation dialog (shared between views) ─────── -->
     <dialog id="reservation-dialog" class="m-auto w-[calc(100%_-_32px)] max-w-md border border-[#8e938e] bg-[#fcfdfb] p-0 text-[#292b2d]">
       <div v-if="!reserved" class="p-6">
         <div class="flex items-start justify-between gap-4 border-b border-[#d9dcd8] pb-4">
@@ -1447,7 +1520,7 @@ function scrollToTop() {
             <h2 class="font-display text-xl font-black">Reserve {{ selectedShoe.name }}</h2>
             <p class="mt-1 text-sm text-[#626662]">Size {{ selectedSize }} · {{ customizedCount }} customized parts · {{ selectedCharm.label }} accessory</p>
           </div>
-          <button class="grid size-9 place-items-center border border-[#bfc3bf] text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" aria-label="Close order modal" @click="closeReservation">×</button>
+          <button class="grid size-9 place-items-center border border-[#bfc3bf] text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" aria-label="Close reservation modal" @click="closeReservation">×</button>
         </div>
         <div v-if="reservationError" class="mt-4 border border-[#b94d27]/30 bg-[#fdf2ef] p-3 text-xs text-[#963a20]">
           {{ reservationError }}
@@ -1474,15 +1547,22 @@ function scrollToTop() {
               class="h-11 w-full border border-[#bfc3bf] bg-white px-3 outline-none focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
             />
           </label>
-          <label class="block">
-            <span class="mb-1.5 block text-sm font-bold">Pickup date</span>
+          <label class="flex items-center gap-2 pt-0.5 text-xs cursor-pointer select-none text-[#5f635f]">
             <input
-              v-model="pickupDate"
-              required
-              type="date"
-              class="h-11 w-full border border-[#bfc3bf] bg-white px-3 outline-none focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+              v-model="rememberGuestProfile"
+              type="checkbox"
+              class="size-4 accent-[#292b2d]"
             />
+            <span>Remember my contact details on this device</span>
           </label>
+          <div>
+            <span class="mb-1.5 block text-sm font-bold">Pickup date</span>
+            <KickCraftCalendar
+              v-model="pickupDate"
+              :min-date="minPickupDate"
+              :max-date="maxPickupDate"
+            />
+          </div>
           <div class="border-t border-[#e2e5e1] pt-3 flex items-center justify-between text-sm">
             <span class="text-[#626662]">Estimated Total:</span>
             <span class="font-bold text-[#292b2d]">{{ selectedShoe.formattedPrice || '₱4,890' }}</span>
