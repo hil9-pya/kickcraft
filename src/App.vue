@@ -1,7 +1,8 @@
 <script setup>
-import { computed, nextTick, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import AdminPanel from './components/AdminPanel.vue'
 import ConfirmModal from './components/ConfirmModal.vue'
+import { api } from './api.js'
 import { adminShoeToCatalogCard, getStoredShoes, setStoredShoes } from './admin.js'
 import { createOrder, getStoredOrders, setStoredOrders } from './financials.js'
 import {
@@ -27,6 +28,28 @@ const colors = [
 
 const adminShoes = ref(getStoredShoes())
 const currentUser = ref(null) // { email, role: 'customer' | 'owner' }
+
+onMounted(async () => {
+  // Check active session from PHP API
+  try {
+    const sessionRes = await api('auth/session.php')
+    if (sessionRes?.authenticated && sessionRes?.user) {
+      currentUser.value = sessionRes.user
+    }
+  } catch (_) {
+    // Session check fails gracefully when offline or unauthenticated
+  }
+
+  // Load catalog shoes from API with fallback to getStoredShoes()
+  try {
+    const shoesRes = await api('shoes/list.php')
+    if (shoesRes?.shoes && Array.isArray(shoesRes.shoes) && shoesRes.shoes.length > 0) {
+      adminShoes.value = shoesRes.shoes
+    }
+  } catch (_) {
+    // Fallback to getStoredShoes() which initialized adminShoes
+  }
+})
 
 function onShoesChanged(updatedShoes) {
   adminShoes.value = updatedShoes
@@ -65,6 +88,8 @@ const customerName = ref('')
 const customerEmail = ref('')
 const pickupDate = ref('')
 const reservationReceipt = ref(null)
+const isSubmitting = ref(false)
+const reservationError = ref('')
 
 const confirmModal = ref({
   show: false,
@@ -176,6 +201,7 @@ function requestResetDesign() {
 function openReservation() {
   reserved.value = false
   reservationReceipt.value = null
+  reservationError.value = ''
   if (!pickupDate.value) {
     pickupDate.value = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
   }
@@ -189,41 +215,52 @@ function closeReservation() {
   document.querySelector('#reservation-dialog')?.close()
 }
 
-function submitReservation() {
+async function submitReservation() {
   if (!customerName.value.trim() || !customerEmail.value.trim() || !pickupDate.value) {
     return
   }
 
-  const orders = getStoredOrders()
-  const newOrder = createOrder(orders, {
-    customerName: customerName.value.trim(),
-    customerEmail: customerEmail.value.trim(),
-    pickupDate: pickupDate.value,
-    shoeId: selectedShoe.value.id,
-    shoeName: selectedShoe.value.name,
-    size: selectedSize.value,
-    price: selectedShoe.value.price || 4890,
-    partColors: { ...partColors.value },
-    charmId: selectedCharm.value.id,
-    charmLabel: selectedCharm.value.label,
-    status: 'pending', // Starts pending until verified/paid upon store pickup
-    paymentMethod: 'in_store',
-    notes: 'Online custom reservation placed via 3D Studio. Store pickup.',
-  })
-  setStoredOrders(orders)
+  isSubmitting.value = true
+  reservationError.value = ''
 
-  // Decrement inventory stock if present in admin catalog
-  const shoeIndex = adminShoes.value.findIndex(s => s.id === selectedShoe.value.id)
-  if (shoeIndex !== -1 && adminShoes.value[shoeIndex].stock > 0) {
-    adminShoes.value[shoeIndex].stock -= 1
-    if (adminShoes.value[shoeIndex].stock === 0) {
-      adminShoes.value[shoeIndex].status = 'out_of_stock'
+  try {
+    const res = await api('reservations/create.php', {
+      method: 'POST',
+      body: {
+        customerName: customerName.value.trim(),
+        email: customerEmail.value.trim(),
+        pickupDate: pickupDate.value,
+        shoeId: selectedShoe.value.id,
+        size: selectedSize.value,
+        partColors: { ...partColors.value },
+        charmId: selectedCharm.value.id,
+        charmLabel: selectedCharm.value.label,
+      },
+    })
+
+    // Decrement inventory stock if present in admin catalog
+    const shoeIndex = adminShoes.value.findIndex(s => s.id === selectedShoe.value.id)
+    if (shoeIndex !== -1 && adminShoes.value[shoeIndex].stock > 0) {
+      adminShoes.value[shoeIndex].stock -= 1
+      if (adminShoes.value[shoeIndex].stock === 0) {
+        adminShoes.value[shoeIndex].status = 'out_of_stock'
+      }
+      setStoredShoes(adminShoes.value)
     }
-    setStoredShoes(adminShoes.value)
-  }
 
-  reservationReceipt.value = newOrder
-  reserved.value = true
+    try {
+      const orders = getStoredOrders()
+      orders.unshift(res.reservation)
+      setStoredOrders(orders)
+    } catch (_) {}
+
+    reservationReceipt.value = res.reservation
+    reserved.value = true
+  } catch (err) {
+    reservationError.value = err.message || 'Failed to create reservation'
+  } finally {
+    isSubmitting.value = false
+  }
 }
 
 // ── View routing ──────────────────────────────────────────────
@@ -234,7 +271,10 @@ function goToAdmin() {
   scrollToTop()
 }
 
-function handleLogout() {
+async function handleLogout() {
+  try {
+    await api('auth/logout.php', { method: 'POST' })
+  } catch (_) {}
   currentUser.value = null
   loginEmail.value = ''
   loginPassword.value = ''
@@ -256,13 +296,14 @@ function requestLogout() {
   }
 }
 
-// ── Auth state (prepared for future PHP / MySQL API) ──────────
+// ── Auth state ────────────────────────────────────────────────
 const authRole = ref('customer') // 'customer' | 'owner'
 const loginEmail = ref('')
 const loginPassword = ref('')
 const loginRemember = ref(false)
 const loginFeedback = ref('')
 const loginError = ref('')
+const isLoggingIn = ref(false)
 
 const registerName = ref('')
 const registerEmail = ref('')
@@ -271,6 +312,7 @@ const registerConfirmPassword = ref('')
 const registerAgreed = ref(false)
 const registerFeedback = ref('')
 const registerError = ref('')
+const isRegistering = ref(false)
 
 function goToLogin(role = 'customer') {
   authRole.value = role
@@ -287,29 +329,40 @@ function goToRegister() {
   scrollToTop()
 }
 
-function handleLoginSubmit() {
+async function handleLoginSubmit() {
   loginError.value = ''
   loginFeedback.value = ''
   if (!loginEmail.value || !loginPassword.value) {
     loginError.value = 'Please enter both your email and password.'
     return
   }
-  if (authRole.value === 'owner') {
-    currentUser.value = { email: loginEmail.value, role: 'owner' }
-    loginFeedback.value = 'Logged in successfully as Owner / Admin. Redirecting to admin portal…'
+
+  isLoggingIn.value = true
+  try {
+    const res = await api('auth/login.php', {
+      method: 'POST',
+      body: {
+        email: loginEmail.value,
+        password: loginPassword.value,
+      },
+    })
+    currentUser.value = res.user
+    loginFeedback.value = `Logged in successfully as ${res.user.role === 'owner' ? 'Owner / Admin' : 'Customer'}. Redirecting…`
     setTimeout(() => {
-      goToAdmin()
-    }, 500)
-  } else {
-    currentUser.value = { email: loginEmail.value, role: 'customer' }
-    loginFeedback.value = 'Logged in successfully as Customer. Redirecting to shop…'
-    setTimeout(() => {
-      goToShop()
-    }, 500)
+      if (res.user.role === 'owner') {
+        goToAdmin()
+      } else {
+        goToShop()
+      }
+    }, 400)
+  } catch (err) {
+    loginError.value = err.message || 'Login failed'
+  } finally {
+    isLoggingIn.value = false
   }
 }
 
-function handleRegisterSubmit() {
+async function handleRegisterSubmit() {
   registerError.value = ''
   registerFeedback.value = ''
   if (!registerName.value || !registerEmail.value || !registerPassword.value) {
@@ -324,12 +377,27 @@ function handleRegisterSubmit() {
     registerError.value = 'Password must be at least 6 characters long.'
     return
   }
-  // Frontend prototype feedback — ready for backend POST /api/auth/register.php
-  registerFeedback.value = 'Account created successfully! Redirecting to sign in…'
-  setTimeout(() => {
-    loginEmail.value = registerEmail.value
-    goToLogin('customer')
-  }, 1200)
+
+  isRegistering.value = true
+  try {
+    const res = await api('auth/register.php', {
+      method: 'POST',
+      body: {
+        name: registerName.value,
+        email: registerEmail.value,
+        password: registerPassword.value,
+      },
+    })
+    registerFeedback.value = res.message || 'Account created successfully! Redirecting to sign in…'
+    setTimeout(() => {
+      loginEmail.value = registerEmail.value
+      goToLogin('customer')
+    }, 1200)
+  } catch (err) {
+    registerError.value = err.message || 'Registration failed'
+  } finally {
+    isRegistering.value = false
+  }
 }
 
 function resetStudioState() {
@@ -341,6 +409,7 @@ function resetStudioState() {
   modelError.value = ''
   reserved.value = false
   reservationReceipt.value = null
+  reservationError.value = ''
 }
 
 function goToStudio(shoeId) {
@@ -1047,9 +1116,10 @@ function scrollToTop() {
 
           <button
             type="submit"
-            class="h-12 w-full bg-[#292b2d] font-bold text-white transition-colors hover:bg-[#404345] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+            :disabled="isLoggingIn"
+            class="h-12 w-full bg-[#292b2d] font-bold text-white transition-colors hover:bg-[#404345] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-[#245fa8]"
           >
-            Sign In as {{ authRole === 'owner' ? 'Owner / Admin' : 'Customer' }}
+            {{ isLoggingIn ? 'Signing in…' : `Sign In as ${authRole === 'owner' ? 'Owner / Admin' : 'Customer'}` }}
           </button>
         </form>
 
@@ -1177,9 +1247,10 @@ function scrollToTop() {
 
           <button
             type="submit"
-            class="h-12 w-full bg-[#b94d27] font-bold text-white transition-colors hover:bg-[#963a20] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+            :disabled="isRegistering"
+            class="h-12 w-full bg-[#b94d27] font-bold text-white transition-colors hover:bg-[#963a20] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-[#245fa8]"
           >
-            Create Customer Account
+            {{ isRegistering ? 'Creating account…' : 'Create Customer Account' }}
           </button>
         </form>
 
@@ -1328,6 +1399,9 @@ function scrollToTop() {
           </div>
           <button class="grid size-9 place-items-center border border-[#bfc3bf] text-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" aria-label="Close order modal" @click="closeReservation">×</button>
         </div>
+        <div v-if="reservationError" class="mt-4 border border-[#b94d27]/30 bg-[#fdf2ef] p-3 text-xs text-[#963a20]">
+          {{ reservationError }}
+        </div>
         <form class="space-y-4 pt-5" @submit.prevent="submitReservation">
           <label class="block">
             <span class="mb-1.5 block text-sm font-bold">Full name</span>
@@ -1364,8 +1438,12 @@ function scrollToTop() {
             <span class="font-bold text-[#292b2d]">{{ selectedShoe.formattedPrice || '₱4,890' }}</span>
           </div>
           <p class="text-xs text-[#737773]">No online charge today. Payment is collected upon inspection and pickup in-store.</p>
-          <button type="submit" class="h-12 w-full bg-[#b94d27] font-bold text-white hover:bg-[#963a20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]">
-            Confirm pickup reservation
+          <button
+            type="submit"
+            :disabled="isSubmitting"
+            class="h-12 w-full bg-[#b94d27] font-bold text-white hover:bg-[#963a20] disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
+          >
+            {{ isSubmitting ? 'Submitting reservation…' : 'Confirm pickup reservation' }}
           </button>
         </form>
       </div>
