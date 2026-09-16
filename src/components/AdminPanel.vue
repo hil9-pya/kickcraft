@@ -127,6 +127,132 @@ const walkInForm = ref({
   notes: 'Direct in-store customer purchase.',
 })
 
+// ── Users & Accounts State ────────────────────────────────────
+const users = ref([])
+const usersLoading = ref(false)
+const usersError = ref('')
+const userSearchQuery = ref('')
+const userRoleFilter = ref('all') // 'all' | 'customer' | 'owner' | 'archived'
+
+async function fetchUsers() {
+  usersLoading.value = true
+  usersError.value = ''
+  try {
+    const res = await api('auth/users.php?include_archived=1')
+    if (res && Array.isArray(res.users)) {
+      users.value = res.users
+    }
+  } catch (err) {
+    usersError.value = err.message || 'Failed to load users'
+  } finally {
+    usersLoading.value = false
+  }
+}
+
+function deleteUser(user, mode = 'soft') {
+  if (user.email === props.currentUser.email) {
+    adminConfirm.value = {
+      show: true,
+      title: 'Cannot Modify Own Account',
+      message: 'You are currently logged into this account. For security, you cannot archive or delete your own active account.',
+      confirmText: 'Understood',
+      cancelText: 'Close',
+      variant: 'warning',
+      icon: 'warning',
+      onConfirm: () => {},
+    }
+    return
+  }
+
+  if (mode === 'hard') {
+    adminConfirm.value = {
+      show: true,
+      title: 'Permanently Delete User Account?',
+      message: `Are you sure you want to permanently delete "${user.name}" (${user.email})? This user will be permanently blocked from signing in. Database history is preserved.`,
+      confirmText: 'Delete Permanently',
+      cancelText: 'Keep Account',
+      variant: 'danger',
+      icon: 'trash',
+      onConfirm: async () => {
+        try {
+          await api('auth/delete-user.php', { method: 'POST', body: { id: user.id, mode: 'hard' } })
+          await fetchUsers()
+          saveFeedback.value = `"${user.name}" has been permanently deleted.`
+        } catch (err) {
+          saveFeedback.value = err.message || 'Failed to delete user'
+        }
+      },
+    }
+  } else {
+    adminConfirm.value = {
+      show: true,
+      title: 'Archive User Account?',
+      message: `Are you sure you want to archive "${user.name}" (${user.email})? This account will be deactivated and cannot sign in until restored.`,
+      confirmText: 'Archive User',
+      cancelText: 'Keep Active',
+      variant: 'warning',
+      icon: 'warning',
+      onConfirm: async () => {
+        try {
+          await api('auth/delete-user.php', { method: 'POST', body: { id: user.id, mode: 'soft' } })
+          await fetchUsers()
+          saveFeedback.value = `"${user.name}" has been archived.`
+        } catch (err) {
+          saveFeedback.value = err.message || 'Failed to archive user'
+        }
+      },
+    }
+  }
+}
+
+async function restoreUser(user) {
+  try {
+    await api('auth/restore-user.php', { method: 'POST', body: { id: user.id } })
+    await fetchUsers()
+    saveFeedback.value = `"${user.name}" has been restored to active status.`
+  } catch (err) {
+    saveFeedback.value = err.message || 'Failed to restore user'
+  }
+}
+
+const filteredUsers = computed(() => {
+  let list = users.value || []
+  const q = userSearchQuery.value.trim().toLowerCase()
+  if (q) {
+    list = list.filter(u =>
+      (u.name && u.name.toLowerCase().includes(q)) ||
+      (u.email && u.email.toLowerCase().includes(q))
+    )
+  }
+  if (userRoleFilter.value === 'archived') {
+    return list.filter(u => u.deleted_at && !u.permanently_deleted)
+  }
+  // For active views: hide archived
+  list = list.filter(u => !u.deleted_at && !u.permanently_deleted)
+  if (userRoleFilter.value === 'customer') {
+    return list.filter(u => u.role === 'customer')
+  }
+  if (userRoleFilter.value === 'owner') {
+    return list.filter(u => u.role === 'owner')
+  }
+  return list
+})
+
+const userStats = computed(() => {
+  const all = users.value || []
+  const active = all.filter(u => !u.deleted_at && !u.permanently_deleted)
+  const customers = active.filter(u => u.role === 'customer').length
+  const owners = active.filter(u => u.role === 'owner').length
+  const archived = all.filter(u => u.deleted_at && !u.permanently_deleted).length
+  return {
+    total: all.length,
+    active: active.length,
+    customers,
+    owners,
+    archived,
+  }
+})
+
 // ── Lifecycle ──────────────────────────────────────────────────
 onMounted(async () => {
   await loadData()
@@ -153,6 +279,15 @@ async function loadData() {
     }
   } catch {
     orders.value = getStoredOrders()
+  }
+
+  try {
+    const usersRes = await api('auth/users.php?include_archived=1')
+    if (usersRes && Array.isArray(usersRes.users)) {
+      users.value = usersRes.users
+    }
+  } catch {
+    // fallback or empty
   }
 
   emit('shoesChanged', shoes.value)
@@ -845,6 +980,24 @@ async function restoreShoe(shoe) {
           class="rounded-full bg-[#c97d1e] px-1.5 py-0.5 text-[10px] font-black text-white"
         >
           {{ financialStats.pendingUnits }} pending
+        </span>
+      </button>
+
+      <button
+        type="button"
+        class="flex items-center gap-2 border-b-2 px-6 py-3.5 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+        :class="adminSection === 'users'
+          ? 'border-[#b94d27] bg-[#fcfdfb] text-[#202220]'
+          : 'border-transparent text-[#5f635f] hover:text-[#202220]'"
+        @click="adminSection = 'users'; editorMode = false; fetchUsers()"
+      >
+        <span>👥</span>
+        <span>User Accounts</span>
+        <span
+          v-if="userStats.total > 0"
+          class="rounded-full bg-[#292b2d] px-1.5 py-0.5 text-[10px] font-black text-white"
+        >
+          {{ userStats.total }}
         </span>
       </button>
     </div>
@@ -2163,6 +2316,279 @@ async function restoreShoe(shoe) {
           </div>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <!-- SECTION 3: USER ACCOUNTS VIEW                              -->
+    <!-- ══════════════════════════════════════════════════════════ -->
+    <div v-if="adminSection === 'users'" class="space-y-6">
+      <!-- Header -->
+      <div class="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+        <div>
+          <h1 class="font-display text-3xl font-black tracking-[-0.04em] text-[#202220]">
+            User Accounts &amp; Access
+          </h1>
+          <p class="mt-1 text-sm text-[#5f635f]">
+            Review registered customer and owner profiles, enforce role permissions, or archive accounts.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          class="flex items-center gap-2 border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#202220] shadow-sm transition-colors hover:border-[#292b2d] hover:bg-[#fcfdfb]"
+          :disabled="usersLoading"
+          @click="fetchUsers"
+        >
+          <svg class="size-3.5" :class="{ 'animate-spin': usersLoading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span>{{ usersLoading ? 'Refreshing…' : 'Refresh Users' }}</span>
+        </button>
+      </div>
+
+      <!-- KPI Summary Cards -->
+      <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
+        <div class="border border-[#cfd2ce] bg-white p-4 shadow-sm">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-[#5f635f]">Total Users</p>
+          <p class="mt-1 font-display text-2xl font-black text-[#202220]">{{ userStats.total }}</p>
+        </div>
+
+        <div class="border border-[#cfd2ce] bg-white p-4 shadow-sm">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-[#3f7652]">Active Customers</p>
+          <p class="mt-1 font-display text-2xl font-black text-[#3f7652]">{{ userStats.customers }}</p>
+        </div>
+
+        <div class="border border-[#cfd2ce] bg-white p-4 shadow-sm">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-[#b94d27]">Owners / Admins</p>
+          <p class="mt-1 font-display text-2xl font-black text-[#b94d27]">{{ userStats.owners }}</p>
+        </div>
+
+        <div class="border border-[#cfd2ce] bg-white p-4 shadow-sm">
+          <p class="text-[11px] font-bold uppercase tracking-wider text-[#c97d1e]">Archived</p>
+          <p class="mt-1 font-display text-2xl font-black text-[#c97d1e]">{{ userStats.archived }}</p>
+        </div>
+      </div>
+
+      <!-- Feedback Banner -->
+      <div
+        v-if="saveFeedback"
+        class="flex items-center justify-between border border-[#3f7652] bg-[#f0f7f2] px-4 py-3 text-xs font-semibold text-[#3f7652]"
+      >
+        <span>{{ saveFeedback }}</span>
+        <button type="button" class="font-bold underline" @click="saveFeedback = ''">Dismiss</button>
+      </div>
+
+      <!-- Error Banner -->
+      <div
+        v-if="usersError"
+        class="flex items-center justify-between border border-[#b94d27] bg-[#fdf2ef] px-4 py-3 text-xs font-semibold text-[#b94d27]"
+      >
+        <span>{{ usersError }}</span>
+        <button type="button" class="font-bold underline" @click="usersError = ''">Dismiss</button>
+      </div>
+
+      <!-- Filter Controls & Search -->
+      <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div class="flex flex-wrap gap-1 border border-[#cfd2ce] bg-white p-1 shadow-sm">
+          <button
+            type="button"
+            class="px-3 py-1.5 text-xs font-bold transition-colors"
+            :class="userRoleFilter === 'all'
+              ? 'bg-[#292b2d] text-white'
+              : 'text-[#5f635f] hover:text-[#202220]'"
+            @click="userRoleFilter = 'all'"
+          >
+            All ({{ userStats.active }})
+          </button>
+          <button
+            type="button"
+            class="px-3 py-1.5 text-xs font-bold transition-colors"
+            :class="userRoleFilter === 'customer'
+              ? 'bg-[#292b2d] text-white'
+              : 'text-[#5f635f] hover:text-[#202220]'"
+            @click="userRoleFilter = 'customer'"
+          >
+            Customers ({{ userStats.customers }})
+          </button>
+          <button
+            type="button"
+            class="px-3 py-1.5 text-xs font-bold transition-colors"
+            :class="userRoleFilter === 'owner'
+              ? 'bg-[#292b2d] text-white'
+              : 'text-[#5f635f] hover:text-[#202220]'"
+            @click="userRoleFilter = 'owner'"
+          >
+            Owners ({{ userStats.owners }})
+          </button>
+          <button
+            type="button"
+            class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold transition-colors"
+            :class="userRoleFilter === 'archived'
+              ? 'bg-[#c97d1e] text-white'
+              : 'text-[#5f635f] hover:text-[#202220]'"
+            @click="userRoleFilter = 'archived'"
+          >
+            <span>Archived</span>
+            <span
+              v-if="userStats.archived > 0"
+              class="rounded-full bg-[#fcfdfb] px-1.5 py-0.2 text-[10px] font-black text-[#c97d1e]"
+            >
+              {{ userStats.archived }}
+            </span>
+          </button>
+        </div>
+
+        <div class="relative w-full sm:w-72">
+          <input
+            v-model="userSearchQuery"
+            type="text"
+            placeholder="Search by name or email…"
+            class="w-full border border-[#cfd2ce] bg-white px-3 py-2 text-xs text-[#202220] shadow-sm transition-colors focus:border-[#245fa8] focus:outline-none"
+          />
+          <button
+            v-if="userSearchQuery"
+            type="button"
+            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[#8e938e] hover:text-[#202220]"
+            @click="userSearchQuery = ''"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+
+      <!-- Users Table -->
+      <div class="border border-[#cfd2ce] bg-white shadow-sm overflow-x-auto">
+        <table class="w-full text-left text-xs text-[#202220]">
+          <thead class="border-b border-[#cfd2ce] bg-[#f7f8f6] font-bold uppercase tracking-wider text-[#5f635f]">
+            <tr>
+              <th class="px-4 py-3">User Profile</th>
+              <th class="px-4 py-3">Role</th>
+              <th class="px-4 py-3">Registered</th>
+              <th class="px-4 py-3">Status</th>
+              <th class="px-4 py-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[#cfd2ce]">
+            <tr
+              v-for="u in filteredUsers"
+              :key="u.id"
+              class="transition-colors hover:bg-[#fcfdfb]"
+              :class="{ 'bg-[#fdfaf5]': u.deleted_at }"
+            >
+              <!-- Profile -->
+              <td class="px-4 py-3.5">
+                <div class="flex items-center gap-3">
+                  <div
+                    class="flex size-8 shrink-0 items-center justify-center rounded-full font-display text-xs font-black text-white"
+                    :class="u.role === 'owner' ? 'bg-[#b94d27]' : 'bg-[#292b2d]'"
+                  >
+                    {{ (u.name || u.email || 'U').charAt(0).toUpperCase() }}
+                  </div>
+                  <div>
+                    <p class="font-bold text-[#202220]">
+                      {{ u.name || 'Unnamed User' }}
+                      <span
+                        v-if="u.email === currentUser?.email"
+                        class="ml-1.5 text-[10px] font-semibold text-[#3f7652]"
+                      >
+                        (You)
+                      </span>
+                    </p>
+                    <p class="text-[11px] text-[#5f635f]">{{ u.email }}</p>
+                  </div>
+                </div>
+              </td>
+
+              <!-- Role -->
+              <td class="px-4 py-3.5">
+                <span
+                  class="inline-block px-2 py-0.5 text-[10px] font-black uppercase tracking-wider"
+                  :class="u.role === 'owner'
+                    ? 'border border-[#b94d27] bg-[#fdf2ef] text-[#b94d27]'
+                    : 'border border-[#cfd2ce] bg-[#f7f8f6] text-[#5f635f]'"
+                >
+                  {{ u.role === 'owner' ? 'Owner / Admin' : 'Customer' }}
+                </span>
+              </td>
+
+              <!-- Registered -->
+              <td class="px-4 py-3.5 text-[#5f635f]">
+                {{ u.created_at ? new Date(u.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }) : '—' }}
+              </td>
+
+              <!-- Status -->
+              <td class="px-4 py-3.5">
+                <span
+                  v-if="u.deleted_at"
+                  class="inline-flex items-center gap-1 text-[11px] font-bold text-[#c97d1e]"
+                >
+                  <span class="size-1.5 rounded-full bg-[#c97d1e]" />
+                  Archived
+                </span>
+                <span
+                  v-else
+                  class="inline-flex items-center gap-1 text-[11px] font-bold text-[#3f7652]"
+                >
+                  <span class="size-1.5 rounded-full bg-[#3f7652]" />
+                  Active
+                </span>
+              </td>
+
+              <!-- Actions -->
+              <td class="px-4 py-3.5 text-right">
+                <div class="flex items-center justify-end gap-2">
+                  <!-- Self-account guard -->
+                  <span
+                    v-if="u.email === currentUser?.email"
+                    class="text-[11px] font-semibold text-[#8e938e]"
+                  >
+                    Current Session
+                  </span>
+
+                  <!-- Active User Actions -->
+                  <template v-else-if="!u.deleted_at">
+                    <button
+                      type="button"
+                      class="border border-[#cfd2ce] bg-white px-2.5 py-1 text-[11px] font-bold text-[#5f635f] transition-colors hover:border-[#b94d27] hover:bg-[#fdf2ef] hover:text-[#b94d27]"
+                      @click="deleteUser(u, 'soft')"
+                    >
+                      Archive
+                    </button>
+                  </template>
+
+                  <!-- Archived User Actions -->
+                  <template v-else>
+                    <button
+                      type="button"
+                      class="border border-[#3f7652] bg-[#f0f7f2] px-2.5 py-1 text-[11px] font-bold text-[#3f7652] transition-colors hover:bg-[#3f7652] hover:text-white"
+                      @click="restoreUser(u)"
+                    >
+                      Restore
+                    </button>
+                    <button
+                      type="button"
+                      class="border border-[#b94d27] bg-white px-2.5 py-1 text-[11px] font-bold text-[#b94d27] transition-colors hover:bg-[#b94d27] hover:text-white"
+                      @click="deleteUser(u, 'hard')"
+                    >
+                      Delete Permanently
+                    </button>
+                  </template>
+                </div>
+              </td>
+            </tr>
+
+            <!-- Empty state -->
+            <tr v-if="filteredUsers.length === 0">
+              <td colspan="5" class="py-12 text-center text-sm text-[#5f635f]">
+                <p class="font-bold text-[#202220]">No users found</p>
+                <p class="mt-1 text-xs">
+                  {{ userSearchQuery ? 'Try clearing your search keyword.' : 'No accounts match the selected filter.' }}
+                </p>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 

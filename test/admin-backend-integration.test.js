@@ -64,3 +64,13 @@ test('AdminPanel.vue inventory tabs include archived tab and provide restore and
   assert.match(content, /@click=["']restoreShoe\(shoe\)["']/, 'Archived tab must render restore button calling restoreShoe(shoe)')
   assert.match(content, /@click=["']confirmPermanentDelete\(shoe\)["']/, 'Archived tab must render permanent delete button calling confirmPermanentDelete(shoe)')
 })
+
+test('AdminPanel.vue top navigation includes User Accounts tab and manages user accounts', () => {
+  const content = fs.readFileSync(ADMIN_PANEL_PATH, 'utf8')
+  assert.match(content, /adminSection\s*===\s*['"]users['"]/, 'AdminPanel.vue must support adminSection === "users"')
+  assert.match(content, /api\(\s*['"]auth\/users\.php\?include_archived=1['"]\s*\)/, 'AdminPanel.vue must fetch auth/users.php?include_archived=1')
+  assert.match(content, /api\(\s*['"]auth\/delete-user\.php['"]/, 'AdminPanel.vue must call auth/delete-user.php for soft/hard delete')
+  assert.match(content, /api\(\s*['"]auth\/restore-user\.php['"]/, 'AdminPanel.vue must call auth/restore-user.php to restore soft-deleted users')
+  assert.match(content, /userRoleFilter/, 'AdminPanel.vue must support filtering users by role and archived status')
+})
+
