@@ -25,6 +25,14 @@ if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $pickupDate) || !strtotime($pickupDate)
     jsonError('Valid pickup date (YYYY-MM-DD) is required', 400);
 }
 
+$pickupTimestamp = strtotime($pickupDate);
+$minTimestamp = strtotime('+6 days 00:00:00');
+$maxTimestamp = strtotime('+366 days 23:59:59');
+
+if ($pickupTimestamp < $minTimestamp || $pickupTimestamp > $maxTimestamp) {
+    jsonError('Pickup date must be between 1 week and 1 year from today', 400);
+}
+
 $shoeId = trim((string)($body['shoeId'] ?? ''));
 if ($shoeId === '') {
     jsonError('Shoe ID is required', 400);

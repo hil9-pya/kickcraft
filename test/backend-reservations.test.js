@@ -92,13 +92,13 @@ test('create.php enforces POST, transactions, DB price lookup, stock decrement, 
 })
 
 
-test('list.php enforces GET, requireAdmin, prepared statements, and status/search filters', () => {
+test('list.php enforces GET, requireAuth, prepared statements, and status/search filters', () => {
   const filePath = path.join(RESERVATIONS_DIR, 'list.php')
   assert.ok(fs.existsSync(filePath), 'list.php must exist')
   const code = fs.readFileSync(filePath, 'utf8')
 
   assert.match(code, /requireMethod\s*\(\s*['"]GET['"]\s*\)/i, 'Must enforce GET method')
-  assert.match(code, /requireAdmin\s*\(\s*\)/i, 'Must require owner admin privileges')
+  assert.match(code, /requireAuth\s*\(\s*\)/i, 'Must require authentication')
   assert.match(code, /prepare\s*\(/i, 'Must use PDO prepare')
   assert.match(code, /status/i, 'Must support status filtering')
   assert.match(code, /search/i, 'Must support keyword search')
@@ -157,9 +157,9 @@ require __DIR__ . '/create.php';
   }
 })
 
-test('runtime: admin reservation endpoints reject unauthenticated and customer requests', () => {
-  const adminEndpoints = ['list.php', 'update-status.php']
-  for (const ep of adminEndpoints) {
+test('runtime: reservation endpoints reject unauthenticated requests and update-status rejects customer requests', () => {
+  const endpoints = ['list.php', 'update-status.php']
+  for (const ep of endpoints) {
     const epPath = path.join(RESERVATIONS_DIR, ep)
     if (!fs.existsSync(epPath)) continue
 
@@ -181,26 +181,26 @@ require __DIR__ . '/${ep}';
     } finally {
       if (fs.existsSync(runnerUnauth)) fs.unlinkSync(runnerUnauth)
     }
+  }
 
-    // 2. Customer role -> 403
-    const runnerCustomer = path.join(RESERVATIONS_DIR, `test_${ep}_customer.php`)
-    fs.writeFileSync(
-      runnerCustomer,
-      `<?php
-$_SERVER['REQUEST_METHOD'] = '${method}';
+  // 2. Customer role -> 403 for update-status.php
+  const runnerCustomer = path.join(RESERVATIONS_DIR, 'test_update-status_customer.php')
+  fs.writeFileSync(
+    runnerCustomer,
+    `<?php
+$_SERVER['REQUEST_METHOD'] = 'POST';
 require_once __DIR__ . '/../config.php';
 $_SESSION['user_id'] = 42;
 $_SESSION['user_role'] = 'customer';
-require __DIR__ . '/${ep}';
+require __DIR__ . '/update-status.php';
 `
-    )
-    try {
-      const output = execSync(`php "${runnerCustomer}"`, { encoding: 'utf8' })
-      const json = JSON.parse(output)
-      assert.equal(json.error, 'Owner privileges required', `${ep} must reject customer role with 403`)
-    } finally {
-      if (fs.existsSync(runnerCustomer)) fs.unlinkSync(runnerCustomer)
-    }
+  )
+  try {
+    const output = execSync(`php "${runnerCustomer}"`, { encoding: 'utf8' })
+    const json = JSON.parse(output)
+    assert.equal(json.error, 'Owner privileges required', 'update-status.php must reject customer role with 403')
+  } finally {
+    if (fs.existsSync(runnerCustomer)) fs.unlinkSync(runnerCustomer)
   }
 })
 
@@ -319,11 +319,13 @@ require __DIR__ . '/create.php';
   const res3 = runCreate({ customerName: 'Alex Reyes', email: 'alex@example.com', pickupDate: '2026/09/20' })
   assert.equal(res3.error, 'Valid pickup date (YYYY-MM-DD) is required')
 
+  const validPickupDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
   // 4. Missing shoeId
   const res4 = runCreate({
     customerName: 'Alex Reyes',
     email: 'alex@example.com',
-    pickupDate: '2026-09-20',
+    pickupDate: validPickupDate,
     shoeId: '',
   })
   assert.equal(res4.error, 'Shoe ID is required')
@@ -332,7 +334,7 @@ require __DIR__ . '/create.php';
   const res5 = runCreate({
     customerName: 'Alex Reyes',
     email: 'alex@example.com',
-    pickupDate: '2026-09-20',
+    pickupDate: validPickupDate,
     shoeId: 'kickcraft-one',
     size: 4,
   })
@@ -341,7 +343,7 @@ require __DIR__ . '/create.php';
   const res6 = runCreate({
     customerName: 'Alex Reyes',
     email: 'alex@example.com',
-    pickupDate: '2026-09-20',
+    pickupDate: validPickupDate,
     shoeId: 'kickcraft-one',
     size: 16,
   })
@@ -377,4 +379,78 @@ require __DIR__ . '/update-status.php';
   // Invalid status
   const res2 = runUpdateStatus({ id: 'KC-2026-1041', status: 'shipped' })
   assert.match(res2.error, /Invalid status/i)
+})
+
+test('list.php allows customer sessions and filters query by session email', () => {
+  const filePath = path.join(RESERVATIONS_DIR, 'list.php')
+  assert.ok(fs.existsSync(filePath), 'list.php must exist')
+  const code = fs.readFileSync(filePath, 'utf8')
+
+  assert.match(code, /requireAuth\s*\(\s*\)/i, 'list.php must require authentication via requireAuth')
+  assert.doesNotMatch(code, /requireAdmin\s*\(\s*\)/i, 'list.php must not require admin role')
+  assert.match(code, /\$_SESSION\[['"]user_role['"]\]\s*===\s*['"]owner['"]/, 'list.php must check for owner role in session')
+  assert.match(code, /\$_SESSION\[['"]user_email['"]\]/, 'list.php must retrieve customer email from session')
+  assert.match(code, /email\s*=\s*\?/, 'list.php must filter by email = ? for non-owner')
+})
+
+test('create.php enforces pickup date window between 1 week and 1 year', () => {
+  const filePath = path.join(RESERVATIONS_DIR, 'create.php')
+  assert.ok(fs.existsSync(filePath), 'create.php must exist')
+  const code = fs.readFileSync(filePath, 'utf8')
+
+  assert.match(code, /\$pickupTimestamp\s*=\s*strtotime\(\$pickupDate\)/, 'create.php must parse pickupDate timestamp')
+  assert.match(code, /\$minTimestamp\s*=\s*strtotime\(['"]\+6 days 00:00:00['"]\)/, 'create.php must calculate minTimestamp (+6 days)')
+  assert.match(code, /\$maxTimestamp\s*=\s*strtotime\(['"]\+366 days 23:59:59['"]\)/, 'create.php must calculate maxTimestamp (+366 days)')
+  assert.match(code, /Pickup date must be between 1 week and 1 year from today/, 'create.php must error if pickup date is out of window')
+
+  const runCreate = (body) => {
+    const runner = path.join(RESERVATIONS_DIR, 'test_create_window_tmp.php')
+    fs.writeFileSync(
+      runner,
+      `<?php
+$_SERVER['REQUEST_METHOD'] = 'POST';
+$GLOBALS['__JSON_BODY__'] = '${JSON.stringify(body).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}';
+require __DIR__ . '/create.php';
+`
+    )
+    try {
+      const out = execSync(`php "${runner}"`, { encoding: 'utf8' })
+      return JSON.parse(out)
+    } finally {
+      if (fs.existsSync(runner)) fs.unlinkSync(runner)
+    }
+  }
+
+  // 1. Pickup date too soon (e.g. +2 days)
+  const tooSoonDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const resTooSoon = runCreate({
+    customerName: 'Alex Reyes',
+    email: 'alex@example.com',
+    pickupDate: tooSoonDate,
+    shoeId: 'kickcraft-one',
+    size: 9,
+  })
+  assert.equal(resTooSoon.error, 'Pickup date must be between 1 week and 1 year from today')
+
+  // 2. Pickup date too far in future (e.g. +400 days)
+  const tooFarDate = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const resTooFar = runCreate({
+    customerName: 'Alex Reyes',
+    email: 'alex@example.com',
+    pickupDate: tooFarDate,
+    shoeId: 'kickcraft-one',
+    size: 9,
+  })
+  assert.equal(resTooFar.error, 'Pickup date must be between 1 week and 1 year from today')
+
+  // 3. Valid pickup date (+14 days) passes date check and proceeds to shoeId check
+  const validDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const resValid = runCreate({
+    customerName: 'Alex Reyes',
+    email: 'alex@example.com',
+    pickupDate: validDate,
+    shoeId: '',
+    size: 9,
+  })
+  assert.equal(resValid.error, 'Shoe ID is required')
 })
