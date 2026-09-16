@@ -155,3 +155,55 @@ test('AdminPanel.vue inspection modal action buttons transition status to arrive
   )
 })
 
+test('AdminPanel.vue defines owner cancellation modal with quick presets and reason textarea', () => {
+  const content = fs.readFileSync(ADMIN_PANEL_PATH, 'utf8')
+
+  // Reactive state
+  assert.match(content, /const\s+showOwnerCancelModal\s*=\s*ref\(false\)/, 'AdminPanel must define showOwnerCancelModal ref')
+  assert.match(content, /const\s+cancelReservationTarget\s*=\s*ref\(null\)/, 'AdminPanel must define cancelReservationTarget ref')
+  assert.match(content, /const\s+cancellationReason\s*=\s*ref\(['"]['"]\)/, 'AdminPanel must define cancellationReason ref')
+
+  // Preset buttons in template
+  assert.match(content, /Selected custom color \/ material is currently unavailable/, 'Modal must offer custom color unavailable preset')
+  assert.match(content, /Silhouette size out of stock/, 'Modal must offer size out of stock preset')
+  assert.match(content, /Custom craftsmanship constraint/, 'Modal must offer craftsmanship constraint preset')
+
+  // Textarea & actions
+  assert.match(content, /v-model="cancellationReason"/, 'Modal must provide cancellationReason textarea')
+  assert.match(content, /Confirm Cancellation/, 'Modal must provide Confirm Cancellation button')
+  assert.match(content, /submitOwnerCancellation/, 'Modal must call submitOwnerCancellation on confirm')
+  assert.match(content, /Keep Active|closeOwnerCancelModal/, 'Modal must provide dismiss / Keep Active action')
+})
+
+test('AdminPanel.vue submitOwnerCancellation persists cancellation with reason notes, restores stock, and broadcasts', () => {
+  const content = fs.readFileSync(ADMIN_PANEL_PATH, 'utf8')
+
+  assert.match(content, /async\s+function\s+submitOwnerCancellation/, 'AdminPanel must define submitOwnerCancellation')
+  assert.match(content, /api\(['"]reservations\/update-status\.php['"][\s\S]*?status:\s*['"]cancelled['"][\s\S]*?notes:/, 'submitOwnerCancellation must call update-status.php with cancelled and notes')
+  assert.match(content, /BroadcastChannel\(['"]kickcraft_reservations_channel['"]\)[\s\S]*?RESERVATION_CANCELLED/, 'submitOwnerCancellation must broadcast RESERVATION_CANCELLED')
+  assert.match(content, /targetShoe\.stock/, 'submitOwnerCancellation must restore shoe stock locally')
+})
+
+test('AdminPanel.vue renders Delete Record button for cancelled reservations in table and inspection modal', () => {
+  const content = fs.readFileSync(ADMIN_PANEL_PATH, 'utf8')
+
+  // Table row delete button
+  assert.match(content, /order\.status\s*===\s*['"]cancelled['"][\s\S]*?Delete Record/, 'Table row must render Delete Record for cancelled reservations')
+  assert.match(content, /requestDeleteReservation\(order\)/, 'Table row Delete Record must call requestDeleteReservation(order)')
+
+  // Inspection modal delete button
+  assert.match(content, /selectedInspectionReservation\.status\s*===\s*['"]cancelled['"][\s\S]*?Delete Record/, 'Inspection modal must render Delete Record for cancelled reservations')
+  assert.match(content, /requestDeleteReservation\(selectedInspectionReservation\)/, 'Inspection modal Delete Record must call requestDeleteReservation')
+})
+
+test('AdminPanel.vue implements requestDeleteReservation with adminConfirm and soft delete API', () => {
+  const content = fs.readFileSync(ADMIN_PANEL_PATH, 'utf8')
+
+  assert.match(content, /function\s+requestDeleteReservation\s*\(\s*order\s*\)/, 'AdminPanel must define requestDeleteReservation(order)')
+  assert.match(content, /title:\s*['"]Delete Cancelled Reservation\?['"]/, 'requestDeleteReservation must set adminConfirm title')
+  assert.match(content, /confirmText:\s*['"]Delete Record['"]/, 'requestDeleteReservation must set confirmText to Delete Record')
+  assert.match(content, /cancelText:\s*['"]Keep in Archive['"]/, 'requestDeleteReservation must set cancelText to Keep in Archive')
+  assert.match(content, /api\(['"]reservations\/delete\.php['"]/, 'requestDeleteReservation must call reservations/delete.php on confirmation')
+  assert.match(content, /setStoredOrders/, 'requestDeleteReservation must persist updated orders list')
+})
+

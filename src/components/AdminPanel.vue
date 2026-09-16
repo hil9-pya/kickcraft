@@ -154,6 +154,23 @@ function closeInspectionModal() {
   selectedInspectionReservation.value = null
 }
 
+// Owner Cancellation Modal State
+const showOwnerCancelModal = ref(false)
+const cancelReservationTarget = ref(null)
+const cancellationReason = ref('')
+
+function openOwnerCancelModal(reservation) {
+  cancelReservationTarget.value = reservation
+  cancellationReason.value = ''
+  showOwnerCancelModal.value = true
+}
+
+function closeOwnerCancelModal() {
+  showOwnerCancelModal.value = false
+  cancelReservationTarget.value = null
+  cancellationReason.value = ''
+}
+
 // Receipt / Details Modal State
 const showReceiptModal = ref(false)
 const selectedOrderForReceipt = ref(null)
@@ -595,21 +612,105 @@ async function handleOrderStatusChange(orderId, newStatus) {
   }
 }
 
-const handleStatusChange = handleOrderStatusChange
+async function submitOwnerCancellation() {
+  if (!cancelReservationTarget.value) return
+  const target = cancelReservationTarget.value
+  const targetId = target.id
+  const reasonNotes = (cancellationReason.value || '').trim()
+
+  try {
+    await api('reservations/update-status.php', {
+      method: 'POST',
+      body: {
+        id: targetId,
+        status: 'cancelled',
+        notes: reasonNotes,
+      },
+    })
+  } catch (_) {}
+
+  // Update local order status and cancellation notes
+  const matchedOrder = (orders.value || []).find(o => o.id === targetId)
+  if (matchedOrder) {
+    matchedOrder.status = 'cancelled'
+    matchedOrder.notes = reasonNotes
+  }
+  persistOrders()
+
+  // Update inspection modal if currently inspecting this reservation
+  if (selectedInspectionReservation.value && selectedInspectionReservation.value.id === targetId) {
+    selectedInspectionReservation.value.status = 'cancelled'
+    selectedInspectionReservation.value.notes = reasonNotes
+  }
+
+  // Update receipt modal if active
+  if (selectedOrderForReceipt.value && selectedOrderForReceipt.value.id === targetId) {
+    selectedOrderForReceipt.value.status = 'cancelled'
+    selectedOrderForReceipt.value.notes = reasonNotes
+  }
+
+  // Restore shoe stock locally
+  const shoeId = target.shoeId
+  if (shoeId) {
+    const targetShoe = (shoes.value || []).find(s => s.id === shoeId)
+    if (targetShoe) {
+      targetShoe.stock = (targetShoe.stock || 0) + 1
+      if (targetShoe.status === 'out_of_stock') {
+        targetShoe.status = 'available'
+      }
+      persistShoes()
+    }
+  }
+
+  // Broadcast cancellation event to other tabs
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      const channel = new BroadcastChannel('kickcraft_reservations_channel')
+      channel.postMessage({
+        type: 'RESERVATION_CANCELLED',
+        id: targetId,
+        notes: reasonNotes,
+      })
+      channel.close()
+    } catch (_) {}
+  }
+
+  closeOwnerCancelModal()
+}
 
 function requestCancelOrder(order) {
+  openOwnerCancelModal(order)
+  /* adminConfirm fallback:
+     title: 'Cancel Sales Order?'
+     variant: 'danger'
+     icon: 'trash'
+  */
+}
+
+function requestDeleteReservation(order) {
   adminConfirm.value = {
     show: true,
-    title: 'Cancel Sales Order?',
-    message: `Are you sure you want to cancel order ${order.id} for ${order.customerName}? This will mark the reservation as cancelled.`,
-    confirmText: 'Cancel Order',
-    cancelText: 'Keep Order Active',
+    title: 'Delete Cancelled Reservation?',
+    message: 'Are you sure you want to delete the reservation record for ' + (order.customerName || order.customer_name) + ' (' + order.id + ')? This will remove it from the active reservations list.',
+    confirmText: 'Delete Record',
+    cancelText: 'Keep in Archive',
     variant: 'danger',
     icon: 'trash',
     onConfirm: async () => {
-      await handleStatusChange(order.id, 'cancelled')
+      try {
+        await api('reservations/delete.php', {
+          method: 'POST',
+          body: { id: order.id },
+        })
+      } catch (_) {}
+      orders.value = (orders.value || []).filter(o => o.id !== order.id)
+      setStoredOrders(orders.value)
+      if (selectedInspectionReservation.value && selectedInspectionReservation.value.id === order.id) {
+        closeInspectionModal()
+      }
       if (selectedOrderForReceipt.value && selectedOrderForReceipt.value.id === order.id) {
-        selectedOrderForReceipt.value.status = 'cancelled'
+        showReceiptModal.value = false
+        selectedOrderForReceipt.value = null
       }
     },
   }
@@ -2142,6 +2243,15 @@ async function restoreShoe(shoe) {
                   >
                     Cancel
                   </button>
+
+                  <button
+                    v-if="order.status === 'cancelled'"
+                    type="button"
+                    class="text-xs font-bold text-[#b94d27] hover:underline"
+                    @click="requestDeleteReservation(order)"
+                  >
+                    Delete Record
+                  </button>
                 </div>
               </td>
             </tr>
@@ -2390,6 +2500,26 @@ async function restoreShoe(shoe) {
             >
               Mark as Completed
             </button>
+
+            <!-- Cancel Reservation (when not cancelled) -->
+            <button
+              v-if="selectedInspectionReservation.status !== 'cancelled'"
+              type="button"
+              class="border border-[#b94d27] bg-white px-4 py-2 text-xs font-bold text-[#b94d27] transition-colors hover:bg-[#fdf2ef]"
+              @click="openOwnerCancelModal(selectedInspectionReservation)"
+            >
+              Cancel Reservation
+            </button>
+
+            <!-- Delete Record (when cancelled) -->
+            <button
+              v-if="selectedInspectionReservation.status === 'cancelled'"
+              type="button"
+              class="text-xs font-bold text-[#b94d27] hover:underline"
+              @click="requestDeleteReservation(selectedInspectionReservation)"
+            >
+              Delete Record
+            </button>
           </div>
 
           <button
@@ -2401,6 +2531,111 @@ async function restoreShoe(shoe) {
           </button>
         </div>
 
+      </div>
+    </div>
+
+    <!-- ── Owner Cancellation Explanation Modal ────────────────────── -->
+    <div
+      v-if="showOwnerCancelModal && cancelReservationTarget"
+      class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/60 p-4"
+    >
+      <div class="my-8 w-full max-w-lg border-2 border-[#202220] bg-[#fcfdfb] p-6 shadow-2xl sm:p-8">
+        <!-- Header -->
+        <div class="flex items-start justify-between border-b-2 border-[#202220] pb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-xs font-black uppercase tracking-wider text-[#b94d27]">
+                Store Cancellation
+              </span>
+              <span class="bg-[#b94d27] px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white">
+                Reason Required
+              </span>
+            </div>
+            <h2 class="mt-1 font-display text-xl font-black text-[#202220]">
+              Cancel Reservation {{ cancelReservationTarget.id }}
+            </h2>
+            <p class="text-xs text-[#5f635f]">
+              Customer: <strong class="text-[#202220]">{{ cancelReservationTarget.customerName || cancelReservationTarget.customer_name }}</strong>
+              <span v-if="cancelReservationTarget.customerEmail || cancelReservationTarget.email">
+                ({{ cancelReservationTarget.customerEmail || cancelReservationTarget.email }})
+              </span>
+            </p>
+          </div>
+          <button
+            type="button"
+            class="border border-[#202220] bg-white p-1 text-[#202220] transition-colors hover:bg-[#202220] hover:text-white"
+            aria-label="Close"
+            @click="closeOwnerCancelModal"
+          >
+            <svg class="size-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <!-- Quick Explanation Presets -->
+        <div class="mt-4">
+          <label class="mb-2 block text-xs font-bold uppercase tracking-wider text-[#5f635f]">
+            Store Cancellation Presets:
+          </label>
+          <div class="flex flex-col gap-2">
+            <button
+              type="button"
+              class="border border-[#cfd2ce] bg-white p-2.5 text-left text-xs font-semibold text-[#202220] transition-all hover:border-[#b94d27] hover:bg-[#fdf2ef]"
+              :class="{ 'border-[#b94d27] bg-[#fdf2ef] font-bold text-[#b94d27]': cancellationReason === 'Selected custom color / material is currently unavailable' }"
+              @click="cancellationReason = 'Selected custom color / material is currently unavailable'"
+            >
+              Selected custom color / material is currently unavailable
+            </button>
+            <button
+              type="button"
+              class="border border-[#cfd2ce] bg-white p-2.5 text-left text-xs font-semibold text-[#202220] transition-all hover:border-[#b94d27] hover:bg-[#fdf2ef]"
+              :class="{ 'border-[#b94d27] bg-[#fdf2ef] font-bold text-[#b94d27]': cancellationReason === 'Silhouette size out of stock' }"
+              @click="cancellationReason = 'Silhouette size out of stock'"
+            >
+              Silhouette size out of stock
+            </button>
+            <button
+              type="button"
+              class="border border-[#cfd2ce] bg-white p-2.5 text-left text-xs font-semibold text-[#202220] transition-all hover:border-[#b94d27] hover:bg-[#fdf2ef]"
+              :class="{ 'border-[#b94d27] bg-[#fdf2ef] font-bold text-[#b94d27]': cancellationReason === 'Custom craftsmanship constraint' }"
+              @click="cancellationReason = 'Custom craftsmanship constraint'"
+            >
+              Custom craftsmanship constraint
+            </button>
+          </div>
+        </div>
+
+        <!-- Custom write-in textarea -->
+        <div class="mt-4">
+          <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-[#5f635f]">
+            Additional Explanation / Custom Reason:
+          </label>
+          <textarea
+            v-model="cancellationReason"
+            rows="3"
+            class="w-full border border-[#cfd2ce] bg-white p-3 text-xs text-[#202220] outline-none transition-colors focus:border-[#b94d27]"
+            placeholder="Explain why this reservation is being cancelled (visible to customer)..."
+          ></textarea>
+        </div>
+
+        <!-- Actions -->
+        <div class="mt-6 flex flex-wrap items-center justify-end gap-3 border-t-2 border-[#202220] pt-4">
+          <button
+            type="button"
+            class="border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#5f635f] transition-colors hover:border-[#202220] hover:text-[#202220]"
+            @click="closeOwnerCancelModal"
+          >
+            Keep Active
+          </button>
+          <button
+            type="button"
+            class="border border-[#b94d27] bg-[#b94d27] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#963a20]"
+            @click="submitOwnerCancellation"
+          >
+            Confirm Cancellation
+          </button>
+        </div>
       </div>
     </div>
 
