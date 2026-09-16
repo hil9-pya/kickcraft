@@ -56,7 +56,7 @@ function handleAdminModalCancel() {
 }
 
 // ── Navigation Section ─────────────────────────────────────────
-const adminSection = ref('inventory') // 'inventory' | 'financials'
+const adminSection = ref('inventory') // 'inventory' | 'reservations' | 'users'
 
 // ── Inventory State ────────────────────────────────────────────
 const shoes = ref([])
@@ -107,14 +107,23 @@ const form = ref(defaultForm())
 const newColorName = ref('')
 const newColorHex = ref('#245fa8')
 
-// ── Orders & Financials State ──────────────────────────────────
+// ── Reservations & Orders State ────────────────────────────────
 const orders = ref([])
-const orderStatusFilter = ref('all') // 'all' | 'paid' | 'pending' | 'cancelled'
+const orderStatusFilter = ref('all') // 'all' | 'pending' | 'arrived' | 'completed' | 'cancelled'
 const orderSearchQuery = ref('')
 
-// Receipt Modal State
+const pendingCount = computed(() => (orders.value || []).filter(o => o.status === 'pending').length)
+const arrivedCount = computed(() => (orders.value || []).filter(o => o.status === 'arrived').length)
+const completedCount = computed(() => (orders.value || []).filter(o => o.status === 'completed' || o.status === 'paid').length)
+const cancelledCount = computed(() => (orders.value || []).filter(o => o.status === 'cancelled').length)
+
+// Receipt / Details Modal State
 const showReceiptModal = ref(false)
 const selectedOrderForReceipt = ref(null)
+
+function viewReservationDetails(order) {
+  openReceipt(order)
+}
 
 // Walk-in Sale Modal State
 const showWalkInModal = ref(false)
@@ -438,22 +447,23 @@ const stats = computed(() => {
   return { total, available, comingSoon, outOfStock, archived }
 })
 
-// ── Financial Analytics & Orders Filtering ────────────────────
-const financialStats = computed(() => calculateFinancialStats(orders.value))
-const silhouetteBreakdown = computed(() => calculateSilhouetteBreakdown(orders.value))
-
+// ── Reservations Filtering ────────────────────────────────────
 const filteredOrders = computed(() => {
   const query = orderSearchQuery.value.trim().toLowerCase()
-  return orders.value.filter(order => {
+  return (orders.value || []).filter(order => {
+    if (order.permanently_deleted || order.permanentlyDeleted || order.deleted_at || order.deletedAt) {
+      return false
+    }
+
     const matchesStatus =
       orderStatusFilter.value === 'all' ? true : order.status === orderStatusFilter.value
 
     const matchesQuery =
       !query ||
-      order.id.toLowerCase().includes(query) ||
-      order.customerName.toLowerCase().includes(query) ||
-      order.customerEmail.toLowerCase().includes(query) ||
-      order.shoeName.toLowerCase().includes(query)
+      (order.id && order.id.toLowerCase().includes(query)) ||
+      (order.customerName && order.customerName.toLowerCase().includes(query)) ||
+      (order.customerEmail && order.customerEmail.toLowerCase().includes(query)) ||
+      (order.shoeName && order.shoeName.toLowerCase().includes(query))
 
     return matchesStatus && matchesQuery
   })
@@ -1067,17 +1077,17 @@ async function restoreShoe(shoe) {
       <button
         type="button"
         class="flex items-center gap-2 border-b-2 px-6 py-3.5 text-xs font-bold transition-all duration-150 focus-visible:outline-2 focus-visible:outline-[#245fa8]"
-        :class="adminSection === 'financials'
+        :class="adminSection === 'reservations'
           ? 'border-[#b94d27] bg-[#fcfdfb] text-[#202220]'
           : 'border-transparent text-[#5f635f] hover:bg-[#f7f8f6] hover:text-[#202220]'"
-        @click="adminSection = 'financials'; editorMode = false"
+        @click="adminSection = 'reservations'; editorMode = false"
       >
-        <span>Financials &amp; Sales History</span>
+        <span>Pickup Reservations</span>
         <span
-          v-if="financialStats.pendingUnits > 0"
+          v-if="pendingCount > 0"
           class="rounded-full bg-[#c97d1e] px-1.5 py-0.5 text-[10px] font-black text-white"
         >
-          {{ financialStats.pendingUnits }} pending
+          {{ pendingCount }} pending
         </span>
       </button>
 
@@ -1844,99 +1854,23 @@ async function restoreShoe(shoe) {
     </div>
 
     <!-- ══════════════════════════════════════════════════════════ -->
-    <!-- SECTION 2: FINANCIALS & SALES HISTORY                      -->
+    <!-- SECTION 2: PICKUP RESERVATIONS HUB                         -->
     <!-- ══════════════════════════════════════════════════════════ -->
-    <div v-else-if="adminSection === 'financials'" class="space-y-6">
+    <div v-else-if="adminSection === 'reservations'" class="space-y-6">
 
-      <!-- Header & Record Sale Button -->
+      <!-- Header -->
       <div class="flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <h1 class="font-display text-3xl font-black tracking-[-0.04em] text-[#202220]">
-            Financials &amp; Sales Ledger
+            Pickup Reservations
           </h1>
           <p class="mt-1 text-sm text-[#5f635f]">
-            Monitor realized revenue, track pending custom reservations, inspect receipts, and manage walk-in sales.
+            Manage incoming custom shoe pickup reservations, track order fulfillment, and update customer pickup status.
           </p>
-        </div>
-
-        <div class="flex items-center gap-3">
-          <button
-            type="button"
-            class="bg-[#292b2d] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-150 hover:bg-[#3f7652] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
-            @click="openWalkInSale"
-          >
-            Record Walk-in Sale
-          </button>
         </div>
       </div>
 
-      <!-- Financial KPI Metrics Cards -->
-      <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div class="border border-[#cfd2ce] bg-white p-5 shadow-sm">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-[#3f7652]">Realized Revenue</p>
-          <p class="mt-1 font-display text-2xl font-black text-[#3f7652] sm:text-3xl">
-            ₱{{ financialStats.realizedRevenue.toLocaleString() }}
-          </p>
-          <p class="mt-1 text-[11px] text-[#6a6e6a]">From {{ financialStats.paidUnits }} completed &amp; paid orders</p>
-        </div>
-
-        <div class="border border-[#cfd2ce] bg-white p-5 shadow-sm">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-[#c97d1e]">Pending Receivables</p>
-          <p class="mt-1 font-display text-2xl font-black text-[#c97d1e] sm:text-3xl">
-            ₱{{ financialStats.pendingRevenue.toLocaleString() }}
-          </p>
-          <p class="mt-1 text-[11px] text-[#6a6e6a]">{{ financialStats.pendingUnits }} pickup reservations awaiting payment</p>
-        </div>
-
-        <div class="border border-[#cfd2ce] bg-white p-5 shadow-sm">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-[#202220]">Pairs Sold</p>
-          <p class="mt-1 font-display text-2xl font-black text-[#202220] sm:text-3xl">
-            {{ financialStats.paidUnits }}
-          </p>
-          <p class="mt-1 text-[11px] text-[#6a6e6a]">Total physical pairs delivered</p>
-        </div>
-
-        <div class="border border-[#cfd2ce] bg-white p-5 shadow-sm">
-          <p class="text-[11px] font-bold uppercase tracking-wider text-[#245fa8]">Average Order Value</p>
-          <p class="mt-1 font-display text-2xl font-black text-[#245fa8] sm:text-3xl">
-            ₱{{ financialStats.aov.toLocaleString() }}
-          </p>
-          <p class="mt-1 text-[11px] text-[#6a6e6a]">Average spend per paid transaction</p>
-        </div>
-      </div>
-
-      <!-- Silhouette Breakdown Section -->
-      <div class="border border-[#cfd2ce] bg-white p-5 shadow-sm">
-        <h3 class="font-display text-sm font-bold uppercase tracking-wider text-[#202220]">
-          Revenue &amp; Sales by Shoe Silhouette
-        </h3>
-        <p class="mt-0.5 text-xs text-[#6a6e6a]">
-          Breakdown of total revenue and sales volume generated per shoe model.
-        </p>
-
-        <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          <div
-            v-for="item in silhouetteBreakdown"
-            :key="item.shoeId"
-            class="flex items-center justify-between border border-[#cfd2ce] bg-[#fcfdfb] p-3.5"
-          >
-            <div>
-              <p class="font-display text-sm font-bold text-[#202220]">{{ item.shoeName }}</p>
-              <p class="text-xs text-[#5f635f]">
-                {{ item.paidUnits }} sold · {{ item.pendingUnits }} pending
-              </p>
-            </div>
-            <div class="text-right">
-              <p class="font-display text-sm font-black text-[#3f7652]">
-                ₱{{ item.revenue.toLocaleString() }}
-              </p>
-              <span class="text-[10px] uppercase font-bold text-[#8e938e]">Collected</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Filter & Search Controls for Orders -->
+      <!-- Filter & Search Controls for Reservations -->
       <div class="flex flex-col gap-4 border border-[#cfd2ce] bg-white p-4 sm:flex-row sm:items-center sm:justify-between shadow-sm">
         <!-- Status Filter Tabs -->
         <div class="flex flex-wrap gap-1 text-xs font-bold">
@@ -1946,15 +1880,7 @@ async function restoreShoe(shoe) {
             :class="orderStatusFilter === 'all' ? 'bg-[#292b2d] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
             @click="orderStatusFilter = 'all'"
           >
-            All Orders ({{ orders.length }})
-          </button>
-          <button
-            type="button"
-            class="px-3 py-2 transition-colors"
-            :class="orderStatusFilter === 'paid' ? 'bg-[#3f7652] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
-            @click="orderStatusFilter = 'paid'"
-          >
-            Paid ({{ financialStats.paidUnits }})
+            All ({{ orders.length }})
           </button>
           <button
             type="button"
@@ -1962,7 +1888,23 @@ async function restoreShoe(shoe) {
             :class="orderStatusFilter === 'pending' ? 'bg-[#c97d1e] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
             @click="orderStatusFilter = 'pending'"
           >
-            Pending Pickup ({{ financialStats.pendingUnits }})
+            Pending ({{ pendingCount }})
+          </button>
+          <button
+            type="button"
+            class="px-3 py-2 transition-colors"
+            :class="orderStatusFilter === 'arrived' ? 'bg-[#245fa8] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
+            @click="orderStatusFilter = 'arrived'"
+          >
+            Arrived ({{ arrivedCount }})
+          </button>
+          <button
+            type="button"
+            class="px-3 py-2 transition-colors"
+            :class="orderStatusFilter === 'completed' ? 'bg-[#3f7652] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
+            @click="orderStatusFilter = 'completed'"
+          >
+            Completed ({{ completedCount }})
           </button>
           <button
             type="button"
@@ -1970,7 +1912,7 @@ async function restoreShoe(shoe) {
             :class="orderStatusFilter === 'cancelled' ? 'bg-[#b94d27] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
             @click="orderStatusFilter = 'cancelled'"
           >
-            Cancelled ({{ financialStats.cancelledUnits }})
+            Cancelled ({{ cancelledCount }})
           </button>
         </div>
 
@@ -1985,17 +1927,17 @@ async function restoreShoe(shoe) {
         </div>
       </div>
 
-      <!-- Orders & Transactions Table -->
+      <!-- Reservations Data Table -->
       <div class="overflow-x-auto border border-[#cfd2ce] bg-white shadow-sm">
         <table class="w-full text-left text-xs">
           <thead class="border-b border-[#cfd2ce] bg-[#f1f3f0] font-bold uppercase tracking-wider text-[#404345]">
             <tr>
               <th class="px-4 py-3">Receipt / Order #</th>
-              <th class="px-4 py-3">Date</th>
               <th class="px-4 py-3">Customer</th>
-              <th class="px-4 py-3">Shoe Model &amp; Size</th>
-              <th class="px-4 py-3">Amount</th>
-              <th class="px-4 py-3">Payment Status</th>
+              <th class="px-4 py-3">Shoe Model &amp; US Size</th>
+              <th class="px-4 py-3">Custom Parts</th>
+              <th class="px-4 py-3">Scheduled Pickup Date</th>
+              <th class="px-4 py-3">Status</th>
               <th class="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
@@ -2010,11 +1952,6 @@ async function restoreShoe(shoe) {
                 {{ order.id }}
               </td>
 
-              <!-- Date -->
-              <td class="whitespace-nowrap px-4 py-3 text-[#5f635f]">
-                {{ new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }}
-              </td>
-
               <!-- Customer -->
               <td class="px-4 py-3">
                 <p class="font-bold text-[#202220]">{{ order.customerName }}</p>
@@ -2024,26 +1961,37 @@ async function restoreShoe(shoe) {
               <!-- Shoe & Size -->
               <td class="px-4 py-3">
                 <span class="font-semibold text-[#202220]">{{ order.shoeName }}</span>
-                <span class="ml-1.5 border border-[#cfd2ce] bg-[#f5f6f4] px-1.5 py-0.2 text-[10px] font-bold">
-                  Size {{ order.size }}
+                <span class="ml-1.5 border border-[#cfd2ce] bg-[#f5f6f4] px-1.5 py-0.5 text-[10px] font-bold">
+                  US {{ order.size }}
                 </span>
                 <p v-if="order.charmLabel && order.charmLabel !== 'None'" class="text-[10px] text-[#6a6e6a]">
                   Accessory: {{ order.charmLabel }}
                 </p>
               </td>
 
-              <!-- Price -->
-              <td class="whitespace-nowrap px-4 py-3 font-display font-black text-sm text-[#202220]">
-                ₱{{ order.price?.toLocaleString() }}
+              <!-- Custom Parts Count -->
+              <td class="whitespace-nowrap px-4 py-3">
+                <span class="inline-flex items-center gap-1 border border-[#cfd2ce] bg-[#f9faf8] px-2 py-0.5 text-[11px] font-bold text-[#404345]">
+                  <span>{{ order.partColors ? Object.keys(order.partColors).length : 0 }}</span>
+                  <span class="font-normal text-[#6a6e6a]">custom parts</span>
+                </span>
               </td>
 
-              <!-- Status -->
+              <!-- Scheduled Pickup Date -->
+              <td class="whitespace-nowrap px-4 py-3">
+                <span class="font-semibold text-[#202220]">
+                  {{ order.pickupDate ? order.pickupDate : new Date(order.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) }}
+                </span>
+              </td>
+
+              <!-- Status badge -->
               <td class="whitespace-nowrap px-4 py-3">
                 <span
                   class="inline-block px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-sm"
                   :class="{
-                    'bg-[#3f7652]': order.status === 'paid',
                     'bg-[#c97d1e]': order.status === 'pending',
+                    'bg-[#245fa8]': order.status === 'arrived',
+                    'bg-[#3f7652]': order.status === 'completed' || order.status === 'paid',
                     'bg-[#b94d27]': order.status === 'cancelled',
                   }"
                 >
@@ -2057,19 +2005,29 @@ async function restoreShoe(shoe) {
                   <button
                     type="button"
                     class="border border-[#bfc3bf] bg-white px-2.5 py-1 text-[11px] font-bold text-[#202220] hover:border-[#292b2d]"
-                    @click="openReceipt(order)"
+                    @click="viewReservationDetails(order)"
                   >
-                    View Receipt
+                    View Details
                   </button>
 
                   <button
                     v-if="order.status === 'pending'"
                     type="button"
-                    class="bg-[#3f7652] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#2a593a]"
-                    title="Mark order as paid upon customer pickup"
-                    @click="handleOrderStatusChange(order.id, 'paid')"
+                    class="bg-[#245fa8] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#1d4b88]"
+                    title="Mark reservation as arrived at studio"
+                    @click="handleOrderStatusChange(order.id, 'arrived')"
                   >
-                    Mark Paid
+                    Mark Arrived
+                  </button>
+
+                  <button
+                    v-if="order.status === 'arrived' || order.status === 'pending'"
+                    type="button"
+                    class="bg-[#3f7652] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#2a593a]"
+                    title="Mark reservation as completed upon customer pickup"
+                    @click="handleOrderStatusChange(order.id, 'completed')"
+                  >
+                    Mark Completed
                   </button>
 
                   <button
@@ -2086,7 +2044,7 @@ async function restoreShoe(shoe) {
 
             <tr v-if="filteredOrders.length === 0">
               <td colspan="7" class="px-4 py-8 text-center text-[#6a6e6a]">
-                No orders match your filter criteria.
+                No pickup reservations match your filter criteria.
               </td>
             </tr>
           </tbody>
@@ -2139,95 +2097,7 @@ async function restoreShoe(shoe) {
       </div>
     </div>
 
-    <!-- ── Walk-in Sale Modal ──────────────────────────────────── -->
-    <div
-      v-if="showWalkInModal"
-      class="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
-    >
-      <div class="w-full max-w-md border border-[#292b2d] bg-white p-6 shadow-2xl">
-        <div class="flex items-center justify-between border-b border-[#cfd2ce] pb-3">
-          <h3 class="font-display text-lg font-black text-[#202220]">
-            Record Walk-in Store Sale
-          </h3>
-          <button
-            type="button"
-            class="px-2.5 py-1 text-xs font-bold text-[#8e938e] transition-all duration-150 hover:bg-[#f1f3f0] hover:text-[#202220]"
-            @click="showWalkInModal = false"
-          >
-            Close
-          </button>
-        </div>
 
-        <form class="mt-4 space-y-4" @submit.prevent="submitWalkInSale">
-          <div>
-            <label class="block text-xs font-bold text-[#404345]">Select Shoe Model</label>
-            <select
-              v-model="walkInForm.shoeId"
-              required
-              class="mt-1 h-10 w-full border border-[#cfd2ce] bg-white px-3 text-xs outline-none focus:border-[#245fa8]"
-            >
-              <option v-for="s in shoes" :key="s.id" :value="s.id">
-                {{ s.name }} — ₱{{ s.price?.toLocaleString() }} ({{ s.stock }} in stock)
-              </option>
-            </select>
-          </div>
-
-          <div class="grid grid-cols-2 gap-3">
-            <div>
-              <label class="block text-xs font-bold text-[#404345]">Shoe Size (US)</label>
-              <select
-                v-model.number="walkInForm.size"
-                class="mt-1 h-10 w-full border border-[#cfd2ce] bg-white px-3 text-xs outline-none focus:border-[#245fa8]"
-              >
-                <option :value="7">US 7</option>
-                <option :value="8">US 8</option>
-                <option :value="9">US 9</option>
-                <option :value="10">US 10</option>
-                <option :value="11">US 11</option>
-              </select>
-            </div>
-
-            <div>
-              <label class="block text-xs font-bold text-[#404345]">Payment Method</label>
-              <select
-                v-model="walkInForm.paymentMethod"
-                class="mt-1 h-10 w-full border border-[#cfd2ce] bg-white px-3 text-xs outline-none focus:border-[#245fa8]"
-              >
-                <option value="cash">Cash</option>
-                <option value="gcash">GCash</option>
-                <option value="card">Credit / Debit Card</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label class="block text-xs font-bold text-[#404345]">Customer Name (Optional)</label>
-            <input
-              v-model="walkInForm.customerName"
-              type="text"
-              placeholder="e.g. Walk-in Customer"
-              class="mt-1 h-10 w-full border border-[#cfd2ce] px-3 text-xs outline-none focus:border-[#245fa8]"
-            />
-          </div>
-
-          <div class="flex justify-end gap-3 border-t border-[#f1f3f0] pt-4">
-            <button
-              type="button"
-              class="border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#5f635f] hover:border-[#292b2d]"
-              @click="showWalkInModal = false"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              class="bg-[#3f7652] px-5 py-2 text-xs font-bold text-white hover:bg-[#2a593a]"
-            >
-              Record Paid Sale &amp; Issue Receipt
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
 
     <!-- ── Digital Receipt Voucher Modal ───────────────────────── -->
     <div
