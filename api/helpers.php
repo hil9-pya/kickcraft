@@ -98,3 +98,57 @@ function formatShoeRow(array $row): array {
         'permanentlyDeleted' => (int)($row['permanently_deleted'] ?? 0),
     ];
 }
+
+function generateReceiptId(?PDO $db = null): string {
+    $year = date('Y');
+    $candidate = "KC-{$year}-" . random_int(1000, 9999);
+    if ($db) {
+        for ($i = 0; $i < 10; $i++) {
+            $stmt = $db->prepare('SELECT COUNT(*) FROM reservations WHERE id = ?');
+            $stmt->execute([$candidate]);
+            if ((int)$stmt->fetchColumn() === 0) {
+                return $candidate;
+            }
+            $candidate = "KC-{$year}-" . random_int(1000, 9999);
+        }
+    }
+    return $candidate;
+}
+
+function formatReservationRow(array $row): array {
+    $price = (float)($row['price'] ?? 0);
+    $formattedPrice = '₱' . number_format($price, floor($price) == $price ? 0 : 2);
+
+    $decodeJson = function($val) {
+        if (is_array($val)) return $val;
+        if (is_string($val) && trim($val) !== '') {
+            $decoded = json_decode($val, true);
+            if (is_array($decoded)) return $decoded;
+        }
+        return [];
+    };
+
+    $email = (string)($row['email'] ?? '');
+
+    return [
+        'id' => (string)($row['id'] ?? ''),
+        'customerName' => (string)($row['customer_name'] ?? ''),
+        'email' => $email,
+        'customerEmail' => $email,
+        'pickupDate' => (string)($row['pickup_date'] ?? ''),
+        'shoeId' => (string)($row['shoe_id'] ?? ''),
+        'shoeName' => (string)($row['shoe_name'] ?? ''),
+        'size' => (int)($row['size'] ?? 0),
+        'price' => $price,
+        'formattedPrice' => $formattedPrice,
+        'partColors' => $decodeJson($row['part_colors'] ?? null),
+        'charmId' => (string)($row['charm_id'] ?? 'none'),
+        'charmLabel' => (string)($row['charm_label'] ?? 'None'),
+        'status' => (string)($row['status'] ?? 'pending'),
+        'paymentMethod' => (string)($row['payment_method'] ?? 'in_store'),
+        'notes' => (string)($row['notes'] ?? ''),
+        'date' => $row['created_at'] ?? null,
+        'createdAt' => $row['created_at'] ?? null,
+        'updatedAt' => $row['updated_at'] ?? null,
+    ];
+}
