@@ -1,6 +1,7 @@
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import ConfirmModal from './ConfirmModal.vue'
+import { api } from '../api.js'
 import {
   createShoeRecord,
   deleteShoeRecord,
@@ -59,7 +60,7 @@ const adminSection = ref('inventory') // 'inventory' | 'financials'
 
 // ── Inventory State ────────────────────────────────────────────
 const shoes = ref([])
-const activeTab = ref('all') // 'all' | 'available' | 'coming_soon' | 'out_of_stock'
+const activeTab = ref('all') // 'all' | 'available' | 'coming_soon' | 'out_of_stock' | 'archived'
 const searchQuery = ref('')
 const editorMode = ref(false) // false = list view, true = editor view
 const isEditing = ref(false) // false = create new, true = edit existing
@@ -127,13 +128,33 @@ const walkInForm = ref({
 })
 
 // ── Lifecycle ──────────────────────────────────────────────────
-onMounted(() => {
-  loadData()
+onMounted(async () => {
+  await loadData()
 })
 
-function loadData() {
-  shoes.value = getStoredShoes()
-  orders.value = getStoredOrders()
+async function loadData() {
+  try {
+    const shoesRes = await api('shoes/list.php?include_archived=1')
+    if (shoesRes && Array.isArray(shoesRes.shoes)) {
+      shoes.value = shoesRes.shoes
+    } else {
+      shoes.value = getStoredShoes()
+    }
+  } catch {
+    shoes.value = getStoredShoes()
+  }
+
+  try {
+    const ordersRes = await api('reservations/list.php')
+    if (ordersRes && Array.isArray(ordersRes.reservations)) {
+      orders.value = ordersRes.reservations
+    } else {
+      orders.value = getStoredOrders()
+    }
+  } catch {
+    orders.value = getStoredOrders()
+  }
+
   emit('shoesChanged', shoes.value)
 }
 
@@ -150,8 +171,18 @@ function persistOrders() {
 const filteredShoes = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
   return shoes.value.filter(shoe => {
+    if (shoe.permanentlyDeleted) return false
+
+    if (activeTab.value === 'archived') {
+      if (!shoe.deletedAt) return false
+    } else {
+      if (shoe.deletedAt) return false
+    }
+
     const matchesStatus =
-      activeTab.value === 'all' ? true : shoe.status === activeTab.value
+      activeTab.value === 'all' || activeTab.value === 'archived'
+        ? true
+        : shoe.status === activeTab.value
 
     const matchesQuery =
       !query ||
@@ -164,11 +195,13 @@ const filteredShoes = computed(() => {
 })
 
 const stats = computed(() => {
-  const total = shoes.value.length
-  const available = shoes.value.filter(s => s.status === 'available').length
-  const comingSoon = shoes.value.filter(s => s.status === 'coming_soon').length
-  const outOfStock = shoes.value.filter(s => s.status === 'out_of_stock').length
-  return { total, available, comingSoon, outOfStock }
+  const activeShoes = shoes.value.filter(s => !s.permanentlyDeleted && !s.deletedAt)
+  const total = activeShoes.length
+  const available = activeShoes.filter(s => s.status === 'available').length
+  const comingSoon = activeShoes.filter(s => s.status === 'coming_soon').length
+  const outOfStock = activeShoes.filter(s => s.status === 'out_of_stock').length
+  const archived = shoes.value.filter(s => !s.permanentlyDeleted && s.deletedAt).length
+  return { total, available, comingSoon, outOfStock, archived }
 })
 
 // ── Financial Analytics & Orders Filtering ────────────────────
@@ -192,9 +225,20 @@ const filteredOrders = computed(() => {
   })
 })
 
-function handleOrderStatusChange(orderId, newStatus) {
-  orders.value = updateOrderStatus(orders.value, orderId, newStatus)
-  persistOrders()
+async function handleOrderStatusChange(orderId, newStatus) {
+  try {
+    await api('reservations/update-status.php', {
+      method: 'POST',
+      body: {
+        id: orderId,
+        status: newStatus,
+      },
+    })
+    await loadData()
+  } catch {
+    orders.value = updateOrderStatus(orders.value, orderId, newStatus)
+    persistOrders()
+  }
   if (selectedOrderForReceipt.value && selectedOrderForReceipt.value.id === orderId) {
     selectedOrderForReceipt.value = {
       ...selectedOrderForReceipt.value,
@@ -214,8 +258,8 @@ function requestCancelOrder(order) {
     cancelText: 'Keep Order Active',
     variant: 'danger',
     icon: 'trash',
-    onConfirm: () => {
-      handleStatusChange(order.id, 'cancelled')
+    onConfirm: async () => {
+      await handleStatusChange(order.id, 'cancelled')
       if (selectedOrderForReceipt.value && selectedOrderForReceipt.value.id === order.id) {
         selectedOrderForReceipt.value.status = 'cancelled'
       }
@@ -245,35 +289,59 @@ function openWalkInSale() {
   showWalkInModal.value = true
 }
 
-function submitWalkInSale() {
+async function submitWalkInSale() {
   const targetShoe = shoes.value.find(s => s.id === walkInForm.value.shoeId) || shoes.value[0] || {
     id: 'kickcraft-one',
     name: 'KickCraft One',
     price: 4890,
   }
 
-  const newOrder = createOrder(orders.value, {
-    customerName: walkInForm.value.customerName || 'Walk-in Customer',
-    customerEmail: walkInForm.value.customerEmail || 'walkin@kickcraft.local',
-    shoeId: targetShoe.id,
-    shoeName: targetShoe.name,
-    size: Number(walkInForm.value.size) || 9,
-    price: targetShoe.price || 4890,
-    status: 'paid', // Walk-in sale is immediately paid
-    paymentMethod: walkInForm.value.paymentMethod,
-    notes: walkInForm.value.notes,
-  })
+  const today = new Date().toISOString().split('T')[0]
+  let createdOrder = null
 
-  // Decrement inventory stock
-  const currentStock = targetShoe.stock ?? 0
-  if (currentStock > 0) {
-    shoes.value = restockShoeRecord(shoes.value, targetShoe.id, currentStock - 1)
-    persistShoes()
+  try {
+    const res = await api('reservations/create.php', {
+      method: 'POST',
+      body: {
+        customerName: walkInForm.value.customerName,
+        email: walkInForm.value.customerEmail,
+        pickupDate: today,
+        shoeId: walkInForm.value.shoeId,
+        size: walkInForm.value.size,
+        paymentMethod: walkInForm.value.paymentMethod,
+        notes: walkInForm.value.notes,
+        status: 'paid', // Walk-in sale is paid immediately
+      },
+    })
+    createdOrder = res.reservation
+    await loadData()
+  } catch {
+    createdOrder = createOrder(orders.value, {
+      customerName: walkInForm.value.customerName || 'Walk-in Customer',
+      customerEmail: walkInForm.value.customerEmail || 'walkin@kickcraft.local',
+      shoeId: targetShoe.id,
+      shoeName: targetShoe.name,
+      size: Number(walkInForm.value.size) || 9,
+      price: targetShoe.price || 4890,
+      status: 'paid', // Walk-in sale is immediately paid
+      paymentMethod: walkInForm.value.paymentMethod,
+      notes: walkInForm.value.notes,
+    })
+
+    // Decrement inventory stock
+    const currentStock = targetShoe.stock ?? 0
+    if (currentStock > 0) {
+      shoes.value = restockShoeRecord(shoes.value, targetShoe.id, currentStock - 1)
+      persistShoes()
+    }
+
+    persistOrders()
   }
 
-  persistOrders()
   showWalkInModal.value = false
-  openReceipt(newOrder)
+  if (createdOrder) {
+    openReceipt(createdOrder)
+  }
 }
 
 // ── Folder & File Upload ───────────────────────────────────────
@@ -554,7 +622,7 @@ function removeColorFromPalette(index) {
 }
 
 // ── Save Shoe ──────────────────────────────────────────────────
-function handleSaveShoe() {
+async function handleSaveShoe() {
   validationErrors.value = []
   saveFeedback.value = ''
 
@@ -576,16 +644,32 @@ function handleSaveShoe() {
     return
   }
 
-  if (isEditing.value && editingShoeId.value) {
-    shoes.value = updateShoeRecord(shoes.value, editingShoeId.value, candidate)
-    saveFeedback.value = `Updated "${candidate.name}" successfully!`
-  } else {
-    const newRecord = createShoeRecord(shoes.value, candidate)
-    shoes.value.unshift(newRecord)
-    saveFeedback.value = `Published "${newRecord.name}" successfully!`
+  try {
+    if (isEditing.value && editingShoeId.value) {
+      await api('shoes/update.php', {
+        method: 'POST',
+        body: { ...form.value, parts: customizableParts, id: editingShoeId.value },
+      })
+      saveFeedback.value = `Updated "${candidate.name}" successfully!`
+    } else {
+      await api('shoes/create.php', {
+        method: 'POST',
+        body: { ...form.value, parts: customizableParts },
+      })
+      saveFeedback.value = `Published "${candidate.name}" successfully!`
+    }
+    await loadData()
+  } catch {
+    if (isEditing.value && editingShoeId.value) {
+      shoes.value = updateShoeRecord(shoes.value, editingShoeId.value, candidate)
+      saveFeedback.value = `Updated "${candidate.name}" successfully!`
+    } else {
+      const newRecord = createShoeRecord(shoes.value, candidate)
+      shoes.value.unshift(newRecord)
+      saveFeedback.value = `Published "${newRecord.name}" successfully!`
+    }
+    persistShoes()
   }
-
-  persistShoes()
 
   setTimeout(() => {
     closeEditor()
@@ -611,33 +695,97 @@ function openRestock(shoe) {
   showRestockModal.value = true
 }
 
-function confirmRestock() {
+async function confirmRestock() {
   if (!restockTargetShoe.value) return
   const newStock = (restockTargetShoe.value.stock || 0) + Number(restockAmount.value)
-  shoes.value = restockShoeRecord(shoes.value, restockTargetShoe.value.id, newStock)
-  persistShoes()
+
+  try {
+    await api('shoes/restock.php', {
+      method: 'POST',
+      body: {
+        id: restockTargetShoe.value.id,
+        amount: Number(restockAmount.value),
+      },
+    })
+    await loadData()
+  } catch {
+    shoes.value = restockShoeRecord(shoes.value, restockTargetShoe.value.id, newStock)
+    persistShoes()
+  }
+
   showRestockModal.value = false
   restockTargetShoe.value = null
 }
 
-function deleteShoe(shoe) {
-  adminConfirm.value = {
-    show: true,
-    title: 'Delete Shoe Silhouette?',
-    message: `Are you sure you want to delete "${shoe.name}"? This silhouette will be permanently removed from the catalog.`,
-    confirmText: 'Delete Permanently',
-    cancelText: 'Keep Shoe',
-    variant: 'danger',
-    icon: 'trash',
-    onConfirm: () => {
-      shoes.value = deleteShoeRecord(shoes.value, shoe.id)
-      persistShoes()
-      saveFeedback.value = `"${shoe.name}" has been deleted.`
-    },
+// function deleteShoe(shoe)
+function deleteShoe(shoe, mode = 'soft') {
+  if (mode === 'hard') {
+    adminConfirm.value = {
+      show: true,
+      title: 'Delete Shoe Silhouette Permanently?',
+      message: `Are you sure you want to permanently delete "${shoe.name}"? This silhouette will be permanently removed from the catalog.`,
+      confirmText: 'Delete Permanently',
+      cancelText: 'Keep Shoe',
+      variant: 'danger',
+      icon: 'trash',
+      onConfirm: async () => {
+        try {
+          await api('shoes/delete.php', {
+            method: 'POST',
+            body: { id: shoe.id, mode },
+          })
+          await loadData()
+        } catch {
+          shoes.value = deleteShoeRecord(shoes.value, shoe.id)
+          persistShoes()
+        }
+        saveFeedback.value = `"${shoe.name}" has been permanently deleted.`
+      },
+    }
+  } else {
+    adminConfirm.value = {
+      show: true,
+      title: 'Delete Shoe Silhouette?',
+      message: `Are you sure you want to delete "${shoe.name}"? This silhouette will be moved to archived shoes.`,
+      confirmText: 'Delete Permanently',
+      cancelText: 'Keep Shoe',
+      variant: 'danger',
+      icon: 'trash',
+      onConfirm: async () => {
+        try {
+          await api('shoes/delete.php', {
+            method: 'POST',
+            body: { id: shoe.id, mode },
+          })
+          await loadData()
+        } catch {
+          shoes.value = deleteShoeRecord(shoes.value, shoe.id)
+          persistShoes()
+        }
+        saveFeedback.value = `"${shoe.name}" has been deleted.`
+      },
+    }
   }
 }
 
 const handleDeleteShoe = deleteShoe
+
+function confirmPermanentDelete(shoe) {
+  deleteShoe(shoe, 'hard')
+}
+
+async function restoreShoe(shoe) {
+  try {
+    await api('shoes/restore.php', {
+      method: 'POST',
+      body: { id: shoe.id },
+    })
+    await loadData()
+    saveFeedback.value = `"${shoe.name}" has been restored to catalog.`
+  } catch (err) {
+    saveFeedback.value = `Failed to restore "${shoe.name}": ${err.message}`
+  }
+}
 </script>
 
 <template>
@@ -735,7 +883,7 @@ const handleDeleteShoe = deleteShoe
         </div>
 
         <!-- Stat Badges Strip -->
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
           <div class="border border-[#cfd2ce] bg-white p-4">
             <p class="text-[11px] font-bold uppercase tracking-wider text-[#6a6e6a]">Total Silhouettes</p>
             <p class="mt-1 text-2xl font-black text-[#202220]">{{ stats.total }}</p>
@@ -751,6 +899,10 @@ const handleDeleteShoe = deleteShoe
           <div class="border border-[#cfd2ce] bg-white p-4">
             <p class="text-[11px] font-bold uppercase tracking-wider text-[#b94d27]">Out of Stock</p>
             <p class="mt-1 text-2xl font-black text-[#b94d27]">{{ stats.outOfStock }}</p>
+          </div>
+          <div class="border border-[#cfd2ce] bg-white p-4">
+            <p class="text-[11px] font-bold uppercase tracking-wider text-[#5f635f]">Archived</p>
+            <p class="mt-1 text-2xl font-black text-[#5f635f]">{{ stats.archived }}</p>
           </div>
         </div>
 
@@ -790,6 +942,14 @@ const handleDeleteShoe = deleteShoe
             >
               Out of Stock ({{ stats.outOfStock }})
             </button>
+            <button
+              type="button"
+              class="px-3 py-2 transition-colors"
+              :class="activeTab === 'archived' ? 'bg-[#5f635f] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
+              @click="activeTab = 'archived'"
+            >
+              Archived ({{ stats.archived }})
+            </button>
           </div>
 
           <!-- Search -->
@@ -824,12 +984,13 @@ const handleDeleteShoe = deleteShoe
               <span
                 class="absolute right-3 top-3 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-sm"
                 :class="{
-                  'bg-[#3f7652]': shoe.status === 'available',
-                  'bg-[#c97d1e]': shoe.status === 'coming_soon',
-                  'bg-[#b94d27]': shoe.status === 'out_of_stock',
+                  'bg-[#5f635f]': shoe.deletedAt,
+                  'bg-[#3f7652]': !shoe.deletedAt && shoe.status === 'available',
+                  'bg-[#c97d1e]': !shoe.deletedAt && shoe.status === 'coming_soon',
+                  'bg-[#b94d27]': !shoe.deletedAt && shoe.status === 'out_of_stock',
                 }"
               >
-                {{ shoe.status.replace('_', ' ') }}
+                {{ shoe.deletedAt ? 'archived' : shoe.status.replace('_', ' ') }}
               </span>
             </div>
 
@@ -869,7 +1030,23 @@ const handleDeleteShoe = deleteShoe
               </div>
 
               <!-- Action buttons strip -->
-              <div class="mt-4 grid grid-cols-3 gap-2 border-t border-[#f1f3f0] pt-3">
+              <div v-if="activeTab === 'archived' || shoe.deletedAt" class="mt-4 grid grid-cols-2 gap-2 border-t border-[#f1f3f0] pt-3">
+                <button
+                  type="button"
+                  class="h-8 border border-[#3f7652] bg-white text-[11px] font-bold text-[#3f7652] transition-colors hover:bg-[#edf5f0]"
+                  @click="restoreShoe(shoe)"
+                >
+                  Restore
+                </button>
+                <button
+                  type="button"
+                  class="h-8 border border-[#b94d27] bg-[#b94d27] text-[11px] font-bold text-white transition-colors hover:bg-[#963a20]"
+                  @click="confirmPermanentDelete(shoe)"
+                >
+                  Delete Permanently
+                </button>
+              </div>
+              <div v-else class="mt-4 grid grid-cols-3 gap-2 border-t border-[#f1f3f0] pt-3">
                 <button
                   type="button"
                   class="h-8 border border-[#bfc3bf] bg-white text-[11px] font-bold text-[#202220] transition-colors hover:border-[#292b2d]"
