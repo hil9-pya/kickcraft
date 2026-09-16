@@ -37,6 +37,19 @@ KickCraft operates as an interactive 3D shoe customizer with in-store pickup res
 - **Footer:**
   - Navigation link updated from `Order` to `Reserve`.
 
+### 2.2 Celebratory Success Animation & Confirmation Experience
+When the customer submits the reservation and the API completes:
+1. **Spring Scale & Pop Checkmark Badge:**
+   The confirmation screen reveals an animated success badge that pops into view using a CSS keyframe spring animation (`scale(0.4) opacity(0)` -> `scale(1.15)` -> `scale(1)`).
+2. **Brutalist "RESERVED" Verification Stamp:**
+   A bold, stamped verification badge displaying:
+   `[ ✓ RESERVATION CONFIRMED · HELD FOR STORE PICKUP ]`
+3. **Staggered Receipt Reveal:**
+   The receipt number (`KC-YYYY-XXXX`), pickup date, and in-store pickup instructions slide in with staggered fade-in transitions.
+4. **Contextual Action Buttons:**
+   - `Continue Designing`: Returns to 3D studio.
+   - `View in My Reservations`: (If logged in as customer) jumps directly to the customer's reservation history; (if guest) offers a subtle invitation to create an account if they want to track past pairs.
+
 ---
 
 ## 3. Navigation & Breadcrumb Structure
