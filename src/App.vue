@@ -584,6 +584,15 @@ async function submitReservation() {
 
     reservationReceipt.value = res.reservation
     reserved.value = true
+
+    // Broadcast event via BroadcastChannel('kickcraft_reservations_channel')
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        const channel = new BroadcastChannel('kickcraft_reservations_channel')
+        channel.postMessage({ type: 'NEW_RESERVATION', reservation: res.reservation })
+        channel.close()
+      } catch (_) {}
+    }
   } catch (err) {
     reservationError.value = err.message || 'Failed to create reservation'
   } finally {

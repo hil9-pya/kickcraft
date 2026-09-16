@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import ConfirmModal from './ConfirmModal.vue'
 import { api } from '../api.js'
 import {
@@ -117,12 +117,49 @@ const arrivedCount = computed(() => (orders.value || []).filter(o => o.status ==
 const completedCount = computed(() => (orders.value || []).filter(o => o.status === 'completed' || o.status === 'paid').length)
 const cancelledCount = computed(() => (orders.value || []).filter(o => o.status === 'cancelled').length)
 
+// Floating Reservation Alert State
+const reservationAlert = ref(null)
+let alertTimeoutId = null
+
+function triggerReservationAlert(reservation) {
+  if (alertTimeoutId) {
+    clearTimeout(alertTimeoutId)
+    alertTimeoutId = null
+  }
+  reservationAlert.value = reservation
+  alertTimeoutId = setTimeout(() => {
+    reservationAlert.value = null
+  }, 12000)
+}
+
+function dismissReservationAlert() {
+  if (alertTimeoutId) {
+    clearTimeout(alertTimeoutId)
+    alertTimeoutId = null
+  }
+  reservationAlert.value = null
+}
+
+// Reservation Inspection Modal State
+const showInspectionModal = ref(false)
+const selectedInspectionReservation = ref(null)
+
+function openInspectionModal(reservation) {
+  selectedInspectionReservation.value = reservation
+  showInspectionModal.value = true
+}
+
+function closeInspectionModal() {
+  showInspectionModal.value = false
+  selectedInspectionReservation.value = null
+}
+
 // Receipt / Details Modal State
 const showReceiptModal = ref(false)
 const selectedOrderForReceipt = ref(null)
 
 function viewReservationDetails(order) {
-  openReceipt(order)
+  openInspectionModal(order)
 }
 
 // Walk-in Sale Modal State
@@ -362,8 +399,45 @@ const userStats = computed(() => {
 })
 
 // ── Lifecycle ──────────────────────────────────────────────────
+let reservationsChannel = null
+
 onMounted(async () => {
   await loadData()
+
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      reservationsChannel = new BroadcastChannel('kickcraft_reservations_channel')
+      reservationsChannel.onmessage = (event) => {
+        if (event.data?.type === 'NEW_RESERVATION' && event.data.reservation) {
+          const newRes = event.data.reservation
+          const exists = (orders.value || []).some(o => o.id === newRes.id)
+          if (!exists) {
+            orders.value.unshift(newRes)
+          }
+          triggerReservationAlert(newRes)
+        } else if (event.data?.type === 'RESERVATION_CANCELLED' && event.data.id) {
+          const target = (orders.value || []).find(o => o.id === event.data.id)
+          if (target) {
+            target.status = 'cancelled'
+          }
+          if (selectedInspectionReservation.value && selectedInspectionReservation.value.id === event.data.id) {
+            selectedInspectionReservation.value.status = 'cancelled'
+          }
+        }
+      }
+    } catch (_) {}
+  }
+})
+
+onUnmounted(() => {
+  if (reservationsChannel) {
+    try {
+      reservationsChannel.close()
+    } catch (_) {}
+  }
+  if (alertTimeoutId) {
+    clearTimeout(alertTimeoutId)
+  }
 })
 
 async function loadData() {
@@ -456,7 +530,11 @@ const filteredOrders = computed(() => {
     }
 
     const matchesStatus =
-      orderStatusFilter.value === 'all' ? true : order.status === orderStatusFilter.value
+      orderStatusFilter.value === 'all'
+        ? true
+        : orderStatusFilter.value === 'completed'
+          ? (order.status === 'completed' || order.status === 'paid')
+          : order.status === orderStatusFilter.value
 
     const matchesQuery =
       !query ||
@@ -468,6 +546,26 @@ const filteredOrders = computed(() => {
     return matchesStatus && matchesQuery
   })
 })
+
+function formatPartLabel(partKey) {
+  if (!partKey) return ''
+  return String(partKey)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[-_]/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase())
+}
+
+function getReservationShoeThumbnail(res) {
+  if (!res) return '/images/kickcraft-one-card.png'
+  if (res.thumbnail) return res.thumbnail
+  if (res.thumbnailPath) return res.thumbnailPath
+  const matched = shoes.value.find(s => s.id === res.shoeId)
+  if (matched?.thumbnailPath) return matched.thumbnailPath
+  if (matched?.thumbnail) return matched.thumbnail
+  if (res.shoeId === 'air-max') return '/images/air-max-card.png'
+  if (res.shoeId === 'nike-dunk') return '/images/nike-dunk-card.png'
+  return '/images/kickcraft-one-card.png'
+}
 
 async function handleOrderStatusChange(orderId, newStatus) {
   try {
@@ -486,6 +584,12 @@ async function handleOrderStatusChange(orderId, newStatus) {
   if (selectedOrderForReceipt.value && selectedOrderForReceipt.value.id === orderId) {
     selectedOrderForReceipt.value = {
       ...selectedOrderForReceipt.value,
+      status: newStatus,
+    }
+  }
+  if (selectedInspectionReservation.value && selectedInspectionReservation.value.id === orderId) {
+    selectedInspectionReservation.value = {
+      ...selectedInspectionReservation.value,
       status: newStatus,
     }
   }
@@ -2051,6 +2155,253 @@ async function restoreShoe(shoe) {
         </table>
       </div>
 
+    </div>
+
+    <!-- ── Floating Reservation Alert Banner (Top-Right) ────────── -->
+    <aside
+      v-if="reservationAlert"
+      aria-label="New reservation alert"
+      class="fixed top-6 right-6 z-50 w-96 max-w-[calc(100vw-2rem)] border-2 border-[#202220] bg-white p-4 shadow-2xl"
+    >
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <span class="inline-block size-2.5 rounded-full bg-[#3f7652] animate-pulse" />
+          <span class="font-display text-xs font-black uppercase tracking-wider text-[#202220]">
+            New Reservation Received
+          </span>
+        </div>
+        <button
+          type="button"
+          class="text-xs font-bold text-[#5f635f] hover:text-[#202220]"
+          title="Dismiss alert"
+          @click="dismissReservationAlert"
+        >
+          Close
+        </button>
+      </div>
+
+      <div class="mt-2.5 border-l-2 border-[#b94d27] pl-3">
+        <p class="font-display text-sm font-black text-[#202220]">
+          {{ reservationAlert.customerName }}
+        </p>
+        <p class="text-xs font-semibold text-[#5f635f]">
+          {{ reservationAlert.shoeName || reservationAlert.shoeId || 'Custom Shoe' }} · US {{ reservationAlert.size }}
+        </p>
+        <p class="mt-0.5 font-mono text-[11px] font-bold text-[#8e938e]">
+          Receipt: {{ reservationAlert.id }}
+        </p>
+      </div>
+
+      <div class="mt-3.5 flex items-center justify-end gap-2 border-t border-[#f1f3f0] pt-3">
+        <button
+          type="button"
+          class="border border-[#cfd2ce] bg-white px-3 py-1.5 text-xs font-bold text-[#5f635f] hover:border-[#202220] hover:text-[#202220]"
+          @click="dismissReservationAlert"
+        >
+          Close
+        </button>
+        <button
+          type="button"
+          class="bg-[#202220] px-3.5 py-1.5 text-xs font-bold text-white transition-colors hover:bg-[#b94d27]"
+          @click="openInspectionModal(reservationAlert); dismissReservationAlert()"
+        >
+          View Details
+        </button>
+      </div>
+    </aside>
+
+    <!-- ── Comprehensive Reservation Inspection Modal ──────────── -->
+    <div
+      v-if="showInspectionModal && selectedInspectionReservation"
+      class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/60 p-4"
+    >
+      <div class="my-8 w-full max-w-2xl border-2 border-[#202220] bg-[#fcfdfb] p-6 shadow-2xl sm:p-8">
+
+        <!-- Modal Header -->
+        <div class="flex items-start justify-between border-b-2 border-[#202220] pb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="font-mono text-xs font-black tracking-wider uppercase text-[#8e938e]">
+                Receipt / Reservation
+              </span>
+              <span
+                class="px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white"
+                :class="{
+                  'bg-[#c97d1e]': selectedInspectionReservation.status === 'pending',
+                  'bg-[#245fa8]': selectedInspectionReservation.status === 'arrived',
+                  'bg-[#3f7652]': selectedInspectionReservation.status === 'completed' || selectedInspectionReservation.status === 'paid',
+                  'bg-[#b94d27]': selectedInspectionReservation.status === 'cancelled',
+                }"
+              >
+                {{ selectedInspectionReservation.status }}
+              </span>
+            </div>
+            <h2 class="font-display mt-1 text-2xl font-black tracking-[-0.03em] text-[#202220]">
+              {{ selectedInspectionReservation.id }}
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            class="text-sm font-bold text-[#5f635f] hover:text-[#202220]"
+            title="Close inspection modal"
+            @click="closeInspectionModal"
+          >
+            ✕ Close
+          </button>
+        </div>
+
+        <!-- Customer & Schedule Meta Cards -->
+        <div class="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <!-- Customer Info Card -->
+          <div class="border border-[#cfd2ce] bg-white p-4 shadow-sm">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-[#8e938e]">
+              Customer Information
+            </p>
+            <p class="mt-1 font-display text-base font-black text-[#202220]">
+              {{ selectedInspectionReservation.customerName }}
+            </p>
+            <p class="text-xs font-medium text-[#5f635f]">
+              {{ selectedInspectionReservation.customerEmail || selectedInspectionReservation.email }}
+            </p>
+          </div>
+
+          <!-- Pickup Schedule Card -->
+          <div class="border border-[#cfd2ce] bg-white p-4 shadow-sm">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-[#8e938e]">
+              Scheduled Pickup Date
+            </p>
+            <p class="mt-1 font-display text-base font-black text-[#b94d27]">
+              {{ selectedInspectionReservation.pickupDate }}
+            </p>
+            <p class="text-xs font-medium text-[#5f635f]">
+              Target Store Pickup at Flagship Studio
+            </p>
+          </div>
+        </div>
+
+        <!-- Shoe Specifications Card -->
+        <div class="mt-5 border border-[#cfd2ce] bg-white p-4 shadow-sm">
+          <p class="mb-3 text-[10px] font-bold uppercase tracking-wider text-[#8e938e]">
+            Shoe Specifications &amp; Build
+          </p>
+          <div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+            <!-- Thumbnail Image -->
+            <div class="flex size-20 shrink-0 items-center justify-center border border-[#cfd2ce] bg-[#f5f6f4] p-1.5">
+              <img
+                :src="getReservationShoeThumbnail(selectedInspectionReservation)"
+                :alt="selectedInspectionReservation.shoeName || 'KickCraft Shoe'"
+                class="max-h-full max-w-full object-contain"
+              />
+            </div>
+
+            <!-- Specs Grid -->
+            <div class="flex-1 space-y-1">
+              <div class="flex items-center justify-between">
+                <h3 class="font-display text-lg font-black text-[#202220]">
+                  {{ selectedInspectionReservation.shoeName || selectedInspectionReservation.shoeId || 'KickCraft One' }}
+                </h3>
+                <span class="font-display text-lg font-black text-[#202220]">
+                  ₱{{ (selectedInspectionReservation.price ?? 4990).toLocaleString() }}
+                </span>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2 pt-1 text-xs text-[#5f635f]">
+                <span class="border border-[#cfd2ce] bg-[#f7f8f6] px-2 py-0.5 font-bold text-[#202220]">
+                  US Size: {{ selectedInspectionReservation.size }}
+                </span>
+                <span class="border border-[#cfd2ce] bg-[#f7f8f6] px-2 py-0.5 font-bold text-[#202220]">
+                  Accessory Charm: {{ selectedInspectionReservation.charmLabel || selectedInspectionReservation.charmId || 'None' }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3D Design Color Palette Breakdown -->
+        <div class="mt-5 border border-[#cfd2ce] bg-white p-4 shadow-sm">
+          <div class="flex items-center justify-between border-b border-[#f1f3f0] pb-2.5">
+            <p class="text-[10px] font-bold uppercase tracking-wider text-[#8e938e]">
+              3D Design Color Palette Breakdown
+            </p>
+            <span class="text-[11px] font-bold text-[#5f635f]">
+              {{ selectedInspectionReservation.partColors ? Object.keys(selectedInspectionReservation.partColors).length : 0 }} Customized Zones
+            </span>
+          </div>
+
+          <div
+            v-if="selectedInspectionReservation.partColors && Object.keys(selectedInspectionReservation.partColors).length > 0"
+            class="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4"
+          >
+            <div
+              v-for="(partColor, partKey) in selectedInspectionReservation.partColors"
+              :key="partKey"
+              class="flex items-center gap-2.5 border border-[#e5e7e4] bg-[#fcfdfb] p-2"
+            >
+              <!-- Color Swatch Box -->
+              <div
+                class="size-6 shrink-0 border border-[#202220]/25 shadow-sm"
+                :style="{ backgroundColor: partColor.value }"
+                :title="partColor.value"
+              />
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-[10px] font-bold uppercase tracking-wider text-[#5f635f]">
+                  {{ formatPartLabel(partKey) }}
+                </p>
+                <p class="truncate text-xs font-black text-[#202220]">
+                  {{ partColor.name || partColor.value }}
+                </p>
+              </div>
+            </div>
+          </div>
+          <p v-else class="mt-3 text-xs italic text-[#8e938e]">
+            Default factory colorway (no custom palette overrides).
+          </p>
+        </div>
+
+        <!-- Store Cancellation Note (if cancelled with reason) -->
+        <div
+          v-if="selectedInspectionReservation.status === 'cancelled' && selectedInspectionReservation.notes"
+          class="mt-4 border-l-2 border-[#b94d27] bg-[#fdf2ef] p-3 text-xs text-[#963a20]"
+        >
+          <span class="block font-bold uppercase tracking-wider text-[10px]">Cancellation Reason:</span>
+          {{ selectedInspectionReservation.notes }}
+        </div>
+
+        <!-- Action Footer -->
+        <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t-2 border-[#202220] pt-4">
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Mark as Arrived (when pending) -->
+            <button
+              v-if="selectedInspectionReservation.status === 'pending'"
+              type="button"
+              class="bg-[#245fa8] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#1d4b88]"
+              @click="handleOrderStatusChange(selectedInspectionReservation.id, 'arrived')"
+            >
+              Mark as Arrived
+            </button>
+
+            <!-- Mark as Completed (when arrived or pending) -->
+            <button
+              v-if="selectedInspectionReservation.status === 'arrived' || selectedInspectionReservation.status === 'pending'"
+              type="button"
+              class="bg-[#3f7652] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#2a593a]"
+              @click="handleOrderStatusChange(selectedInspectionReservation.id, 'completed')"
+            >
+              Mark as Completed
+            </button>
+          </div>
+
+          <button
+            type="button"
+            class="border border-[#bfc3bf] bg-white px-5 py-2 text-xs font-bold text-[#5f635f] transition-colors hover:border-[#202220] hover:text-[#202220]"
+            @click="closeInspectionModal"
+          >
+            Close
+          </button>
+        </div>
+
+      </div>
     </div>
 
     <!-- ── Restock Modal ───────────────────────────────────────── -->

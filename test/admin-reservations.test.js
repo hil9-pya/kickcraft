@@ -63,3 +63,95 @@ test('AdminPanel.vue reservations table renders columns, custom parts count, sch
   assert.match(content, /Mark Arrived/, 'Table row must provide "Mark Arrived" button')
   assert.match(content, /Mark Completed/, 'Table row must provide "Mark Completed" button')
 })
+
+const APP_PATH = path.resolve('src/App.vue')
+
+test('App.vue broadcasts NEW_RESERVATION event on submitReservation success', () => {
+  assert.ok(fs.existsSync(APP_PATH), 'App.vue must exist')
+  const content = fs.readFileSync(APP_PATH, 'utf8')
+
+  assert.match(
+    content,
+    /BroadcastChannel\(['"]kickcraft_reservations_channel['"]\)[\s\S]*?NEW_RESERVATION/,
+    'App.vue must broadcast NEW_RESERVATION on kickcraft_reservations_channel'
+  )
+})
+
+test('AdminPanel.vue defines reservationAlert reactive state and renders floating notification banner', () => {
+  const content = fs.readFileSync(ADMIN_PANEL_PATH, 'utf8')
+
+  // reservationAlert ref & trigger function
+  assert.match(content, /const\s+reservationAlert\s*=\s*ref/, 'AdminPanel must define reservationAlert ref')
+  assert.match(content, /triggerReservationAlert/, 'AdminPanel must define triggerReservationAlert function')
+
+  // BroadcastChannel listener in onMounted
+  assert.match(
+    content,
+    /BroadcastChannel\(['"]kickcraft_reservations_channel['"]\)[\s\S]*?NEW_RESERVATION/,
+    'AdminPanel must listen for NEW_RESERVATION on kickcraft_reservations_channel'
+  )
+
+  // Floating notification alert banner template
+  assert.match(content, /New Reservation Received/, 'Banner must display "New Reservation Received"')
+  assert.match(content, /reservationAlert\.customerName/, 'Banner must display customer name')
+  assert.match(content, /reservationAlert\.(shoeName|shoeId)/, 'Banner must display shoe model/name')
+  assert.match(content, /reservationAlert\.id/, 'Banner must display receipt ID')
+  assert.match(content, /12000/, 'Banner auto-dismisses after 12 seconds')
+
+  // Action buttons on alert banner
+  assert.match(content, /View Details/, 'Banner must include "View Details" button')
+  assert.match(content, /Close|dismissReservationAlert/, 'Banner must include "Close" button or dismiss action')
+})
+
+test('AdminPanel.vue renders the inspection modal with 3D part color swatches', () => {
+  const content = fs.readFileSync(ADMIN_PANEL_PATH, 'utf8')
+
+  // Inspection modal state
+  assert.match(content, /const\s+showInspectionModal\s*=\s*ref/, 'AdminPanel must define showInspectionModal ref')
+  assert.match(content, /const\s+selectedInspectionReservation\s*=\s*ref/, 'AdminPanel must define selectedInspectionReservation ref')
+  assert.match(content, /showInspectionModal\s*&&\s*selectedInspectionReservation/, 'Inspection modal must be conditioned on showInspectionModal && selectedInspectionReservation')
+
+  // Customer & receipt info
+  assert.match(content, /selectedInspectionReservation\.id/, 'Modal must display receipt ID')
+  assert.match(content, /selectedInspectionReservation\.customerName/, 'Modal must display customer name')
+  assert.match(content, /selectedInspectionReservation\.(customerEmail|email)/, 'Modal must display customer email')
+  assert.match(content, /selectedInspectionReservation\.pickupDate/, 'Modal must display scheduled pickup date')
+
+  // Shoe specs: name, size, charm, thumbnail
+  assert.match(content, /selectedInspectionReservation\.(shoeName|shoeId)/, 'Modal must display shoe silhouette name')
+  assert.match(content, /selectedInspectionReservation\.size/, 'Modal must display US size')
+  assert.match(content, /selectedInspectionReservation\.(charmLabel|charmId)/, 'Modal must display charm accessory')
+
+  // 3D Color Swatches iteration
+  assert.match(content, /selectedInspectionReservation\.partColors/, 'Modal must iterate over partColors')
+  assert.match(content, /backgroundColor:\s*(?:partColor|color)\.value/, 'Modal must render color swatch box with backgroundColor')
+  assert.match(content, /(?:partColor|color)\.name/, 'Modal must render color name')
+})
+
+test('AdminPanel.vue inspection modal action buttons transition status to arrived and completed and filteredOrders handles completed/paid', () => {
+  const content = fs.readFileSync(ADMIN_PANEL_PATH, 'utf8')
+
+  // Action buttons
+  assert.match(content, /Mark as Arrived|Mark Arrived/, 'Modal must render Mark as Arrived button')
+  assert.match(content, /Mark as Completed|Mark Completed/, 'Modal must render Mark as Completed button')
+
+  // Transitions
+  assert.match(
+    content,
+    /['"]arrived['"]/,
+    'Modal action must transition to arrived'
+  )
+  assert.match(
+    content,
+    /['"]completed['"]/,
+    'Modal action must transition to completed'
+  )
+
+  // filteredOrders completed filter handles paid as well
+  assert.match(
+    content,
+    /order\.status === ['"]completed['"]\s*\|\|\s*order\.status === ['"]paid['"]/,
+    'filteredOrders must match completed or paid when status filter is completed'
+  )
+})
+
