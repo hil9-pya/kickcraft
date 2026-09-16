@@ -1,0 +1,227 @@
+-- KickCraft Database Setup Script
+-- Schema definition and seed data
+-- Note: KickCraft uses soft and permanent deletion flags; physical row deletion is forbidden.
+
+CREATE DATABASE IF NOT EXISTS kickcraft_db;
+USE kickcraft_db;
+
+-- --------------------------------------------------------
+-- Users Table
+-- --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) UNIQUE NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  role ENUM('customer', 'owner') NOT NULL DEFAULT 'customer',
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL DEFAULT NULL,
+  permanently_deleted TINYINT(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
+-- Shoes Table
+-- --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS shoes (
+  id VARCHAR(100) PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  price DECIMAL(10,2) NOT NULL DEFAULT 4890.00,
+  stock INT NOT NULL DEFAULT 0,
+  status ENUM('available', 'coming_soon', 'out_of_stock') NOT NULL DEFAULT 'available',
+  glb_path VARCHAR(500) NOT NULL,
+  thumbnail_path VARCHAR(500) DEFAULT '/images/kickcraft-one-card.png',
+  charms_enabled TINYINT(1) NOT NULL DEFAULT 1,
+  charm_offset VARCHAR(100) DEFAULT NULL,
+  charm_scale VARCHAR(100) DEFAULT '1 1 1',
+  charm_dir VARCHAR(500) DEFAULT NULL,
+  categories JSON NOT NULL,
+  parts JSON NOT NULL,
+  colors JSON NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL DEFAULT NULL,
+  permanently_deleted TINYINT(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
+-- Reservations Table
+-- --------------------------------------------------------
+CREATE TABLE IF NOT EXISTS reservations (
+  id VARCHAR(64) PRIMARY KEY,
+  customer_name VARCHAR(255) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  pickup_date DATE NOT NULL,
+  shoe_id VARCHAR(100) NOT NULL,
+  shoe_name VARCHAR(255) NOT NULL,
+  size INT NOT NULL,
+  price DECIMAL(10,2) NOT NULL,
+  part_colors JSON NOT NULL,
+  charm_id VARCHAR(50) NOT NULL DEFAULT 'none',
+  charm_label VARCHAR(50) NOT NULL DEFAULT 'None',
+  status ENUM('pending', 'paid', 'approved', 'ready', 'completed', 'cancelled') NOT NULL DEFAULT 'pending',
+  payment_method VARCHAR(50) NOT NULL DEFAULT 'in_store',
+  notes TEXT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- --------------------------------------------------------
+-- Seed Data: Admin User
+-- --------------------------------------------------------
+-- Password: kickcraft2026
+INSERT INTO users (name, email, password_hash, role)
+VALUES (
+  'KickCraft Owner',
+  'admin@kickcraft.local',
+  '$2y$12$QGS3OmhfjIFpByutrjRdW.JdAewtuJU6St5o.lsYKS9wN.a0ASpIu',
+  'owner'
+)
+ON DUPLICATE KEY UPDATE
+  name = VALUES(name),
+  role = VALUES(role);
+
+-- --------------------------------------------------------
+-- Seed Data: Initial Shoes
+-- --------------------------------------------------------
+INSERT INTO shoes (
+  id, name, description, price, stock, status, glb_path, thumbnail_path,
+  charms_enabled, charm_offset, charm_scale, charm_dir,
+  categories, parts, colors
+) VALUES
+(
+  'kickcraft-one',
+  'KickCraft One',
+  'Our original customizable sneaker concept.',
+  4890.00,
+  50,
+  'available',
+  '/models/shoe-soleview-final.glb',
+  '/images/kickcraft-one-card.png',
+  1,
+  NULL,
+  '1 1 1',
+  NULL,
+  '["kickcraft", "sneakers"]',
+  '[{"id":"upper","label":"Upper","material":"UpperMaterial"},{"id":"toe-cap","label":"Toe cap","material":"ToeCapMaterial"},{"id":"tongue","label":"Tongue","material":"TongueMaterial"},{"id":"laces","label":"Laces","material":"LacesMaterial"},{"id":"heel-panel","label":"Heel panel","material":"HeelPanelMaterial"},{"id":"side-accents","label":"Side accents","material":"SideAccentsMaterial"},{"id":"midsole","label":"Midsole","material":"MidsoleMaterial"},{"id":"outsole","label":"Outsole","material":"OutsoleMaterial"}]',
+  '[{"name":"Chalk","value":"#f1efe8"},{"name":"Graphite","value":"#292b2d"},{"name":"Cobalt","value":"#245fa8"},{"name":"Rust","value":"#b94d27"},{"name":"Moss","value":"#52684f"},{"name":"Burgundy","value":"#713741"}]'
+),
+(
+  'nike-air-max',
+  'Nike Air Max',
+  'A 3D shoe with three simple customization zones.',
+  4890.00,
+  50,
+  'available',
+  '/models/nike-air-max-custom.glb',
+  '/images/nike-air-max-card.png',
+  1,
+  '0.003800 0.005100 0.085800',
+  '0.25 0.25 0.25',
+  '/models/charms/air-max/',
+  '["sneakers", "running", "fashion"]',
+  '[{"id":"upper","label":"Upper","material":"UpperMaterial"},{"id":"laces","label":"Laces","material":"LacesMaterial"},{"id":"midsole","label":"Midsole","material":"MidsoleMaterial"}]',
+  '[{"name":"Chalk","value":"#f1efe8"},{"name":"Graphite","value":"#292b2d"},{"name":"Cobalt","value":"#245fa8"},{"name":"Rust","value":"#b94d27"},{"name":"Moss","value":"#52684f"},{"name":"Burgundy","value":"#713741"}]'
+),
+(
+  'nike-dunk',
+  'Nike Dunk',
+  'An iconic silhouette with customizable upper, laces, and midsole.',
+  4890.00,
+  50,
+  'available',
+  '/models/nike-dunk.glb',
+  '/images/nike-dunk-card.png',
+  1,
+  NULL,
+  '0.35 0.35 0.35',
+  NULL,
+  '["sneakers", "fashion", "basketball"]',
+  '[{"id":"upper","label":"Upper","material":"UpperMaterial"},{"id":"laces","label":"Laces","material":"LacesMaterial"},{"id":"midsole","label":"Midsole","material":"MidsoleMaterial"}]',
+  '[{"name":"Chalk","value":"#f1efe8"},{"name":"Graphite","value":"#292b2d"},{"name":"Cobalt","value":"#245fa8"},{"name":"Rust","value":"#b94d27"},{"name":"Moss","value":"#52684f"},{"name":"Burgundy","value":"#713741"}]'
+)
+ON DUPLICATE KEY UPDATE
+  name = VALUES(name),
+  price = VALUES(price),
+  stock = VALUES(stock),
+  status = VALUES(status);
+
+-- --------------------------------------------------------
+-- Seed Data: Sample Reservations
+-- --------------------------------------------------------
+INSERT INTO reservations (
+  id, customer_name, email, pickup_date, shoe_id, shoe_name,
+  size, price, part_colors, charm_id, charm_label,
+  status, payment_method, notes, created_at
+) VALUES
+(
+  'KC-2026-1041',
+  'Alex Reyes',
+  'alex.reyes@example.com',
+  '2026-09-18',
+  'kickcraft-one',
+  'KickCraft One',
+  9,
+  4890.00,
+  '{"upper":{"name":"Cobalt","value":"#245fa8"},"toe-cap":{"name":"Chalk","value":"#f1efe8"},"laces":{"name":"Rust","value":"#b94d27"},"midsole":{"name":"Graphite","value":"#292b2d"}}',
+  'star',
+  'Star',
+  'paid',
+  'gcash',
+  'Paid via GCash at studio counter.',
+  '2026-09-11 14:32:00'
+),
+(
+  'KC-2026-1042',
+  'Bea Gomez',
+  'bea.gomez@example.com',
+  '2026-09-19',
+  'nike-air-max',
+  'Nike Air Max',
+  8,
+  4890.00,
+  '{"upper":{"name":"Burgundy","value":"#713741"},"laces":{"name":"Chalk","value":"#f1efe8"},"midsole":{"name":"Chalk","value":"#f1efe8"}}',
+  'k-tag',
+  'K tag',
+  'paid',
+  'card',
+  'In-store credit card payment processed.',
+  '2026-09-12 10:15:00'
+),
+(
+  'KC-2026-1043',
+  'Carlos Mendoza',
+  'carlos.m@example.com',
+  '2026-09-20',
+  'kickcraft-one',
+  'KickCraft One',
+  10,
+  4890.00,
+  '{"upper":{"name":"Moss","value":"#52684f"},"laces":{"name":"Graphite","value":"#292b2d"},"midsole":{"name":"Chalk","value":"#f1efe8"},"outsole":{"name":"Rust","value":"#b94d27"}}',
+  'lightning',
+  'Lightning',
+  'paid',
+  'cash',
+  'Cash receipt issued upon pickup.',
+  '2026-09-13 16:45:00'
+),
+(
+  'KC-2026-1044',
+  'Danica Cruz',
+  'danica.cruz@example.com',
+  '2026-09-21',
+  'nike-dunk',
+  'Nike Dunk',
+  7,
+  4890.00,
+  '{"upper":{"name":"Cobalt","value":"#245fa8"},"laces":{"name":"Chalk","value":"#f1efe8"},"midsole":{"name":"Graphite","value":"#292b2d"}}',
+  'none',
+  'None',
+  'pending',
+  'in_store',
+  'Customer reservation placed online. Payment upon store pickup.',
+  '2026-09-14 09:20:00'
+)
+ON DUPLICATE KEY UPDATE
+  status = VALUES(status),
+  payment_method = VALUES(payment_method);

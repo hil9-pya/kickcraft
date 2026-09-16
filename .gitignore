@@ -4,3 +4,4 @@ tmp/
 .worktrees/
 .DS_Store
 *.log
+api/.env
