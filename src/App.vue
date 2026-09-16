@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import AdminPanel from './components/AdminPanel.vue'
 import ConfirmModal from './components/ConfirmModal.vue'
 import { api } from './api.js'
@@ -30,11 +30,30 @@ const adminShoes = ref(getStoredShoes())
 const currentUser = ref(null) // { email, role: 'customer' | 'owner' }
 
 onMounted(async () => {
+  // Listen for browser navigation via URL hash
+  if (typeof window !== 'undefined') {
+    window.addEventListener('hashchange', () => {
+      const hash = window.location.hash.replace('#', '').trim()
+      if (['shop', 'studio', 'login', 'register', 'admin'].includes(hash) && view.value !== hash) {
+        view.value = hash
+      }
+    })
+  }
+
   // Check active session from PHP API
   try {
     const sessionRes = await api('auth/session.php')
     if (sessionRes?.authenticated && sessionRes?.user) {
       currentUser.value = sessionRes.user
+      const hash = typeof window !== 'undefined' ? window.location.hash.replace('#', '').trim() : ''
+      const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('kickcraft_view') : ''
+      if (sessionRes.user.role === 'owner' && (hash === 'admin' || saved === 'admin')) {
+        view.value = 'admin'
+      }
+    } else {
+      if (view.value === 'admin') {
+        goToLogin('owner')
+      }
     }
   } catch (_) {
     // Session check fails gracefully when offline or unauthenticated
@@ -264,7 +283,34 @@ async function submitReservation() {
 }
 
 // ── View routing ──────────────────────────────────────────────
-const view = ref('shop') // 'shop' | 'studio' | 'login' | 'register' | 'admin'
+function getInitialView() {
+  if (typeof window !== 'undefined') {
+    const hash = window.location.hash.replace('#', '').trim()
+    if (['shop', 'studio', 'login', 'register', 'admin'].includes(hash)) {
+      return hash
+    }
+    try {
+      const saved = localStorage.getItem('kickcraft_view')
+      if (saved && ['shop', 'studio', 'login', 'register', 'admin'].includes(saved)) {
+        return saved
+      }
+    } catch (_) {}
+  }
+  return 'shop'
+}
+
+const view = ref(getInitialView()) // 'shop' | 'studio' | 'login' | 'register' | 'admin'
+
+watch(view, (newView) => {
+  if (typeof window !== 'undefined' && newView) {
+    if (window.location.hash !== `#${newView}`) {
+      window.location.hash = newView
+    }
+    try {
+      localStorage.setItem('kickcraft_view', newView)
+    } catch (_) {}
+  }
+}, { immediate: true })
 
 function goToAdmin() {
   view.value = 'admin'
@@ -278,6 +324,9 @@ async function handleLogout() {
   currentUser.value = null
   loginEmail.value = ''
   loginPassword.value = ''
+  try {
+    localStorage.removeItem('kickcraft_view')
+  } catch (_) {}
   goToShop()
 }
 
@@ -445,8 +494,9 @@ function scrollToTop() {
           <span class="font-display text-lg font-extrabold tracking-[-0.03em]">KickCraft</span>
         </button>
         <nav class="flex items-center gap-4 text-sm font-semibold sm:gap-6" aria-label="Main navigation">
-          <!-- Shop link -->
+          <!-- Shop link (hide when in admin to avoid redundant buttons) -->
           <button
+            v-if="view !== 'admin'"
             type="button"
             class="transition-colors hover:text-[#b94d27] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
             :class="view === 'shop' ? 'border-b-2 border-[#b94d27] py-5 text-[#202220]' : 'text-[#5f635f]'"
@@ -455,9 +505,9 @@ function scrollToTop() {
             Shop
           </button>
 
-          <!-- Back to shop (if in studio, login, or register) -->
+          <!-- Back to shop (only in studio, login, or register - NOT in admin) -->
           <button
-            v-if="view !== 'shop'"
+            v-if="view !== 'shop' && view !== 'admin'"
             class="hidden items-center gap-1.5 text-[#5f635f] transition-colors hover:text-[#202220] sm:flex focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
             @click="goToShop"
           >

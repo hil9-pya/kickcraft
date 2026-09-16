@@ -1028,21 +1028,26 @@ async function restoreShoe(shoe) {
     <!-- Top Breadcrumb & Status Bar -->
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-[#cfd2ce] pb-4">
       <div class="flex items-center gap-3">
-        <button
-          type="button"
-          class="flex items-center gap-1.5 text-xs font-semibold text-[#5f635f] transition-colors hover:text-[#202220] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
-          @click="emit('backToShop')"
-        >
-          <svg class="size-3.5" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-          Back to Customer Shop
-        </button>
+        <span class="font-display text-base font-black tracking-[-0.02em] text-[#202220]">
+          KickCraft
+        </span>
         <span class="text-[#cfd2ce]">/</span>
         <span class="font-bold text-xs uppercase tracking-wider text-[#b94d27]">Owner Admin Portal</span>
       </div>
 
       <div class="flex items-center gap-3 text-xs">
+        <button
+          type="button"
+          class="flex items-center gap-1.5 border border-[#bfc3bf] bg-white px-3 py-1.5 font-bold text-[#202220] shadow-sm transition-colors hover:border-[#292b2d] hover:bg-[#fcfdfb] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+          @click="emit('backToShop')"
+        >
+          <svg class="size-3.5 text-[#5f635f]" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
+            <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
+          </svg>
+          <span>Preview Customer Shop</span>
+        </button>
+
         <span class="flex items-center gap-1.5 font-semibold text-[#5f635f]">
           <span class="size-2 rounded-full bg-[#3f7652]" />
           Signed in: <strong class="text-[#202220]">{{ currentUser?.email || 'owner@kickcraft.local' }}</strong>
