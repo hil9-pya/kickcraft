@@ -90,6 +90,24 @@ onMounted(async () => {
       customerEmail.value = savedGuest.email
     }
   }
+
+  // Listen for real-time reservation updates across tabs
+  if (typeof BroadcastChannel !== 'undefined') {
+    try {
+      const channel = new BroadcastChannel('kickcraft_reservations_channel')
+      channel.onmessage = (event) => {
+        if (event.data?.type === 'RESERVATION_CANCELLED') {
+          const target = myReservations.value.find(r => r.id === event.data.id)
+          if (target) {
+            target.status = 'cancelled'
+            if (event.data.notes) {
+              target.notes = event.data.notes
+            }
+          }
+        }
+      }
+    } catch (_) {}
+  }
 })
 
 function onShoesChanged(updatedShoes) {
@@ -368,6 +386,66 @@ function goToMyReservations() {
     scrollToTop()
   } else {
     showGuestPerkReminder.value = true
+  }
+}
+
+function requestCancelCustomerReservation(reservation) {
+  confirmModal.value = {
+    show: true,
+    title: 'Cancel Pickup Reservation?',
+    message: `Are you sure you want to cancel your reservation for ${getReservationShoeName(reservation)} (Reference: ${reservation.id})? This action cannot be undone.`,
+    confirmText: 'Cancel Reservation',
+    cancelText: 'Keep Reservation',
+    variant: 'danger',
+    icon: 'trash',
+    onConfirm: async () => {
+      try {
+        await api('reservations/update-status.php', {
+          method: 'POST',
+          body: {
+            id: reservation.id,
+            status: 'cancelled',
+          },
+        })
+
+        // Update local state in myReservations
+        const target = myReservations.value.find(r => r.id === reservation.id)
+        if (target) {
+          target.status = 'cancelled'
+        }
+
+        // Update localStorage getStoredOrders()
+        try {
+          const storedOrders = getStoredOrders()
+          const orderIndex = storedOrders.findIndex(o => o.id === reservation.id)
+          if (orderIndex !== -1) {
+            storedOrders[orderIndex].status = 'cancelled'
+            setStoredOrders(storedOrders)
+          }
+        } catch (_) {}
+
+        // Restore local shoe stock in adminShoes if present
+        const shoeIndex = adminShoes.value.findIndex(s => s.id === reservation.shoeId)
+        if (shoeIndex !== -1) {
+          adminShoes.value[shoeIndex].stock += 1
+          if (adminShoes.value[shoeIndex].status === 'out_of_stock') {
+            adminShoes.value[shoeIndex].status = 'in_stock'
+          }
+          setStoredShoes(adminShoes.value)
+        }
+
+        // Broadcast event via BroadcastChannel('kickcraft_reservations_channel')
+        if (typeof BroadcastChannel !== 'undefined') {
+          try {
+            const channel = new BroadcastChannel('kickcraft_reservations_channel')
+            channel.postMessage({ type: 'RESERVATION_CANCELLED', id: reservation.id })
+            channel.close()
+          } catch (_) {}
+        }
+      } catch (err) {
+        reservationsError.value = err.message || 'Failed to cancel reservation'
+      }
+    },
   }
 }
 
@@ -1651,27 +1729,27 @@ function scrollToTop() {
       <!-- Reservations Card Grid -->
       <div v-else-if="myReservations.length > 0" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         <article
-          v-for="res in myReservations"
-          :key="res.id"
+          v-for="reservation in myReservations"
+          :key="reservation.id"
           class="flex flex-col border border-[#bfc3bf] bg-[#fcfdfb] transition-shadow hover:shadow-md"
         >
           <!-- Receipt Header & Status Badge -->
           <div class="flex items-center justify-between border-b border-[#e2e5e1] bg-[#f5f6f4] px-4 py-3">
             <div>
               <span class="block text-[10px] font-bold uppercase tracking-wider text-[#6a6e6a]">Receipt Reference</span>
-              <span class="font-mono text-sm font-black text-[#202220]">{{ res.id }}</span>
+              <span class="font-mono text-sm font-black text-[#202220]">{{ reservation.id }}</span>
             </div>
             <!-- Live Status Badge -->
             <span
               class="inline-flex items-center gap-1.5 border px-2.5 py-1 text-xs font-bold"
               :class="[
-                getReservationStatusBadge(res.status).bgClass,
-                getReservationStatusBadge(res.status).textClass,
-                getReservationStatusBadge(res.status).borderClass,
+                getReservationStatusBadge(reservation.status).bgClass,
+                getReservationStatusBadge(reservation.status).textClass,
+                getReservationStatusBadge(reservation.status).borderClass,
               ]"
             >
-              <span class="size-1.5 rounded-full" :class="getReservationStatusBadge(res.status).dotClass"></span>
-              {{ getReservationStatusBadge(res.status).label }}
+              <span class="size-1.5 rounded-full" :class="getReservationStatusBadge(reservation.status).dotClass"></span>
+              {{ getReservationStatusBadge(reservation.status).label }}
             </span>
           </div>
 
@@ -1680,7 +1758,7 @@ function scrollToTop() {
             <span class="font-semibold text-[#5f635f]">Scheduled Pickup</span>
             <span class="flex items-center gap-1.5 font-bold text-[#202220]">
               <span class="size-2 rounded-full bg-[#245fa8]"></span>
-              {{ res.pickupDate }}
+              {{ reservation.pickupDate }}
             </span>
           </div>
 
@@ -1688,22 +1766,22 @@ function scrollToTop() {
           <div class="flex items-center gap-4 border-b border-[#e2e5e1] p-4">
             <div class="grid size-20 shrink-0 place-items-center border border-[#d9dcd8] bg-[#f5f6f4] p-1">
               <img
-                :src="getReservationShoeImage(res)"
-                :alt="getReservationShoeName(res)"
+                :src="getReservationShoeImage(reservation)"
+                :alt="getReservationShoeName(reservation)"
                 class="max-h-full max-w-full object-contain"
               />
             </div>
             <div class="min-w-0 flex-1">
               <h3 class="font-display truncate text-base font-black text-[#202220]">
-                {{ getReservationShoeName(res) }}
+                {{ getReservationShoeName(reservation) }}
               </h3>
               <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#5f635f]">
-                <span class="font-medium text-[#202220]">US {{ res.size }}</span>
+                <span class="font-medium text-[#202220]">US {{ reservation.size }}</span>
                 <span>•</span>
-                <span class="font-bold text-[#202220]">{{ res.formattedPrice || '₱4,890' }}</span>
+                <span class="font-bold text-[#202220]">{{ reservation.formattedPrice || '₱4,890' }}</span>
                 <span>•</span>
                 <span class="font-medium text-[#245fa8]">
-                  {{ res.charmLabel || (res.charmId && res.charmId !== 'none' ? res.charmId : 'No accessory') }}
+                  {{ reservation.charmLabel || (reservation.charmId && reservation.charmId !== 'none' ? reservation.charmId : 'No accessory') }}
                 </span>
               </div>
             </div>
@@ -1715,11 +1793,11 @@ function scrollToTop() {
               Customized Parts
             </h4>
             <div
-              v-if="res.partColors && Object.keys(res.partColors).length > 0"
+              v-if="reservation.partColors && Object.keys(reservation.partColors).length > 0"
               class="grid grid-cols-2 gap-2 text-xs"
             >
               <div
-                v-for="(colorInfo, partKey) in res.partColors"
+                v-for="(colorInfo, partKey) in reservation.partColors"
                 :key="partKey"
                 class="flex items-center gap-2 border border-[#e2e5e1] bg-[#f5f6f4] px-2 py-1.5"
               >
@@ -1736,9 +1814,18 @@ function scrollToTop() {
             <div v-else class="text-xs italic text-[#6a6e6a]">
               Standard factory colorway
             </div>
+
+            <!-- Store Cancellation Reason Callout -->
+            <div
+              v-if="reservation.status === 'cancelled' && reservation.notes"
+              class="mt-3 border-l-2 border-[#b94d27] bg-[#fdf2ef] p-2.5 text-xs text-[#963a20]"
+            >
+              <span class="block text-[10px] font-bold uppercase tracking-wider text-[#963a20]">Store Cancellation Reason:</span>
+              <p class="mt-0.5 text-xs text-[#202220]">{{ reservation.notes }}</p>
+            </div>
           </div>
 
-          <!-- Store Pickup Notice -->
+          <!-- Store Pickup Notice & Self-Cancellation Action -->
           <div class="border-t border-[#e2e5e1] bg-[#f5f6f4] p-4 text-xs text-[#5f635f]">
             <div class="flex items-start gap-2">
               <svg class="mt-0.5 size-4 shrink-0 text-[#245fa8]" viewBox="0 0 20 20" fill="currentColor">
@@ -1747,6 +1834,16 @@ function scrollToTop() {
               <p class="leading-relaxed">
                 Please present this receipt reference at <strong class="text-[#202220]">123 Craft Studio Way, Manila</strong> on or before your pickup date.
               </p>
+            </div>
+            <div v-if="reservation.status === 'pending'" class="mt-3 flex justify-end border-t border-[#e2e5e1] pt-3">
+              <button
+                v-if="reservation.status === 'pending'"
+                type="button"
+                class="border border-[#b94d27] px-3 py-1.5 text-xs font-bold text-[#b94d27] transition-colors hover:bg-[#b94d27] hover:text-white focus-visible:outline-2 focus-visible:outline-[#b94d27]"
+                @click="requestCancelCustomerReservation(reservation)"
+              >
+                Cancel Reservation
+              </button>
             </div>
           </div>
         </article>

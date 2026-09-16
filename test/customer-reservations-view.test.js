@@ -142,3 +142,112 @@ test('Reservations view status badge supports pending, paid, approved, ready, co
   assert.match(content, /292b2d/, 'Status styling must include dark #292b2d for completed')
   assert.match(content, /b94d27/, 'Status styling must include terracotta #b94d27 for cancelled')
 })
+
+test('Customer reservations view renders "Cancel Reservation" button only for pending reservations', () => {
+  const content = fs.readFileSync(APP_PATH, 'utf8')
+
+  // Cancel reservation button exists
+  assert.match(
+    content,
+    /Cancel Reservation/,
+    'Reservations card must render "Cancel Reservation" button'
+  )
+
+  // Conditioned only on status === 'pending'
+  assert.match(
+    content,
+    /v-if="reservation\.status === 'pending'"[\s\S]*?Cancel Reservation/,
+    'Cancel Reservation button must be conditioned on reservation.status === "pending"'
+  )
+
+  // Click triggers requestCancelCustomerReservation
+  assert.match(
+    content,
+    /@click="requestCancelCustomerReservation\(reservation\)"/,
+    'Cancel Reservation button must trigger requestCancelCustomerReservation(reservation)'
+  )
+})
+
+test('App.vue implements requestCancelCustomerReservation with ConfirmModal, API call, local storage update, and BroadcastChannel', () => {
+  const content = fs.readFileSync(APP_PATH, 'utf8')
+
+  // Function declaration
+  assert.match(
+    content,
+    /function\s+requestCancelCustomerReservation\s*\(\s*reservation\s*\)/,
+    'App.vue must implement function requestCancelCustomerReservation(reservation)'
+  )
+
+  // ConfirmModal configuration: title and danger variant
+  assert.match(
+    content,
+    /title:\s*['"]Cancel Pickup Reservation\?['"]/,
+    'requestCancelCustomerReservation must prompt ConfirmModal with "Cancel Pickup Reservation?"'
+  )
+  assert.match(
+    content,
+    /variant:\s*['"]danger['"]/,
+    'requestCancelCustomerReservation must use danger variant for ConfirmModal'
+  )
+
+  // Calls api('reservations/update-status.php') with status: 'cancelled'
+  assert.match(
+    content,
+    /api\(['"]reservations\/update-status\.php['"],\s*\{\s*method:\s*['"]POST['"][\s\S]*?status:\s*['"]cancelled['"]/,
+    'requestCancelCustomerReservation must call reservations/update-status.php with status: "cancelled"'
+  )
+
+  // Updates local reservation state
+  assert.match(
+    content,
+    /myReservations\.value[\s\S]*?status\s*=\s*['"]cancelled['"]/,
+    'requestCancelCustomerReservation must update local myReservations status to cancelled'
+  )
+
+  // Updates getStoredOrders() and setStoredOrders()
+  assert.match(
+    content,
+    /getStoredOrders\(\)[\s\S]*?setStoredOrders\(/,
+    'requestCancelCustomerReservation must update stored orders in localStorage'
+  )
+
+  // Broadcasts event on BroadcastChannel('kickcraft_reservations_channel')
+  assert.match(
+    content,
+    /BroadcastChannel\(['"]kickcraft_reservations_channel['"]\)[\s\S]*?postMessage\(\{\s*type:\s*['"]RESERVATION_CANCELLED['"]/,
+    'requestCancelCustomerReservation must broadcast RESERVATION_CANCELLED event via kickcraft_reservations_channel'
+  )
+})
+
+test('Reservations view renders store cancellation reason callout for cancelled reservations with notes', () => {
+  const content = fs.readFileSync(APP_PATH, 'utf8')
+
+  // Callout conditioned on reservation.status === 'cancelled' && reservation.notes
+  assert.match(
+    content,
+    /v-if="reservation\.status === 'cancelled' && reservation\.notes"/,
+    'Store cancellation reason callout must check reservation.status === "cancelled" && reservation.notes'
+  )
+
+  // Contains header / label "Store Cancellation Reason:"
+  assert.match(
+    content,
+    /Store Cancellation Reason:/,
+    'Callout must display "Store Cancellation Reason:"'
+  )
+
+  // Renders {{ reservation.notes }}
+  assert.match(
+    content,
+    /\{\{\s*reservation\.notes\s*\}\}/,
+    'Callout must render {{ reservation.notes }}'
+  )
+
+  // Brutalist styling tokens: border-l-2 border-[#b94d27] bg-[#fdf2ef] text-[#963a20]
+  assert.match(
+    content,
+    /border-l-2\s+border-\[#b94d27\]\s+bg-\[#fdf2ef\]/,
+    'Callout must use brutalist border-l-2 border-[#b94d27] bg-[#fdf2ef]'
+  )
+})
+
