@@ -215,6 +215,105 @@ async function restoreUser(user) {
   }
 }
 
+// ── User Modal State (Create / Edit) ──────────────────────────
+const showUserModal = ref(false)
+const isEditingUser = ref(false)
+const userModalSaving = ref(false)
+const userModalError = ref('')
+const userForm = ref({
+  id: null,
+  name: '',
+  email: '',
+  role: 'customer',
+  password: '',
+})
+
+function openCreateUserModal() {
+  isEditingUser.value = false
+  userModalError.value = ''
+  userForm.value = {
+    id: null,
+    name: '',
+    email: '',
+    role: 'customer',
+    password: '',
+  }
+  showUserModal.value = true
+}
+
+function openEditUserModal(user) {
+  isEditingUser.value = true
+  userModalError.value = ''
+  userForm.value = {
+    id: user.id,
+    name: user.name || '',
+    email: user.email || '',
+    role: user.role || 'customer',
+    password: '',
+  }
+  showUserModal.value = true
+}
+
+async function handleSaveUser() {
+  userModalError.value = ''
+
+  if (!userForm.value.name || userForm.value.name.trim().length < 2) {
+    userModalError.value = 'Full name must be at least 2 characters long.'
+    return
+  }
+
+  if (!userForm.value.email || !userForm.value.email.includes('@')) {
+    userModalError.value = 'A valid email address is required.'
+    return
+  }
+
+  if (!isEditingUser.value && (!userForm.value.password || userForm.value.password.length < 6)) {
+    userModalError.value = 'Password must be at least 6 characters long for new accounts.'
+    return
+  }
+
+  if (isEditingUser.value && userForm.value.password && userForm.value.password.length < 6) {
+    userModalError.value = 'Password must be at least 6 characters long if changed.'
+    return
+  }
+
+  userModalSaving.value = true
+
+  try {
+    if (isEditingUser.value) {
+      await api('auth/update-user.php', {
+        method: 'POST',
+        body: {
+          id: userForm.value.id,
+          name: userForm.value.name.trim(),
+          email: userForm.value.email.trim(),
+          role: userForm.value.role,
+          password: userForm.value.password ? userForm.value.password : undefined,
+        },
+      })
+      saveFeedback.value = `User "${userForm.value.name}" updated successfully.`
+    } else {
+      await api('auth/create-user.php', {
+        method: 'POST',
+        body: {
+          name: userForm.value.name.trim(),
+          email: userForm.value.email.trim(),
+          role: userForm.value.role,
+          password: userForm.value.password,
+        },
+      })
+      saveFeedback.value = `New user "${userForm.value.name}" created successfully.`
+    }
+
+    showUserModal.value = false
+    await fetchUsers()
+  } catch (err) {
+    userModalError.value = err.message || 'Failed to save user account'
+  } finally {
+    userModalSaving.value = false
+  }
+}
+
 const filteredUsers = computed(() => {
   let list = users.value || []
   const q = userSearchQuery.value.trim().toLowerCase()
@@ -2334,17 +2433,30 @@ async function restoreShoe(shoe) {
           </p>
         </div>
 
-        <button
-          type="button"
-          class="flex items-center gap-2 border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#202220] shadow-sm transition-colors hover:border-[#292b2d] hover:bg-[#fcfdfb]"
-          :disabled="usersLoading"
-          @click="fetchUsers"
-        >
-          <svg class="size-3.5" :class="{ 'animate-spin': usersLoading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          <span>{{ usersLoading ? 'Refreshing…' : 'Refresh Users' }}</span>
-        </button>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="flex items-center gap-2 bg-[#292b2d] px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#b94d27]"
+            @click="openCreateUserModal"
+          >
+            <svg class="size-3.5" viewBox="0 0 20 20" fill="currentColor">
+              <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
+            </svg>
+            Add New User
+          </button>
+
+          <button
+            type="button"
+            class="flex items-center gap-2 border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#202220] shadow-sm transition-colors hover:border-[#292b2d] hover:bg-[#fcfdfb]"
+            :disabled="usersLoading"
+            @click="fetchUsers"
+          >
+            <svg class="size-3.5" :class="{ 'animate-spin': usersLoading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>{{ usersLoading ? 'Refreshing…' : 'Refresh Users' }}</span>
+          </button>
+        </div>
       </div>
 
       <!-- KPI Summary Cards -->
@@ -2539,15 +2651,26 @@ async function restoreShoe(shoe) {
               <td class="px-4 py-3.5 text-right">
                 <div class="flex items-center justify-end gap-2">
                   <!-- Self-account guard -->
-                  <span
-                    v-if="u.email === currentUser?.email"
-                    class="text-[11px] font-semibold text-[#8e938e]"
-                  >
-                    Current Session
-                  </span>
+                  <!-- Current Account Actions -->
+                  <template v-if="u.email === currentUser?.email">
+                    <button
+                      type="button"
+                      class="border border-[#cfd2ce] bg-white px-2.5 py-1 text-[11px] font-bold text-[#202220] transition-colors hover:border-[#245fa8] hover:bg-[#f0f4fa] hover:text-[#245fa8]"
+                      @click="openEditUserModal(u)"
+                    >
+                      Edit Profile
+                    </button>
+                  </template>
 
                   <!-- Active User Actions -->
                   <template v-else-if="!u.deleted_at">
+                    <button
+                      type="button"
+                      class="border border-[#cfd2ce] bg-white px-2.5 py-1 text-[11px] font-bold text-[#202220] transition-colors hover:border-[#245fa8] hover:bg-[#f0f4fa] hover:text-[#245fa8]"
+                      @click="openEditUserModal(u)"
+                    >
+                      Edit
+                    </button>
                     <button
                       type="button"
                       class="border border-[#cfd2ce] bg-white px-2.5 py-1 text-[11px] font-bold text-[#5f635f] transition-colors hover:border-[#b94d27] hover:bg-[#fdf2ef] hover:text-[#b94d27]"
@@ -2589,6 +2712,105 @@ async function restoreShoe(shoe) {
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- ── User Create / Edit Modal ────────────────────────────── -->
+    <div
+      v-if="showUserModal"
+      class="fixed inset-0 z-50 flex items-center justify-center p-4"
+    >
+      <div
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+        @click="showUserModal = false"
+      />
+      <div class="relative w-full max-w-md border border-[#292b2d] bg-white p-6 shadow-2xl">
+        <div class="flex items-center justify-between border-b border-[#cfd2ce] pb-3">
+          <h2 class="font-display text-lg font-black text-[#202220]">
+            {{ isEditingUser ? 'Edit User Account' : 'Create New User Account' }}
+          </h2>
+          <button
+            type="button"
+            class="text-[#8e938e] hover:text-[#202220]"
+            @click="showUserModal = false"
+          >
+            ✕
+          </button>
+        </div>
+
+        <form class="mt-4 space-y-4" @submit.prevent="handleSaveUser">
+          <div
+            v-if="userModalError"
+            class="border border-[#b94d27] bg-[#fdf2ef] p-3 text-xs font-semibold text-[#b94d27]"
+          >
+            {{ userModalError }}
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-[#5f635f]">Full Name</label>
+            <input
+              v-model="userForm.name"
+              type="text"
+              required
+              placeholder="e.g. Jordan Cruz"
+              class="mt-1 w-full border border-[#cfd2ce] bg-white px-3 py-2 text-xs text-[#202220] focus:border-[#245fa8] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-[#5f635f]">Email Address</label>
+            <input
+              v-model="userForm.email"
+              type="email"
+              required
+              placeholder="e.g. jordan@example.com"
+              class="mt-1 w-full border border-[#cfd2ce] bg-white px-3 py-2 text-xs text-[#202220] focus:border-[#245fa8] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-[#5f635f]">Account Role</label>
+            <select
+              v-model="userForm.role"
+              class="mt-1 w-full border border-[#cfd2ce] bg-white px-3 py-2 text-xs font-semibold text-[#202220] focus:border-[#245fa8] focus:outline-none"
+            >
+              <option value="customer">Customer (Can customize & reserve shoes)</option>
+              <option value="owner">Owner / Admin (Full administrative access)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold uppercase tracking-wider text-[#5f635f]">
+              {{ isEditingUser ? 'New Password (Optional)' : 'Password' }}
+            </label>
+            <input
+              v-model="userForm.password"
+              type="password"
+              :placeholder="isEditingUser ? 'Leave blank to keep current password' : 'Minimum 6 characters'"
+              class="mt-1 w-full border border-[#cfd2ce] bg-white px-3 py-2 text-xs text-[#202220] focus:border-[#245fa8] focus:outline-none"
+            />
+            <p v-if="isEditingUser" class="mt-1 text-[10px] text-[#8e938e]">
+              Only enter a value if you want to reset this user's password.
+            </p>
+          </div>
+
+          <div class="mt-6 flex items-center justify-end gap-3 border-t border-[#cfd2ce] pt-4">
+            <button
+              type="button"
+              class="border border-[#cfd2ce] bg-white px-4 py-2 text-xs font-bold text-[#5f635f] hover:border-[#292b2d] hover:text-[#202220]"
+              @click="showUserModal = false"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              class="bg-[#292b2d] px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#b94d27]"
+              :disabled="userModalSaving"
+            >
+              {{ userModalSaving ? 'Saving…' : (isEditingUser ? 'Save Changes' : 'Create User') }}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
 

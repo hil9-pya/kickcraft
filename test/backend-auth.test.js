@@ -15,9 +15,11 @@ const REQUIRED_FILES = [
   'users.php',
   'delete-user.php',
   'restore-user.php',
+  'create-user.php',
+  'update-user.php',
 ]
 
-test('all 7 authentication and user management endpoint files exist', () => {
+test('all authentication and user management endpoint files exist', () => {
   for (const file of REQUIRED_FILES) {
     const filePath = path.join(AUTH_DIR, file)
     assert.ok(fs.existsSync(filePath), `Expected endpoint file to exist: api/auth/${file}`)
@@ -240,4 +242,24 @@ require __DIR__ . '/delete-user.php';
     if (fs.existsSync(runnerScript1)) fs.unlinkSync(runnerScript1)
   }
 })
+
+test('create-user.php enforces POST, requireAdmin, prepared statements, and password hashing', () => {
+  const code = fs.readFileSync(path.join(AUTH_DIR, 'create-user.php'), 'utf8')
+  assert.match(code, /requireMethod\(['"]POST['"]\)/)
+  assert.match(code, /requireAdmin\(\)/)
+  assert.match(code, /password_hash\(/)
+  assert.match(code, /PASSWORD_BCRYPT/)
+  assert.match(code, /prepare\(/)
+  assert.doesNotMatch(code, /\bDELETE\s+FROM\b/i)
+})
+
+test('update-user.php enforces POST, requireAdmin, prepared statements, and guards permanently_deleted', () => {
+  const code = fs.readFileSync(path.join(AUTH_DIR, 'update-user.php'), 'utf8')
+  assert.match(code, /requireMethod\(['"]POST['"]\)/)
+  assert.match(code, /requireAdmin\(\)/)
+  assert.match(code, /prepare\(/)
+  assert.match(code, /permanently_deleted\s*=\s*0/)
+  assert.doesNotMatch(code, /\bDELETE\s+FROM\b/i)
+})
+
 
