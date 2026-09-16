@@ -93,7 +93,21 @@ This specification removes the Financial Tracker and sales metrics from the Kick
 - Increments shoe inventory stock back by 1.
 - Broadcasts event to instantly update owner reservations panel.
 
-### 5.2 Owner Record Deletion
+### 5.2 Owner Cancellation with Explanation (Color Out of Stock)
+- When the owner clicks **"Cancel Reservation"** from the table or inspection modal, an **Owner Cancellation Modal** opens:
+  - Header: \`Cancel Reservation [Receipt ID]\`
+  - Input: \`Cancellation Reason / Store Explanation\`
+  - Quick presets:
+    - *"Selected custom color / material is currently unavailable"*
+    - *"Silhouette size out of stock"*
+    - *"Custom craftsmanship constraint"*
+  - Custom note text area for custom explanations.
+- On submit: calls \`api/reservations/update-status.php\` with \`status: 'cancelled'\` and \`notes: reasonText\`.
+- Restores shoe inventory stock by 1 (\`stock = stock + 1\`).
+- **Customer Visibility:** In the customer's "My Reservations" dashboard, if a reservation was cancelled by the store with an explanation, the card prominently displays:
+  \`Store Cancellation Reason: [explanation text]\`.
+
+### 5.3 Owner Record Deletion
 - Only available for reservations marked `cancelled`.
 - Triggers `ConfirmModal` before executing.
 - Handled by `api/reservations/delete.php` using prepared statements:
