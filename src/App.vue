@@ -122,6 +122,7 @@ const pickupDate = ref('')
 const reservationReceipt = ref(null)
 const isSubmitting = ref(false)
 const reservationError = ref('')
+const showGuestPerkReminder = ref(false)
 
 const GUEST_PROFILE_KEY = 'kickcraft_guest_profile'
 const rememberGuestProfile = ref(false)
@@ -285,6 +286,7 @@ function openReservation() {
   reserved.value = false
   reservationReceipt.value = null
   reservationError.value = ''
+  showGuestPerkReminder.value = false
   if (!pickupDate.value) {
     pickupDate.value = minPickupDate.value
   }
@@ -312,6 +314,19 @@ function openReservation() {
 
 function closeReservation() {
   document.querySelector('#reservation-dialog')?.close()
+  showGuestPerkReminder.value = false
+}
+
+function goToMyReservations() {
+  if (currentUser.value?.role === 'customer') {
+    closeReservation()
+    view.value = 'reservations'
+    if (typeof fetchMyReservations === 'function') {
+      fetchMyReservations()
+    }
+  } else {
+    showGuestPerkReminder.value = true
+  }
 }
 
 async function submitReservation() {
@@ -541,6 +556,7 @@ function resetStudioState() {
   reserved.value = false
   reservationReceipt.value = null
   reservationError.value = ''
+  showGuestPerkReminder.value = false
 }
 
 function goToStudio(shoeId) {
@@ -1578,20 +1594,75 @@ function scrollToTop() {
         </form>
       </div>
       <div v-else class="p-8 text-center">
-        <div class="mx-auto grid size-12 place-items-center bg-[#3f7652] text-xl font-black text-white">✓</div>
+        <div class="mx-auto grid size-12 place-items-center bg-[#3f7652] text-xl font-black text-white animate-pop-in">✓</div>
         <h2 class="font-display mt-5 text-xl font-black">Reservation placed!</h2>
-        <div v-if="reservationReceipt" class="mt-3 inline-block bg-[#f1f3f0] border border-[#d9dcd8] px-3 py-1 font-mono text-xs font-bold text-[#292b2d]">
-          Receipt Reference: {{ reservationReceipt.id }}
+
+        <div class="mt-4 border-2 border-[#3f7652] bg-[#edf5f0] px-4 py-2 font-mono text-xs font-black uppercase tracking-wider text-[#2a593a]">[ ✓ RESERVATION CONFIRMED · HELD FOR STORE PICKUP ]</div>
+
+        <div class="mt-4 border border-[#d9dcd8] bg-[#f8f9f7] p-4 text-left font-mono text-xs text-[#292b2d]">
+          <div class="flex items-center justify-between border-b border-[#e2e5e1] pb-2">
+            <span class="font-sans font-semibold uppercase tracking-wider text-[#626662]">Receipt Reference</span>
+            <span class="font-bold text-[#292b2d]">{{ reservationReceipt?.id || 'KC-2026-XXXX' }}</span>
+          </div>
+          <div class="flex items-center justify-between border-b border-[#e2e5e1] py-2">
+            <span class="font-sans font-semibold uppercase tracking-wider text-[#626662]">Silhouette &amp; Size</span>
+            <span class="font-sans font-bold text-[#292b2d]">{{ selectedShoe.name }} · Size {{ selectedSize }}</span>
+          </div>
+          <div class="flex items-center justify-between border-b border-[#e2e5e1] py-2">
+            <span class="font-sans font-semibold uppercase tracking-wider text-[#626662]">Scheduled Pickup</span>
+            <span class="font-sans font-bold text-[#292b2d]">{{ pickupDate }}</span>
+          </div>
+          <div class="flex items-start justify-between border-b border-[#e2e5e1] py-2">
+            <span class="font-sans font-semibold uppercase tracking-wider text-[#626662]">Store Address</span>
+            <span class="font-sans font-medium text-right text-[#292b2d]">123 Craft Studio Way, Manila</span>
+          </div>
+          <div class="flex items-start justify-between pt-2">
+            <span class="font-sans font-semibold uppercase tracking-wider text-[#626662]">Status</span>
+            <span class="font-sans font-medium text-right text-[#292b2d]">
+              <span class="font-bold text-[#b94d27]">Pending Payment</span> · Payment collected in-store upon inspection
+            </span>
+          </div>
         </div>
-        <p class="mt-3 text-sm leading-6 text-[#626662]">
-          Your custom {{ selectedShoe.name }} (Size {{ selectedSize }}) with {{ selectedCharm.label }} accessory has been logged for pickup on <strong class="text-[#292b2d]">{{ pickupDate }}</strong>.
+
+        <p class="mt-3 text-xs leading-5 text-[#626662]">
+          Your custom {{ selectedShoe.name }} (Size {{ selectedSize }}) with {{ selectedCharm.label }} accessory has been reserved. Please bring this receipt reference to the studio.
         </p>
-        <p class="mt-2 text-xs text-[#8e938e]">
-          Status: <span class="font-semibold text-[#b94d27]">Pending Payment</span> · Logged into owner inventory &amp; sales ledger.
-        </p>
-        <button class="mt-6 h-11 w-full border border-[#8e938e] font-bold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]" @click="closeReservation">
-          Continue designing
-        </button>
+
+        <div class="mt-6 flex flex-col gap-2.5">
+          <button
+            type="button"
+            class="h-11 w-full bg-[#292b2d] font-bold text-white transition-colors hover:bg-[#1a1b1c] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
+            @click="goToMyReservations"
+          >
+            View in My Reservations
+          </button>
+
+          <!-- Guest account perk reminder -->
+          <div
+            v-if="showGuestPerkReminder && (!currentUser || currentUser.role !== 'customer')"
+            class="border border-[#bfa76a] bg-[#fbf8f0] p-3 text-left text-xs text-[#634e18]"
+          >
+            <div class="font-bold uppercase tracking-wider text-[#493910]">Account Registration Perk</div>
+            <p class="mt-1 leading-relaxed">
+              Create a customer account to track your customized shoe reservations, verify real-time pickup readiness, and save your sizes.
+            </p>
+            <button
+              type="button"
+              class="mt-2 inline-flex items-center font-bold text-[#b94d27] underline hover:text-[#963a20]"
+              @click="closeReservation(); goToRegister()"
+            >
+              Create an account now →
+            </button>
+          </div>
+
+          <button
+            type="button"
+            class="h-11 w-full border border-[#8e938e] font-bold hover:bg-[#f1f3f0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
+            @click="closeReservation"
+          >
+            Continue Designing
+          </button>
+        </div>
       </div>
     </dialog>
 
@@ -1608,3 +1679,15 @@ function scrollToTop() {
     />
   </div>
 </template>
+
+<style scoped>
+@keyframes popIn {
+  0% { transform: scale(0.4); opacity: 0; }
+  70% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-pop-in {
+  animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+</style>
+

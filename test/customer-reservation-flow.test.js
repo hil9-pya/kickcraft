@@ -235,3 +235,96 @@ test('Reservation dialog integrates KickCraftCalendar with minPickupDate and max
     'Reservation dialog must not contain native type="date" input'
   )
 })
+
+test('Reservation success dialog renders spring pop animation, brutalist verification stamp, and actions', () => {
+  const content = fs.readFileSync(APP_PATH, 'utf8')
+
+  // CSS keyframes popIn and .animate-pop-in definition
+  assert.match(
+    content,
+    /@keyframes\s+popIn\s*\{[\s\S]*?transform:\s*scale\(0\.4\)[\s\S]*?transform:\s*scale\(1\.15\)[\s\S]*?transform:\s*scale\(1\)/,
+    'App.vue must define @keyframes popIn spring animation'
+  )
+  assert.match(
+    content,
+    /\.animate-pop-in\s*\{[\s\S]*?animation:\s*popIn\s+0\.5s/,
+    'App.vue must define .animate-pop-in class'
+  )
+
+  // Extract reservation dialog success section (the v-else block inside #reservation-dialog)
+  const dialogMatch = content.match(/id="reservation-dialog"[\s\S]*?<\/dialog>/)
+  assert.ok(dialogMatch, 'Reservation dialog must exist')
+  const dialogContent = dialogMatch[0]
+
+  const successBlockMatch = dialogContent.match(/<div[^>]*v-else[\s\S]*?<\/dialog>/)
+  assert.ok(successBlockMatch, 'Reservation success view (v-else) must exist')
+  const successContent = successBlockMatch[0]
+
+  // Success badge includes animate-pop-in class
+  assert.match(
+    successContent,
+    /animate-pop-in/,
+    'Success checkmark badge must include animate-pop-in animation class'
+  )
+
+  // Brutalist verification banner
+  assert.match(
+    successContent,
+    /\[\s*✓\s*RESERVATION\s+CONFIRMED\s*·\s*HELD\s+FOR\s+STORE\s+PICKUP\s*\]/,
+    'Success view must render brutalist verification banner "[ ✓ RESERVATION CONFIRMED · HELD FOR STORE PICKUP ]"'
+  )
+
+  // Staggered details: receipt reference, shoe name & size, pickup date, address, and status
+  assert.match(
+    successContent,
+    /reservationReceipt/,
+    'Success view must display reservation receipt reference'
+  )
+  assert.match(
+    successContent,
+    /selectedShoe\.name[\s\S]*?selectedSize|selectedSize[\s\S]*?selectedShoe\.name/,
+    'Success view must display shoe silhouette name and size'
+  )
+  assert.match(
+    successContent,
+    /123 Craft Studio Way,\s*Manila/,
+    'Success view must display store pickup address "123 Craft Studio Way, Manila"'
+  )
+  assert.match(
+    successContent,
+    /Pending Payment[\s\S]*?Payment collected in-store upon inspection/,
+    'Success view must display pending payment status and in-store payment notice'
+  )
+
+  // Action buttons
+  assert.match(
+    successContent,
+    /<button[^>]*@click="closeReservation"[^>]*>[\s\S]*?Continue Designing[\s\S]*?<\/button>/,
+    'Success view must render "Continue Designing" button that calls closeReservation'
+  )
+  assert.match(
+    successContent,
+    /<button[^>]*@click="goToMyReservations"[^>]*>[\s\S]*?View in My Reservations[\s\S]*?<\/button>/,
+    'Success view must render "View in My Reservations" button that calls goToMyReservations'
+  )
+
+  // Guest perk reminder
+  assert.match(
+    successContent,
+    /showGuestPerkReminder/,
+    'Success view must toggle account registration perk reminder for guests'
+  )
+
+  // Script definitions
+  assert.match(
+    content,
+    /function\s+goToMyReservations\s*\(/,
+    'App.vue must define goToMyReservations function'
+  )
+  assert.match(
+    content,
+    /showGuestPerkReminder/,
+    'App.vue must define showGuestPerkReminder ref'
+  )
+})
+
