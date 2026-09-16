@@ -1038,14 +1038,10 @@ async function restoreShoe(shoe) {
       <div class="flex items-center gap-3 text-xs">
         <button
           type="button"
-          class="flex items-center gap-1.5 border border-[#bfc3bf] bg-white px-3 py-1.5 font-bold text-[#202220] shadow-sm transition-colors hover:border-[#292b2d] hover:bg-[#fcfdfb] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+          class="border border-[#bfc3bf] bg-white px-3.5 py-1.5 font-bold text-[#202220] shadow-sm transition-all duration-150 hover:border-[#202220] hover:bg-[#202220] hover:text-white focus-visible:outline-2 focus-visible:outline-[#245fa8]"
           @click="emit('backToShop')"
         >
-          <svg class="size-3.5 text-[#5f635f]" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-            <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-            <path fill-rule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clip-rule="evenodd" />
-          </svg>
-          <span>Preview Customer Shop</span>
+          Preview Customer Shop
         </button>
 
         <span class="flex items-center gap-1.5 font-semibold text-[#5f635f]">
@@ -1059,25 +1055,23 @@ async function restoreShoe(shoe) {
     <div class="mb-6 flex border-b border-[#cfd2ce] bg-white shadow-sm">
       <button
         type="button"
-        class="flex items-center gap-2 border-b-2 px-6 py-3.5 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+        class="border-b-2 px-6 py-3.5 text-xs font-bold transition-all duration-150 focus-visible:outline-2 focus-visible:outline-[#245fa8]"
         :class="adminSection === 'inventory'
           ? 'border-[#b94d27] bg-[#fcfdfb] text-[#202220]'
-          : 'border-transparent text-[#5f635f] hover:text-[#202220]'"
+          : 'border-transparent text-[#5f635f] hover:bg-[#f7f8f6] hover:text-[#202220]'"
         @click="adminSection = 'inventory'; editorMode = false"
       >
-        <span>👟</span>
-        <span>Shoe Catalog &amp; Inventory</span>
+        Shoe Catalog &amp; Inventory
       </button>
 
       <button
         type="button"
-        class="flex items-center gap-2 border-b-2 px-6 py-3.5 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+        class="flex items-center gap-2 border-b-2 px-6 py-3.5 text-xs font-bold transition-all duration-150 focus-visible:outline-2 focus-visible:outline-[#245fa8]"
         :class="adminSection === 'financials'
           ? 'border-[#b94d27] bg-[#fcfdfb] text-[#202220]'
-          : 'border-transparent text-[#5f635f] hover:text-[#202220]'"
+          : 'border-transparent text-[#5f635f] hover:bg-[#f7f8f6] hover:text-[#202220]'"
         @click="adminSection = 'financials'; editorMode = false"
       >
-        <span>📈</span>
         <span>Financials &amp; Sales History</span>
         <span
           v-if="financialStats.pendingUnits > 0"
@@ -1089,13 +1083,12 @@ async function restoreShoe(shoe) {
 
       <button
         type="button"
-        class="flex items-center gap-2 border-b-2 px-6 py-3.5 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+        class="flex items-center gap-2 border-b-2 px-6 py-3.5 text-xs font-bold transition-all duration-150 focus-visible:outline-2 focus-visible:outline-[#245fa8]"
         :class="adminSection === 'users'
           ? 'border-[#b94d27] bg-[#fcfdfb] text-[#202220]'
-          : 'border-transparent text-[#5f635f] hover:text-[#202220]'"
+          : 'border-transparent text-[#5f635f] hover:bg-[#f7f8f6] hover:text-[#202220]'"
         @click="adminSection = 'users'; editorMode = false; fetchUsers()"
       >
-        <span>👥</span>
         <span>User Accounts</span>
         <span
           v-if="userStats.total > 0"
@@ -1128,12 +1121,9 @@ async function restoreShoe(shoe) {
           <div class="flex items-center gap-3">
             <button
               type="button"
-              class="flex items-center gap-2 bg-[#292b2d] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#b94d27] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+              class="bg-[#292b2d] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-150 hover:bg-[#b94d27] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
               @click="openNewShoeEditor"
             >
-              <svg class="size-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-              </svg>
               Add New Shoe
             </button>
           </div>
@@ -1215,11 +1205,8 @@ async function restoreShoe(shoe) {
               v-model="searchQuery"
               type="search"
               placeholder="Search shoes by name or category..."
-              class="h-9 w-full border border-[#cfd2ce] bg-[#fcfdfb] pl-8 pr-3 text-xs outline-none focus:border-[#245fa8]"
+              class="h-9 w-full border border-[#cfd2ce] bg-[#fcfdfb] px-3 text-xs outline-none transition-colors focus:border-[#245fa8]"
             />
-            <svg class="absolute left-2.5 top-2.5 size-4 text-[#8e938e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
           </div>
         </div>
 
@@ -1347,12 +1334,9 @@ async function restoreShoe(shoe) {
           <p class="mt-1 text-xs text-[#5f635f]">Try adjusting your search query or add a new 3D model.</p>
           <button
             type="button"
-            class="mx-auto mt-4 flex items-center gap-2 bg-[#292b2d] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#b94d27]"
+            class="mx-auto mt-4 bg-[#292b2d] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-150 hover:bg-[#b94d27]"
             @click="openNewShoeEditor"
           >
-            <svg class="size-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-            </svg>
             Add New Shoe
           </button>
         </div>
@@ -1367,10 +1351,10 @@ async function restoreShoe(shoe) {
           <div>
             <button
               type="button"
-              class="flex items-center gap-1.5 text-xs font-bold text-[#5f635f] hover:text-[#202220]"
+              class="text-xs font-bold text-[#5f635f] transition-colors hover:text-[#202220] hover:underline"
               @click="cancelEdit"
             >
-              ← Back to Shoe Inventory
+              Back to Shoe Inventory
             </button>
             <h2 class="font-display mt-2 text-2xl font-black tracking-[-0.03em] text-[#202220]">
               {{ isEditing ? `Edit: ${form.name}` : (form.glbPath ? `Configure: ${form.name}` : 'Add New 3D Shoe Model') }}
@@ -1413,10 +1397,8 @@ async function restoreShoe(shoe) {
           @dragover.prevent
           @drop="handleDrop"
         >
-          <div class="mx-auto grid size-16 place-items-center bg-[#fdf2ef] text-[#b94d27]">
-            <svg class="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-            </svg>
+          <div class="mx-auto flex h-10 w-28 items-center justify-center border-2 border-[#b94d27] bg-[#fdf2ef] font-mono text-xs font-black uppercase tracking-wider text-[#b94d27]">
+            Drop GLB
           </div>
 
           <h3 class="mt-4 font-display text-2xl font-black text-[#202220]">
@@ -1827,10 +1809,10 @@ async function restoreShoe(shoe) {
 
                 <button
                   type="button"
-                  class="h-8 bg-[#292b2d] px-3 text-xs font-bold text-white transition-colors hover:bg-[#b94d27]"
+                  class="h-8 bg-[#292b2d] px-3.5 text-xs font-bold text-white shadow-sm transition-all duration-150 hover:bg-[#b94d27]"
                   @click="addColorToPalette"
                 >
-                  + Add Color
+                  Add Color
                 </button>
               </div>
             </div>
@@ -1880,12 +1862,9 @@ async function restoreShoe(shoe) {
         <div class="flex items-center gap-3">
           <button
             type="button"
-            class="flex items-center gap-2 bg-[#292b2d] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#3f7652] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+            class="bg-[#292b2d] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-150 hover:bg-[#3f7652] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
             @click="openWalkInSale"
           >
-            <svg class="size-4" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-            </svg>
             Record Walk-in Sale
           </button>
         </div>
@@ -1996,16 +1975,13 @@ async function restoreShoe(shoe) {
         </div>
 
         <!-- Search input -->
-        <div class="relative sm:w-72">
+        <div class="relative w-full sm:w-72">
           <input
             v-model="orderSearchQuery"
             type="search"
             placeholder="Search receipt #, customer name, email..."
-            class="h-9 w-full border border-[#cfd2ce] bg-[#fcfdfb] pl-8 pr-3 text-xs outline-none focus:border-[#245fa8]"
+            class="h-9 w-full border border-[#cfd2ce] bg-[#fcfdfb] px-3 text-xs outline-none transition-colors focus:border-[#245fa8]"
           />
-          <svg class="absolute left-2.5 top-2.5 size-4 text-[#8e938e]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
         </div>
       </div>
 
@@ -2175,10 +2151,10 @@ async function restoreShoe(shoe) {
           </h3>
           <button
             type="button"
-            class="size-6 text-sm text-[#8e938e] hover:text-[#202220]"
+            class="px-2.5 py-1 text-xs font-bold text-[#8e938e] transition-all duration-150 hover:bg-[#f1f3f0] hover:text-[#202220]"
             @click="showWalkInModal = false"
           >
-            ✕
+            Close
           </button>
         </div>
 
@@ -2376,15 +2352,15 @@ async function restoreShoe(shoe) {
             <button
               v-if="selectedOrderForReceipt.status !== 'paid'"
               type="button"
-              class="bg-[#3f7652] px-3 py-1.5 text-xs font-bold text-white hover:bg-[#2a593a]"
+              class="bg-[#3f7652] px-3.5 py-1.5 text-xs font-bold text-white transition-all duration-150 hover:bg-[#2a593a]"
               @click="handleOrderStatusChange(selectedOrderForReceipt.id, 'paid')"
             >
-              ✓ Mark as Paid
+              Mark as Paid
             </button>
             <button
               v-if="selectedOrderForReceipt.status !== 'pending'"
               type="button"
-              class="border border-[#c97d1e] bg-white px-3 py-1.5 text-xs font-bold text-[#c97d1e] hover:bg-[#fcfdfb]"
+              class="border border-[#c97d1e] bg-white px-3 py-1.5 text-xs font-bold text-[#c97d1e] transition-all duration-150 hover:bg-[#fcfdfb]"
               @click="handleOrderStatusChange(selectedOrderForReceipt.id, 'pending')"
             >
               Set to Pending
@@ -2392,7 +2368,7 @@ async function restoreShoe(shoe) {
             <button
               v-if="selectedOrderForReceipt.status !== 'cancelled'"
               type="button"
-              class="border border-[#b94d27] bg-white px-2.5 py-1.5 text-xs font-bold text-[#b94d27] hover:bg-[#fdf2ef]"
+              class="border border-[#b94d27] bg-white px-2.5 py-1.5 text-xs font-bold text-[#b94d27] transition-all duration-150 hover:bg-[#fdf2ef]"
               @click="requestCancelOrder(selectedOrderForReceipt)"
             >
               Cancel Order
@@ -2402,12 +2378,9 @@ async function restoreShoe(shoe) {
           <div class="flex items-center gap-2">
             <button
               type="button"
-              class="flex items-center gap-1.5 border border-[#292b2d] bg-[#292b2d] px-4 py-1.5 text-xs font-bold text-white hover:bg-[#b94d27]"
+              class="border border-[#292b2d] bg-[#292b2d] px-4 py-1.5 text-xs font-bold text-white transition-all duration-150 hover:border-[#b94d27] hover:bg-[#b94d27]"
               @click="printReceipt"
             >
-              <svg class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-              </svg>
               Print Receipt
             </button>
             <button
@@ -2441,25 +2414,19 @@ async function restoreShoe(shoe) {
         <div class="flex items-center gap-2">
           <button
             type="button"
-            class="flex items-center gap-2 bg-[#292b2d] px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#b94d27]"
+            class="bg-[#292b2d] px-4 py-2 text-xs font-bold text-white shadow-sm transition-all duration-150 hover:bg-[#b94d27]"
             @click="openCreateUserModal"
           >
-            <svg class="size-3.5" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clip-rule="evenodd" />
-            </svg>
             Add New User
           </button>
 
           <button
             type="button"
-            class="flex items-center gap-2 border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#202220] shadow-sm transition-colors hover:border-[#292b2d] hover:bg-[#fcfdfb]"
+            class="border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#202220] shadow-sm transition-all duration-150 hover:border-[#202220] hover:bg-[#202220] hover:text-white"
             :disabled="usersLoading"
             @click="fetchUsers"
           >
-            <svg class="size-3.5" :class="{ 'animate-spin': usersLoading }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span>{{ usersLoading ? 'Refreshing…' : 'Refresh Users' }}</span>
+            {{ usersLoading ? 'Refreshing…' : 'Refresh Users' }}
           </button>
         </div>
       </div>
@@ -2736,10 +2703,10 @@ async function restoreShoe(shoe) {
           </h2>
           <button
             type="button"
-            class="text-[#8e938e] hover:text-[#202220]"
+            class="px-2.5 py-1 text-xs font-bold text-[#8e938e] transition-all duration-150 hover:bg-[#f1f3f0] hover:text-[#202220]"
             @click="showUserModal = false"
           >
-            ✕
+            Close
           </button>
         </div>
 
