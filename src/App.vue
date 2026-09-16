@@ -35,8 +35,11 @@ onMounted(async () => {
   if (typeof window !== 'undefined') {
     window.addEventListener('hashchange', () => {
       const hash = window.location.hash.replace('#', '').trim()
-      if (['shop', 'studio', 'login', 'register', 'admin'].includes(hash) && view.value !== hash) {
+      if (['shop', 'studio', 'login', 'register', 'admin', 'reservations'].includes(hash) && view.value !== hash) {
         view.value = hash
+        if (hash === 'reservations' && currentUser.value?.role === 'customer') {
+          fetchMyReservations()
+        }
       }
     })
   }
@@ -50,14 +53,20 @@ onMounted(async () => {
       const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('kickcraft_view') : ''
       if (sessionRes.user.role === 'owner' && (hash === 'admin' || saved === 'admin')) {
         view.value = 'admin'
+      } else if (sessionRes.user.role === 'customer' && (hash === 'reservations' || saved === 'reservations')) {
+        view.value = 'reservations'
+        fetchMyReservations()
       }
     } else {
-      if (view.value === 'admin') {
-        goToLogin('owner')
+      if (view.value === 'admin' || view.value === 'reservations') {
+        goToLogin(view.value === 'admin' ? 'owner' : 'customer')
       }
     }
   } catch (_) {
     // Session check fails gracefully when offline or unauthenticated
+    if (view.value === 'reservations') {
+      fetchMyReservations()
+    }
   }
 
   // Load catalog shoes from API with fallback to getStoredShoes()
@@ -317,15 +326,140 @@ function closeReservation() {
   showGuestPerkReminder.value = false
 }
 
+// ── Customer reservations state ───────────────────────────────
+const myReservations = ref([])
+const isLoadingReservations = ref(false)
+const reservationsError = ref('')
+
+async function fetchMyReservations() {
+  isLoadingReservations.value = true
+  reservationsError.value = ''
+  try {
+    const res = await api('reservations/list.php')
+    if (res?.reservations && Array.isArray(res.reservations)) {
+      myReservations.value = res.reservations
+    } else {
+      const email = currentUser.value?.email
+      const stored = getStoredOrders()
+      myReservations.value = email ? stored.filter(o => o.customerEmail === email || o.email === email) : stored
+    }
+  } catch (err) {
+    try {
+      const email = currentUser.value?.email
+      const stored = getStoredOrders()
+      const offline = email ? stored.filter(o => o.customerEmail === email || o.email === email) : stored
+      myReservations.value = offline
+      if (offline.length === 0 && err.message) {
+        reservationsError.value = err.message || 'Failed to load reservations'
+      }
+    } catch (_) {
+      reservationsError.value = err.message || 'Failed to load reservations'
+    }
+  } finally {
+    isLoadingReservations.value = false
+  }
+}
+
 function goToMyReservations() {
   if (currentUser.value?.role === 'customer') {
     closeReservation()
     view.value = 'reservations'
-    if (typeof fetchMyReservations === 'function') {
-      fetchMyReservations()
-    }
+    fetchMyReservations()
+    scrollToTop()
   } else {
     showGuestPerkReminder.value = true
+  }
+}
+
+function getReservationStatusBadge(status) {
+  const statusMap = {
+    pending: {
+      label: 'Pending Payment',
+      bgClass: 'bg-[#fcf5eb]',
+      textClass: 'text-[#c97d1e]',
+      borderClass: 'border-[#c97d1e]',
+      dotClass: 'bg-[#c97d1e]',
+    },
+    paid: {
+      label: 'Paid & Confirmed',
+      bgClass: 'bg-[#edf5f0]',
+      textClass: 'text-[#3f7652]',
+      borderClass: 'border-[#3f7652]',
+      dotClass: 'bg-[#3f7652]',
+    },
+    approved: {
+      label: 'Processing',
+      bgClass: 'bg-[#edf4fb]',
+      textClass: 'text-[#245fa8]',
+      borderClass: 'border-[#245fa8]',
+      dotClass: 'bg-[#245fa8]',
+    },
+    ready: {
+      label: 'Ready for Store Pickup',
+      bgClass: 'bg-[#eaf5ee]',
+      textClass: 'text-[#2a593a]',
+      borderClass: 'border-[#2a593a]',
+      dotClass: 'bg-[#2a593a]',
+    },
+    completed: {
+      label: 'Completed',
+      bgClass: 'bg-[#f1f2f0]',
+      textClass: 'text-[#292b2d]',
+      borderClass: 'border-[#292b2d]',
+      dotClass: 'bg-[#292b2d]',
+    },
+    cancelled: {
+      label: 'Cancelled',
+      bgClass: 'bg-[#fdf2ef]',
+      textClass: 'text-[#b94d27]',
+      borderClass: 'border-[#b94d27]',
+      dotClass: 'bg-[#b94d27]',
+    },
+  }
+  return statusMap[status] || {
+    label: status || 'Pending',
+    bgClass: 'bg-[#f1f2f0]',
+    textClass: 'text-[#292b2d]',
+    borderClass: 'border-[#292b2d]',
+    dotClass: 'bg-[#292b2d]',
+  }
+}
+
+function getReservationShoeImage(reservation) {
+  const shoe = adminShoes.value.find(s => s.id === reservation.shoeId) || SHOES.find(s => s.id === reservation.shoeId)
+  return shoe?.thumbnailPath || shoe?.image || '/images/kickcraft-one-card.png'
+}
+
+function getReservationShoeName(reservation) {
+  if (reservation.shoeName) return reservation.shoeName
+  const shoe = adminShoes.value.find(s => s.id === reservation.shoeId) || SHOES.find(s => s.id === reservation.shoeId)
+  return shoe?.name || 'KickCraft Shoe'
+}
+
+function formatPartName(partKey) {
+  const labelMap = {
+    upper: 'Upper',
+    toecap: 'Toe Cap',
+    'toe-cap': 'Toe Cap',
+    tongue: 'Tongue',
+    laces: 'Laces',
+    heelpanel: 'Heel Panel',
+    'heel-panel': 'Heel Panel',
+    sideaccents: 'Side Accents',
+    'side-accents': 'Side Accents',
+    midsole: 'Midsole',
+    outsole: 'Outsole',
+    swoosh: 'Swoosh',
+  }
+  return labelMap[partKey.toLowerCase()] || partKey.replace(/[-_]/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+}
+
+function normalizeColorInfo(colorVal) {
+  if (!colorVal) return { name: 'Default', value: '#f1efe8' }
+  if (typeof colorVal === 'string') return { name: colorVal, value: colorVal }
+  return {
+    name: colorVal.name || colorVal.value || 'Custom',
+    value: colorVal.value || '#f1efe8',
   }
 }
 
@@ -383,12 +517,12 @@ async function submitReservation() {
 function getInitialView() {
   if (typeof window !== 'undefined') {
     const hash = window.location.hash.replace('#', '').trim()
-    if (['shop', 'studio', 'login', 'register', 'admin'].includes(hash)) {
+    if (['shop', 'studio', 'login', 'register', 'admin', 'reservations'].includes(hash)) {
       return hash
     }
     try {
       const saved = localStorage.getItem('kickcraft_view')
-      if (saved && ['shop', 'studio', 'login', 'register', 'admin'].includes(saved)) {
+      if (saved && ['shop', 'studio', 'login', 'register', 'admin', 'reservations'].includes(saved)) {
         return saved
       }
     } catch (_) {}
@@ -396,7 +530,7 @@ function getInitialView() {
   return 'shop'
 }
 
-const view = ref(getInitialView()) // 'shop' | 'studio' | 'login' | 'register' | 'admin'
+const view = ref(getInitialView()) // 'shop' | 'studio' | 'login' | 'register' | 'admin' | 'reservations'
 
 watch(view, (newView) => {
   if (typeof window !== 'undefined' && newView) {
@@ -607,6 +741,17 @@ function scrollToTop() {
           <span v-if="view === 'studio'" class="hidden border-b-2 border-[#b94d27] py-5 text-[#202220] sm:block">
             Design studio
           </span>
+
+          <!-- Customer reservations tab -->
+          <button
+            v-if="currentUser?.role === 'customer'"
+            type="button"
+            class="transition-colors hover:text-[#b94d27] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+            :class="view === 'reservations' ? 'border-b-2 border-[#b94d27] py-5 text-[#202220]' : 'text-[#5f635f]'"
+            @click="goToMyReservations"
+          >
+            My Reservations
+          </button>
 
           <!-- Admin link (shown if logged in as owner or in admin view) -->
           <button
@@ -1410,6 +1555,201 @@ function scrollToTop() {
           Backend architecture: Prepared for <span class="font-semibold text-[#202220]">PHP / MySQL API</span> (<code class="text-[#b94d27]">POST /api/auth/register.php</code>)
         </div>
 
+      </div>
+    </main>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- MY RESERVATIONS VIEW (CUSTOMER)                        -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <main v-else-if="view === 'reservations'" class="mx-auto max-w-[1480px] px-5 py-10 lg:px-8 lg:py-14">
+      <!-- Back to shop link -->
+      <button
+        type="button"
+        class="mb-6 inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#6a6e6a] transition-colors hover:text-[#202220] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+        @click="goToShop"
+      >
+        <svg class="size-3.5" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M9 2L4 7l5 5" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Back to shop
+      </button>
+
+      <!-- Header -->
+      <div class="mb-10 flex flex-col justify-between gap-4 border-b border-[#cfd2ce] pb-8 sm:flex-row sm:items-end">
+        <div>
+          <div class="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#6a6e6a]">
+            <span>Customer Account</span>
+            <span>•</span>
+            <span class="text-[#b94d27]">Pickup History</span>
+          </div>
+          <h1 class="font-display text-3xl font-black tracking-[-0.04em] text-[#202220] sm:text-4xl">
+            My Pickup Reservations
+          </h1>
+          <p class="mt-2 max-w-2xl text-sm leading-6 text-[#5f635f]">
+            Review your customized shoes, track live preparation status, and present your receipt reference in-store for pickup.
+          </p>
+        </div>
+        <div class="flex items-center gap-3">
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 border border-[#bfc3bf] bg-[#fcfdfb] px-4 py-2.5 text-xs font-bold text-[#292b2d] hover:border-[#292b2d] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+            :disabled="isLoadingReservations"
+            @click="fetchMyReservations"
+          >
+            <svg class="size-3.5" :class="{ 'animate-spin': isLoadingReservations }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12a9 9 0 11-6.219-8.56"/>
+            </svg>
+            Refresh
+          </button>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 bg-[#292b2d] px-4 py-2.5 text-xs font-bold text-white hover:bg-[#1a1b1c] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+            @click="goToShop"
+          >
+            Design Another Shoe
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading state -->
+      <div v-if="isLoadingReservations && myReservations.length === 0" class="py-16 text-center">
+        <div class="inline-block size-8 animate-spin rounded-full border-2 border-[#292b2d] border-t-transparent"></div>
+        <p class="mt-4 text-xs font-bold uppercase tracking-wider text-[#6a6e6a]">Loading reservations…</p>
+      </div>
+
+      <!-- Error feedback -->
+      <div v-if="reservationsError" class="mb-6 border border-[#b94d27]/40 bg-[#fdf2ef] p-4 text-sm text-[#963a20]">
+        <div class="font-bold">Unable to load reservations</div>
+        <p class="mt-1 text-xs">{{ reservationsError }}</p>
+      </div>
+
+      <!-- Empty state -->
+      <div
+        v-if="myReservations.length === 0 && !isLoadingReservations"
+        class="border border-[#cfd2ce] bg-[#fcfdfb] p-10 text-center sm:p-16"
+      >
+        <div class="mx-auto grid size-12 place-items-center bg-[#292b2d] text-lg font-black text-white">
+          K
+        </div>
+        <h2 class="font-display mt-5 text-xl font-black tracking-tight text-[#202220] sm:text-2xl">
+          You haven't reserved any custom shoes yet.
+        </h2>
+        <p class="mx-auto mt-2 max-w-md text-sm leading-6 text-[#5f635f]">
+          Explore our original silhouettes in the 3D Studio, recolor individual parts, attach a custom charm, and reserve your unique pair for pickup.
+        </p>
+        <div class="mt-6">
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 bg-[#b94d27] px-6 py-3 text-sm font-bold text-white transition-colors hover:bg-[#963a20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
+            @click="goToStudio('kickcraft-one')"
+          >
+            Start Designing in 3D Studio
+          </button>
+        </div>
+      </div>
+
+      <!-- Reservations Card Grid -->
+      <div v-else-if="myReservations.length > 0" class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <article
+          v-for="res in myReservations"
+          :key="res.id"
+          class="flex flex-col border border-[#bfc3bf] bg-[#fcfdfb] transition-shadow hover:shadow-md"
+        >
+          <!-- Receipt Header & Status Badge -->
+          <div class="flex items-center justify-between border-b border-[#e2e5e1] bg-[#f5f6f4] px-4 py-3">
+            <div>
+              <span class="block text-[10px] font-bold uppercase tracking-wider text-[#6a6e6a]">Receipt Reference</span>
+              <span class="font-mono text-sm font-black text-[#202220]">{{ res.id }}</span>
+            </div>
+            <!-- Live Status Badge -->
+            <span
+              class="inline-flex items-center gap-1.5 border px-2.5 py-1 text-xs font-bold"
+              :class="[
+                getReservationStatusBadge(res.status).bgClass,
+                getReservationStatusBadge(res.status).textClass,
+                getReservationStatusBadge(res.status).borderClass,
+              ]"
+            >
+              <span class="size-1.5 rounded-full" :class="getReservationStatusBadge(res.status).dotClass"></span>
+              {{ getReservationStatusBadge(res.status).label }}
+            </span>
+          </div>
+
+          <!-- Pickup date strip -->
+          <div class="flex items-center justify-between border-b border-[#e2e5e1] bg-[#fcfdfb] px-4 py-2.5 text-xs">
+            <span class="font-semibold text-[#5f635f]">Scheduled Pickup</span>
+            <span class="flex items-center gap-1.5 font-bold text-[#202220]">
+              <span class="size-2 rounded-full bg-[#245fa8]"></span>
+              {{ res.pickupDate }}
+            </span>
+          </div>
+
+          <!-- Shoe Thumbnail & Details -->
+          <div class="flex items-center gap-4 border-b border-[#e2e5e1] p-4">
+            <div class="grid size-20 shrink-0 place-items-center border border-[#d9dcd8] bg-[#f5f6f4] p-1">
+              <img
+                :src="getReservationShoeImage(res)"
+                :alt="getReservationShoeName(res)"
+                class="max-h-full max-w-full object-contain"
+              />
+            </div>
+            <div class="min-w-0 flex-1">
+              <h3 class="font-display truncate text-base font-black text-[#202220]">
+                {{ getReservationShoeName(res) }}
+              </h3>
+              <div class="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#5f635f]">
+                <span class="font-medium text-[#202220]">US {{ res.size }}</span>
+                <span>•</span>
+                <span class="font-bold text-[#202220]">{{ res.formattedPrice || '₱4,890' }}</span>
+                <span>•</span>
+                <span class="font-medium text-[#245fa8]">
+                  {{ res.charmLabel || (res.charmId && res.charmId !== 'none' ? res.charmId : 'No accessory') }}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3D Customized Part Color Swatches -->
+          <div class="flex-1 border-b border-[#e2e5e1] p-4">
+            <h4 class="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-[#6a6e6a]">
+              Customized Parts
+            </h4>
+            <div
+              v-if="res.partColors && Object.keys(res.partColors).length > 0"
+              class="grid grid-cols-2 gap-2 text-xs"
+            >
+              <div
+                v-for="(colorInfo, partKey) in res.partColors"
+                :key="partKey"
+                class="flex items-center gap-2 border border-[#e2e5e1] bg-[#f5f6f4] px-2 py-1.5"
+              >
+                <span
+                  class="size-3.5 shrink-0 border border-black/10"
+                  :style="{ backgroundColor: normalizeColorInfo(colorInfo).value }"
+                />
+                <div class="min-w-0 flex-1 truncate">
+                  <span class="font-semibold text-[#202220]">{{ formatPartName(partKey) }}: </span>
+                  <span class="text-[#5f635f]">{{ normalizeColorInfo(colorInfo).name }}</span>
+                </div>
+              </div>
+            </div>
+            <div v-else class="text-xs italic text-[#6a6e6a]">
+              Standard factory colorway
+            </div>
+          </div>
+
+          <!-- Store Pickup Notice -->
+          <div class="border-t border-[#e2e5e1] bg-[#f5f6f4] p-4 text-xs text-[#5f635f]">
+            <div class="flex items-start gap-2">
+              <svg class="mt-0.5 size-4 shrink-0 text-[#245fa8]" viewBox="0 0 20 20" fill="currentColor">
+                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
+              </svg>
+              <p class="leading-relaxed">
+                Please present this receipt reference at <strong class="text-[#202220]">123 Craft Studio Way, Manila</strong> on or before your pickup date.
+              </p>
+            </div>
+          </div>
+        </article>
       </div>
     </main>
 
