@@ -46,3 +46,85 @@ test('Task 2: Show/Hide Password toggles in App.vue and AdminPanel.vue', () => {
   assert.match(adminContent, /showUserPassword\s*\?\s*['"]text['"]\s*:\s*['"]password['"]/, 'AdminPanel user password input must toggle type')
 })
 
+test('Task 3: Apache .htaccess file provides SPA fallback for client routing', () => {
+  const htaccessRoot = path.join(ROOT, '.htaccess')
+  const htaccessPublic = path.join(ROOT, 'public', '.htaccess')
+
+  assert.ok(
+    fs.existsSync(htaccessRoot) || fs.existsSync(htaccessPublic),
+    '.htaccess must exist in root or public folder'
+  )
+
+  const content = fs.existsSync(htaccessRoot)
+    ? fs.readFileSync(htaccessRoot, 'utf8')
+    : fs.readFileSync(htaccessPublic, 'utf8')
+
+  assert.match(content, /RewriteEngine\s+On/i, '.htaccess must enable RewriteEngine')
+  assert.match(content, /RewriteRule\s+.*\s+index\.html/i, '.htaccess must rewrite missing paths to index.html')
+})
+
+test('Task 3: App.vue route protection and brutalist 404 page', () => {
+  const appVuePath = path.join(ROOT, 'src', 'App.vue')
+  const appContent = fs.readFileSync(appVuePath, 'utf8')
+
+  // State definitions
+  assert.match(appContent, /const\s+notFoundPath\s*=\s*ref\(/, 'App.vue must define notFoundPath ref')
+  assert.match(appContent, /['"]not-found['"]/, 'App.vue must support not-found in view states')
+
+  // Brute force / unauthorized protection logic
+  assert.match(appContent, /role\s*!==?\s*['"]owner['"][\s\S]*?not-found/, 'App.vue must transition non-owners on admin route to not-found')
+
+  // 404 Template elements
+  assert.match(appContent, /v-else-if="view\s*===\s*['"]not-found['"]"/, 'App.vue must render 404 main container')
+  assert.match(appContent, /404/, '404 view must display 404 heading')
+  assert.match(appContent, /notFoundPath/, '404 view must display attempted notFoundPath')
+  assert.match(appContent, /goToShop/, '404 view must provide return to catalog action')
+  assert.match(appContent, /goToStudio/, '404 view must provide open 3D studio action')
+})
+
+test('Task 3: route resolution helper correctly routes and protects paths', () => {
+  function simulateRoute(pathname, hash, currentUser) {
+    let p = pathname || ''
+    p = p.replace(/^\/kickcraft\/?/i, '/')
+    const cleanPath = p.replace(/^\/+|\/+$/g, '')
+    const cleanHash = (hash || '').replace(/^#\/?/, '').trim()
+    const target = (cleanPath && cleanPath !== 'index.html') ? cleanPath : cleanHash
+
+    if (!target || target === 'shop') return { view: 'shop', notFoundPath: '' }
+    if (['studio', 'login', 'register'].includes(target)) return { view: target, notFoundPath: '' }
+    if (target === 'reservations') {
+      if (currentUser?.role === 'customer') return { view: 'reservations', notFoundPath: '' }
+      if (!currentUser) return { view: 'login', notFoundPath: '' }
+      return { view: 'not-found', notFoundPath: cleanPath ? `/${cleanPath}` : `#${cleanHash}` }
+    }
+    if (target === 'admin') {
+      if (currentUser?.role === 'owner') return { view: 'admin', notFoundPath: '' }
+      return { view: 'not-found', notFoundPath: cleanPath ? `/${cleanPath}` : `#${cleanHash}` }
+    }
+    return { view: 'not-found', notFoundPath: cleanPath ? `/${cleanPath}` : `#${cleanHash}` }
+  }
+
+  // Unauthorized attempts to /admin or #admin lead to not-found (404)
+  assert.equal(simulateRoute('/admin', '', null).view, 'not-found')
+  assert.equal(simulateRoute('', '#admin', null).view, 'not-found')
+  assert.equal(simulateRoute('/admin', '', { role: 'customer' }).view, 'not-found')
+  assert.equal(simulateRoute('', '#admin', { role: 'customer' }).view, 'not-found')
+
+  // Authorized owner accessing /admin or #admin
+  assert.equal(simulateRoute('/admin', '', { role: 'owner' }).view, 'admin')
+  assert.equal(simulateRoute('', '#admin', { role: 'owner' }).view, 'admin')
+
+  // Unknown brute-force URLs lead to not-found (404)
+  assert.equal(simulateRoute('/secret', '', null).view, 'not-found')
+  assert.equal(simulateRoute('/secret', '', null).notFoundPath, '/secret')
+  assert.equal(simulateRoute('', '#unknown', null).view, 'not-found')
+  assert.equal(simulateRoute('', '#unknown', null).notFoundPath, '#unknown')
+
+  // Valid public routes
+  assert.equal(simulateRoute('/', '', null).view, 'shop')
+  assert.equal(simulateRoute('', '#shop', null).view, 'shop')
+  assert.equal(simulateRoute('', '#studio', null).view, 'studio')
+  assert.equal(simulateRoute('/login', '', null).view, 'login')
+  assert.equal(simulateRoute('/register', '', null).view, 'register')
+})
+

@@ -31,16 +31,17 @@ const adminShoes = ref(getStoredShoes())
 const currentUser = ref(null) // { email, role: 'customer' | 'owner' }
 
 onMounted(async () => {
-  // Listen for browser navigation via URL hash
+  // Listen for browser navigation via URL hash and route changes (supports shop, studio, reservations, admin)
   if (typeof window !== 'undefined') {
     window.addEventListener('hashchange', () => {
-      const hash = window.location.hash.replace('#', '').trim()
-      if (['shop', 'studio', 'login', 'register', 'admin', 'reservations'].includes(hash) && view.value !== hash) {
-        view.value = hash
-        if (hash === 'reservations' && currentUser.value?.role === 'customer') {
-          fetchMyReservations()
-        }
+      const hash = window.location.hash.replace(/^#\/?/, '').trim()
+      if (hash === 'reservations' && currentUser.value?.role === 'customer') {
+        fetchMyReservations()
       }
+      resolveCurrentRoute()
+    })
+    window.addEventListener('popstate', () => {
+      resolveCurrentRoute()
     })
   }
 
@@ -49,22 +50,36 @@ onMounted(async () => {
     const sessionRes = await api('auth/session.php')
     if (sessionRes?.authenticated && sessionRes?.user) {
       currentUser.value = sessionRes.user
-      const hash = typeof window !== 'undefined' ? window.location.hash.replace('#', '').trim() : ''
+      const hash = typeof window !== 'undefined' ? window.location.hash.replace(/^#\/?/, '').trim() : ''
       const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('kickcraft_view') : ''
-      if (sessionRes.user.role === 'owner' && (hash === 'admin' || saved === 'admin')) {
+      if (sessionRes.user.role === 'owner' && (hash === 'admin' || saved === 'admin' || view.value === 'admin')) {
         view.value = 'admin'
-      } else if (sessionRes.user.role === 'customer' && (hash === 'reservations' || saved === 'reservations')) {
+        notFoundPath.value = ''
+      } else if (sessionRes.user.role === 'customer' && (hash === 'reservations' || saved === 'reservations' || view.value === 'reservations')) {
         view.value = 'reservations'
+        notFoundPath.value = ''
         fetchMyReservations()
+      } else if (sessionRes.user.role !== 'owner' && view.value === 'admin') {
+        // Block brute force attempts by non-owners to access admin
+        notFoundPath.value = '/admin'
+        view.value = 'not-found'
       }
     } else {
-      if (view.value === 'admin' || view.value === 'reservations') {
-        goToLogin(view.value === 'admin' ? 'owner' : 'customer')
+      // Unauthenticated session
+      if (view.value === 'admin') {
+        // Block unauthenticated brute-force attempts to /admin -> 404
+        notFoundPath.value = '/admin'
+        view.value = 'not-found'
+      } else if (view.value === 'reservations') {
+        goToLogin('customer')
       }
     }
   } catch (_) {
     // Session check fails gracefully when offline or unauthenticated
-    if (view.value === 'reservations') {
+    if (view.value === 'admin') {
+      notFoundPath.value = '/admin'
+      view.value = 'not-found'
+    } else if (view.value === 'reservations') {
       fetchMyReservations()
     }
   }
@@ -605,13 +620,44 @@ async function submitReservation() {
   }
 }
 
-// ── View routing ──────────────────────────────────────────────
+// ── View routing & Route Protection ───────────────────────────
+function getAttemptedPath() {
+  if (typeof window === 'undefined') return '/404'
+  let p = window.location.pathname || ''
+  p = p.replace(/^\/kickcraft\/?/i, '/')
+  const cleanPath = p.replace(/^\/+|\/+$/g, '')
+  if (cleanPath && cleanPath !== 'index.html') {
+    return '/' + cleanPath
+  }
+  const hash = window.location.hash.replace(/^#\/?/, '').trim()
+  if (hash) {
+    return '#' + hash
+  }
+  return '/404'
+}
+
+const notFoundPath = ref(getAttemptedPath())
+
 function getInitialView() {
   if (typeof window !== 'undefined') {
-    const hash = window.location.hash.replace('#', '').trim()
-    if (['shop', 'studio', 'login', 'register', 'admin', 'reservations'].includes(hash)) {
-      return hash
+    let p = window.location.pathname || ''
+    p = p.replace(/^\/kickcraft\/?/i, '/')
+    const cleanPath = p.replace(/^\/+|\/+$/g, '')
+    const hash = window.location.hash.replace(/^#\/?/, '').trim()
+
+    const target = (cleanPath && cleanPath !== 'index.html') ? cleanPath : hash
+
+    if (target) {
+      if (['shop', 'studio', 'login', 'register', 'reservations'].includes(target)) {
+        return target
+      }
+      if (target === 'admin') {
+        // Will be verified against session in onMounted; if unauthenticated, transitions to not-found
+        return 'admin'
+      }
+      return 'not-found'
     }
+
     try {
       const saved = localStorage.getItem('kickcraft_view')
       if (saved && ['shop', 'studio', 'login', 'register', 'admin', 'reservations'].includes(saved)) {
@@ -622,10 +668,67 @@ function getInitialView() {
   return 'shop'
 }
 
-const view = ref(getInitialView()) // 'shop' | 'studio' | 'login' | 'register' | 'admin' | 'reservations'
+const view = ref(getInitialView()) // 'shop' | 'studio' | 'login' | 'register' | 'admin' | 'reservations' | 'not-found'
+
+function resolveCurrentRoute() {
+  if (typeof window === 'undefined') return
+  let p = window.location.pathname || ''
+  p = p.replace(/^\/kickcraft\/?/i, '/')
+  const cleanPath = p.replace(/^\/+|\/+$/g, '')
+  const hash = window.location.hash.replace(/^#\/?/, '').trim()
+  const target = (cleanPath && cleanPath !== 'index.html') ? cleanPath : hash
+
+  if (!target || target === 'shop') {
+    view.value = 'shop'
+    notFoundPath.value = ''
+    return
+  }
+
+  if (['studio', 'login', 'register'].includes(target)) {
+    view.value = target
+    notFoundPath.value = ''
+    return
+  }
+
+  if (target === 'reservations') {
+    if (currentUser.value?.role === 'customer') {
+      view.value = 'reservations'
+      notFoundPath.value = ''
+      fetchMyReservations()
+    } else if (!currentUser.value) {
+      goToLogin('customer')
+    } else {
+      notFoundPath.value = cleanPath ? `/${cleanPath}` : `#${hash}`
+      view.value = 'not-found'
+    }
+    return
+  }
+
+  if (target === 'admin') {
+    if (currentUser.value?.role === 'owner') {
+      view.value = 'admin'
+      notFoundPath.value = ''
+    } else {
+      // Brute force / unauthorized attempt to access admin
+      notFoundPath.value = cleanPath ? `/${cleanPath}` : `#${hash}`
+      view.value = 'not-found'
+    }
+    return
+  }
+
+  // Any other URL attempted by user
+  notFoundPath.value = cleanPath ? `/${cleanPath}` : `#${hash}`
+  view.value = 'not-found'
+}
 
 watch(view, (newView) => {
   if (typeof window !== 'undefined' && newView) {
+    if (newView === 'not-found') {
+      try {
+        localStorage.removeItem('kickcraft_view')
+      } catch (_) {}
+      return
+    }
     if (window.location.hash !== `#${newView}`) {
       window.location.hash = newView
     }
@@ -636,6 +739,7 @@ watch(view, (newView) => {
 }, { immediate: true })
 
 function goToAdmin() {
+  notFoundPath.value = ''
   view.value = 'admin'
   scrollToTop()
 }
@@ -791,6 +895,7 @@ function resetStudioState() {
 function goToStudio(shoeId) {
   selectedShoeId.value = shoeId
   resetStudioState()
+  notFoundPath.value = ''
   view.value = 'studio'
   scrollToTop()
 }
@@ -798,6 +903,7 @@ function goToStudio(shoeId) {
 function goToShop() {
   selectedShoeId.value = SHOES[0].id
   resetStudioState()
+  notFoundPath.value = ''
   view.value = 'shop'
   scrollToTop()
 }
@@ -1912,6 +2018,63 @@ function scrollToTop() {
             </div>
           </div>
         </article>
+      </div>
+    </main>
+
+    <!-- ══════════════════════════════════════════════════════ -->
+    <!-- 404 NOT FOUND / BRUTE-FORCE PROTECTION VIEW            -->
+    <!-- ══════════════════════════════════════════════════════ -->
+    <main v-else-if="view === 'not-found'" class="mx-auto max-w-2xl px-5 py-16 lg:py-24">
+      <div class="border-2 border-[#202220] bg-[#fcfdfb] p-8 shadow-[8px_8px_0px_0px_#202220] sm:p-12">
+        <!-- Brutalist Tag -->
+        <div class="inline-flex items-center gap-2 border border-[#b94d27] bg-[#fdf2ef] px-3 py-1 font-mono text-xs font-bold uppercase tracking-widest text-[#b94d27]">
+          <span>[ 404 · PAGE NOT FOUND · ACCESS RESTRICTED ]</span>
+        </div>
+
+        <!-- Heading -->
+        <h1 class="font-display mt-6 text-6xl font-black tracking-tight text-[#202220] sm:text-7xl">
+          404
+        </h1>
+
+        <h2 class="font-display mt-2 text-xl font-black uppercase tracking-tight text-[#202220] sm:text-2xl">
+          Silhouette or Route Not Located
+        </h2>
+
+        <!-- Attempted Destination Box -->
+        <div class="mt-5 border-l-4 border-[#b94d27] bg-[#f5f6f4] p-4 font-mono text-xs text-[#5f635f]">
+          <span class="block font-bold uppercase tracking-wider text-[#202220]">Attempted Destination:</span>
+          <code class="mt-1 block break-all text-sm font-bold text-[#b94d27]">{{ notFoundPath || '/admin' }}</code>
+        </div>
+
+        <p class="mt-5 text-sm leading-relaxed text-[#5f635f]">
+          The address you requested does not exist or requires authenticated owner privileges. URL manipulation and unauthorized route tampering are restricted.
+        </p>
+
+        <!-- Navigation Actions -->
+        <div class="mt-8 flex flex-wrap items-center gap-3 border-t border-[#d9dcd8] pt-6">
+          <button
+            type="button"
+            class="inline-flex h-11 items-center justify-center bg-[#202220] px-6 text-xs font-bold uppercase tracking-wider text-white transition-colors hover:bg-[#404345] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+            @click="goToShop"
+          >
+            ← Return to Catalog
+          </button>
+          <button
+            type="button"
+            class="inline-flex h-11 items-center justify-center border-2 border-[#202220] bg-white px-5 text-xs font-bold uppercase tracking-wider text-[#202220] transition-colors hover:bg-[#f1f3f0] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+            @click="goToStudio('kickcraft-one')"
+          >
+            Open 3D Studio
+          </button>
+          <button
+            v-if="!currentUser"
+            type="button"
+            class="inline-flex h-11 items-center justify-center border border-transparent px-4 text-xs font-bold uppercase tracking-wider text-[#b94d27] hover:underline focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+            @click="goToLogin('owner')"
+          >
+            Owner Sign In →
+          </button>
+        </div>
       </div>
     </main>
 
