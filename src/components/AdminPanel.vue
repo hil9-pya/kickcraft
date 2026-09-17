@@ -584,6 +584,27 @@ function getReservationShoeThumbnail(res) {
   return '/images/kickcraft-one-card.png'
 }
 
+function requestOrderStatusChange(order, newStatus) {
+  if (!order) return
+  const customerName = order.customerName || order.customer_name || 'Customer'
+  const isArrived = newStatus === 'arrived'
+
+  adminConfirm.value = {
+    show: true,
+    title: isArrived ? 'Mark Reservation as Arrived?' : 'Mark Reservation as Completed?',
+    message: isArrived
+      ? `Are you sure you want to mark reservation ${order.id} for ${customerName} as arrived at the studio?`
+      : `Are you sure you want to mark reservation ${order.id} for ${customerName} as completed? This confirms customer pickup.`,
+    confirmText: isArrived ? 'Mark Arrived' : 'Mark Completed',
+    cancelText: isArrived ? 'Keep Pending' : 'Keep Active',
+    variant: 'default',
+    icon: 'warning',
+    onConfirm: async () => {
+      await handleOrderStatusChange(order.id, newStatus)
+    },
+  }
+}
+
 async function handleOrderStatusChange(orderId, newStatus) {
   // Optimistically update local state and persistence immediately
   orders.value = updateOrderStatus(orders.value, orderId, newStatus)
@@ -2240,7 +2261,7 @@ async function restoreShoe(shoe) {
                     type="button"
                     class="bg-[#245fa8] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#1d4b88]"
                     title="Mark reservation as arrived at studio"
-                    @click="handleOrderStatusChange(order.id, 'arrived')"
+                    @click="requestOrderStatusChange(order, 'arrived')"
                   >
                     Mark Arrived
                   </button>
@@ -2250,7 +2271,7 @@ async function restoreShoe(shoe) {
                     type="button"
                     class="bg-[#3f7652] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#2a593a]"
                     title="Mark reservation as completed upon customer pickup"
-                    @click="handleOrderStatusChange(order.id, 'completed')"
+                    @click="requestOrderStatusChange(order, 'completed')"
                   >
                     Mark Completed
                   </button>
@@ -2506,7 +2527,7 @@ async function restoreShoe(shoe) {
               v-if="selectedInspectionReservation.status === 'pending'"
               type="button"
               class="bg-[#245fa8] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#1d4b88]"
-              @click="handleOrderStatusChange(selectedInspectionReservation.id, 'arrived')"
+              @click="requestOrderStatusChange(selectedInspectionReservation, 'arrived')"
             >
               Mark as Arrived
             </button>
@@ -2516,7 +2537,7 @@ async function restoreShoe(shoe) {
               v-if="selectedInspectionReservation.status === 'arrived' || selectedInspectionReservation.status === 'pending'"
               type="button"
               class="bg-[#3f7652] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#2a593a]"
-              @click="handleOrderStatusChange(selectedInspectionReservation.id, 'completed')"
+              @click="requestOrderStatusChange(selectedInspectionReservation, 'completed')"
             >
               Mark as Completed
             </button>

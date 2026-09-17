@@ -232,3 +232,43 @@ test('AdminPanel.vue handleOrderStatusChange optimistically updates state, persi
   )
 })
 
+test('AdminPanel.vue prompts confirmation modal when marking reservation as arrived or completed', () => {
+  const content = fs.readFileSync(ADMIN_PANEL_PATH, 'utf8')
+
+  assert.match(
+    content,
+    /function\s+requestOrderStatusChange\s*\(\s*(?:order|reservation),\s*newStatus\s*\)/,
+    'AdminPanel must define requestOrderStatusChange'
+  )
+  assert.match(
+    content,
+    /requestOrderStatusChange\(order,\s*['"]arrived['"]\)/,
+    'Table row Mark Arrived button must call requestOrderStatusChange with arrived'
+  )
+  assert.match(
+    content,
+    /requestOrderStatusChange\(order,\s*['"]completed['"]\)/,
+    'Table row Mark Completed button must call requestOrderStatusChange with completed'
+  )
+  assert.match(
+    content,
+    /requestOrderStatusChange\(selectedInspectionReservation,\s*['"]arrived['"]\)/,
+    'Inspection modal Mark as Arrived button must call requestOrderStatusChange with arrived'
+  )
+  assert.match(
+    content,
+    /requestOrderStatusChange\(selectedInspectionReservation,\s*['"]completed['"]\)/,
+    'Inspection modal Mark as Completed button must call requestOrderStatusChange with completed'
+  )
+  assert.match(
+    content,
+    /Mark Reservation as Arrived\?/,
+    'requestOrderStatusChange must set Arrived modal title'
+  )
+  assert.match(
+    content,
+    /Mark Reservation as Completed\?/,
+    'requestOrderStatusChange must set Completed modal title'
+  )
+})
+
