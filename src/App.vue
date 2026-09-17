@@ -672,6 +672,7 @@ function requestLogout() {
 const authRole = ref('customer') // 'customer' | 'owner'
 const loginEmail = ref('')
 const loginPassword = ref('')
+const showLoginPassword = ref(false)
 const loginRemember = ref(false)
 const loginFeedback = ref('')
 const loginError = ref('')
@@ -680,7 +681,9 @@ const isLoggingIn = ref(false)
 const registerName = ref('')
 const registerEmail = ref('')
 const registerPassword = ref('')
+const showRegisterPassword = ref(false)
 const registerConfirmPassword = ref('')
+const showRegisterConfirmPassword = ref(false)
 const registerAgreed = ref(false)
 const registerFeedback = ref('')
 const registerError = ref('')
@@ -1473,14 +1476,30 @@ function scrollToTop() {
             <div class="mb-1.5 flex items-center justify-between">
               <span class="text-xs font-bold uppercase tracking-wider text-[#404345]">Password</span>
             </div>
-            <input
-              v-model="loginPassword"
-              required
-              type="password"
-              autocomplete="current-password"
-              placeholder="••••••••"
-              class="h-11 w-full border border-[#bfc3bf] bg-white px-3 text-sm outline-none transition-colors focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
-            />
+            <div class="relative">
+              <input
+                v-model="loginPassword"
+                required
+                :type="showLoginPassword ? 'text' : 'password'"
+                autocomplete="current-password"
+                placeholder="••••••••"
+                class="h-11 w-full border border-[#bfc3bf] bg-white px-3 pr-10 text-sm outline-none transition-colors focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+              />
+              <button
+                type="button"
+                class="absolute inset-y-0 right-0 flex items-center px-3 text-[#5f635f] hover:text-[#202220] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+                :aria-label="showLoginPassword ? 'Hide password' : 'Show password'"
+                @click="showLoginPassword = !showLoginPassword"
+              >
+                <svg v-if="!showLoginPassword" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <svg v-else class="size-4 text-[#b94d27]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                </svg>
+              </button>
+            </div>
           </label>
 
           <div class="flex items-center justify-between text-xs">
@@ -1592,26 +1611,58 @@ function scrollToTop() {
 
           <label class="block">
             <span class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#404345]">Password</span>
-            <input
-              v-model="registerPassword"
-              required
-              type="password"
-              autocomplete="new-password"
-              placeholder="Minimum 6 characters"
-              class="h-11 w-full border border-[#bfc3bf] bg-white px-3 text-sm outline-none transition-colors focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
-            />
+            <div class="relative">
+              <input
+                v-model="registerPassword"
+                required
+                :type="showRegisterPassword ? 'text' : 'password'"
+                autocomplete="new-password"
+                placeholder="Minimum 6 characters"
+                class="h-11 w-full border border-[#bfc3bf] bg-white px-3 pr-10 text-sm outline-none transition-colors focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+              />
+              <button
+                type="button"
+                class="absolute inset-y-0 right-0 flex items-center px-3 text-[#5f635f] hover:text-[#202220] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+                :aria-label="showRegisterPassword ? 'Hide password' : 'Show password'"
+                @click="showRegisterPassword = !showRegisterPassword"
+              >
+                <svg v-if="!showRegisterPassword" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <svg v-else class="size-4 text-[#b94d27]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                </svg>
+              </button>
+            </div>
           </label>
 
           <label class="block">
             <span class="mb-1.5 block text-xs font-bold uppercase tracking-wider text-[#404345]">Confirm password</span>
-            <input
-              v-model="registerConfirmPassword"
-              required
-              type="password"
-              autocomplete="new-password"
-              placeholder="Repeat your password"
-              class="h-11 w-full border border-[#bfc3bf] bg-white px-3 text-sm outline-none transition-colors focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
-            />
+            <div class="relative">
+              <input
+                v-model="registerConfirmPassword"
+                required
+                :type="showRegisterConfirmPassword ? 'text' : 'password'"
+                autocomplete="new-password"
+                placeholder="Repeat your password"
+                class="h-11 w-full border border-[#bfc3bf] bg-white px-3 pr-10 text-sm outline-none transition-colors focus:border-[#245fa8] focus:ring-1 focus:ring-[#245fa8]"
+              />
+              <button
+                type="button"
+                class="absolute inset-y-0 right-0 flex items-center px-3 text-[#5f635f] hover:text-[#202220] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+                :aria-label="showRegisterConfirmPassword ? 'Hide password' : 'Show password'"
+                @click="showRegisterConfirmPassword = !showRegisterConfirmPassword"
+              >
+                <svg v-if="!showRegisterConfirmPassword" class="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <svg v-else class="size-4 text-[#b94d27]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                </svg>
+              </button>
+            </div>
           </label>
 
           <label class="flex items-start gap-2 pt-1 text-xs cursor-pointer select-none">

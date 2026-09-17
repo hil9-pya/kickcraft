@@ -73,6 +73,7 @@ const restockAmount = ref(10)
 
 // Folder & Model Upload
 const detectedFiles = ref([])
+const detectedModelFileName = ref('')
 const uploadError = ref('')
 const folderInput = ref(null)
 const fileInput = ref(null)
@@ -283,6 +284,7 @@ const showUserModal = ref(false)
 const isEditingUser = ref(false)
 const userModalSaving = ref(false)
 const userModalError = ref('')
+const showUserPassword = ref(false)
 const userForm = ref({
   id: null,
   name: '',
@@ -294,6 +296,7 @@ const userForm = ref({
 function openCreateUserModal() {
   isEditingUser.value = false
   userModalError.value = ''
+  showUserPassword.value = false
   userForm.value = {
     id: null,
     name: '',
@@ -307,6 +310,7 @@ function openCreateUserModal() {
 function openEditUserModal(user) {
   isEditingUser.value = true
   userModalError.value = ''
+  showUserPassword.value = false
   userForm.value = {
     id: user.id,
     name: user.name || '',
@@ -912,6 +916,16 @@ function processSelectedFiles(fileList) {
     return
   }
 
+  // Auto-detect thumbnail image if dropped alongside the model
+  const imageList = fileList.filter(f => /\.(png|jpe?g|webp)$/i.test(f.name))
+  if (imageList.length > 0) {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      form.value.thumbnailPath = e.target.result
+    }
+    reader.readAsDataURL(imageList[0])
+  }
+
   const detected = glbList.map(f => ({
     name: f.name,
     sizeFormatted: formatFileSize(f.size),
@@ -935,6 +949,7 @@ function formatFileSize(bytes) {
 }
 
 function configureDetectedModel(detected) {
+  detectedModelFileName.value = detected.name
   const modelNameClean = detected.name.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' ')
   const capitalized = modelNameClean
     .split(' ')
@@ -950,6 +965,7 @@ function configureDetectedModel(detected) {
 }
 
 function selectLibraryModel(path, name) {
+  detectedModelFileName.value = path.split('/').pop() || ''
   form.value.name = name
   form.value.description = `Customizable silhouette based on ${name}.`
   form.value.glbPath = path
@@ -960,6 +976,7 @@ function selectLibraryModel(path, name) {
 
 function changeModel() {
   form.value.glbPath = ''
+  detectedModelFileName.value = ''
   form.value.parts = []
   detectedFiles.value = []
   editorModelReady.value = false
@@ -970,6 +987,7 @@ function changeModel() {
 function openNewShoeEditor() {
   form.value = defaultForm()
   detectedFiles.value = []
+  detectedModelFileName.value = ''
   uploadError.value = ''
   isEditing.value = false
   editingShoeId.value = null
@@ -995,6 +1013,7 @@ function openEditShoe(shoe) {
   isEditing.value = true
   editingShoeId.value = shoe.id
   detectedFiles.value = []
+  detectedModelFileName.value = (shoe.glbPath || '').split('/').pop() || ''
   uploadError.value = ''
   validationErrors.value = []
   saveFeedback.value = ''
@@ -1006,6 +1025,7 @@ function closeEditor() {
   isEditing.value = false
   editingShoeId.value = null
   detectedFiles.value = []
+  detectedModelFileName.value = ''
   uploadError.value = ''
   activeHighlightedMaterial.value = null
   validationErrors.value = []
@@ -1134,36 +1154,42 @@ async function handleSaveShoe() {
     return
   }
 
+  // Resolve permanent server GLB path
+  const serverGlbPath = form.value.glbPath.startsWith('blob:')
+    ? (detectedModelFileName.value ? `/models/${detectedModelFileName.value}` : form.value.glbPath)
+    : form.value.glbPath
+
+  const payload = {
+    ...form.value,
+    glbPath: serverGlbPath,
+    modelFileName: detectedModelFileName.value,
+    parts: customizableParts,
+  }
+
   try {
     if (isEditing.value && editingShoeId.value) {
       await api('shoes/update.php', {
         method: 'POST',
-        body: { ...form.value, parts: customizableParts, id: editingShoeId.value },
+        body: { ...payload, id: editingShoeId.value },
       })
-      saveFeedback.value = `Updated "${candidate.name}" successfully!`
+      saveFeedback.value = `Updated "${candidate.name}" in database successfully!`
     } else {
       await api('shoes/create.php', {
         method: 'POST',
-        body: { ...form.value, parts: customizableParts },
+        body: payload,
       })
-      saveFeedback.value = `Published "${candidate.name}" successfully!`
+      saveFeedback.value = `Published "${candidate.name}" to database successfully!`
     }
     await loadData()
-  } catch {
-    if (isEditing.value && editingShoeId.value) {
-      shoes.value = updateShoeRecord(shoes.value, editingShoeId.value, candidate)
-      saveFeedback.value = `Updated "${candidate.name}" successfully!`
-    } else {
-      const newRecord = createShoeRecord(shoes.value, candidate)
-      shoes.value.unshift(newRecord)
-      saveFeedback.value = `Published "${newRecord.name}" successfully!`
-    }
-    persistShoes()
+    setTimeout(() => {
+      closeEditor()
+    }, 1200)
+  } catch (err) {
+    console.error('Database save error:', err)
+    validationErrors.value = [
+      `Database error: ${err.message || 'Failed to save shoe to MySQL database. Make sure you are logged in as Owner.'}`,
+    ]
   }
-
-  setTimeout(() => {
-    closeEditor()
-  }, 1000)
 }
 
 // ── Quick Actions ──────────────────────────────────────────────
@@ -3252,12 +3278,28 @@ async function restoreShoe(shoe) {
             <label class="block text-xs font-bold uppercase tracking-wider text-[#5f635f]">
               {{ isEditingUser ? 'New Password (Optional)' : 'Password' }}
             </label>
-            <input
-              v-model="userForm.password"
-              type="password"
-              :placeholder="isEditingUser ? 'Leave blank to keep current password' : 'Minimum 6 characters'"
-              class="mt-1 w-full border border-[#cfd2ce] bg-white px-3 py-2 text-xs text-[#202220] focus:border-[#245fa8] focus:outline-none"
-            />
+            <div class="relative mt-1">
+              <input
+                v-model="userForm.password"
+                :type="showUserPassword ? 'text' : 'password'"
+                :placeholder="isEditingUser ? 'Leave blank to keep current password' : 'Minimum 6 characters'"
+                class="w-full border border-[#cfd2ce] bg-white px-3 py-2 pr-10 text-xs text-[#202220] focus:border-[#245fa8] focus:outline-none"
+              />
+              <button
+                type="button"
+                class="absolute inset-y-0 right-0 flex items-center px-3 text-[#5f635f] hover:text-[#202220] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+                :aria-label="showUserPassword ? 'Hide password' : 'Show password'"
+                @click="showUserPassword = !showUserPassword"
+              >
+                <svg v-if="!showUserPassword" class="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                <svg v-else class="size-3.5 text-[#b94d27]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                </svg>
+              </button>
+            </div>
             <p v-if="isEditingUser" class="mt-1 text-[10px] text-[#8e938e]">
               Only enter a value if you want to reset this user's password.
             </p>
