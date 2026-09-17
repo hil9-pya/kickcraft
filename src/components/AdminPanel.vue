@@ -585,19 +585,10 @@ function getReservationShoeThumbnail(res) {
 }
 
 async function handleOrderStatusChange(orderId, newStatus) {
-  try {
-    await api('reservations/update-status.php', {
-      method: 'POST',
-      body: {
-        id: orderId,
-        status: newStatus,
-      },
-    })
-    await loadData()
-  } catch {
-    orders.value = updateOrderStatus(orders.value, orderId, newStatus)
-    persistOrders()
-  }
+  // Optimistically update local state and persistence immediately
+  orders.value = updateOrderStatus(orders.value, orderId, newStatus)
+  persistOrders()
+
   if (selectedOrderForReceipt.value && selectedOrderForReceipt.value.id === orderId) {
     selectedOrderForReceipt.value = {
       ...selectedOrderForReceipt.value,
@@ -609,6 +600,35 @@ async function handleOrderStatusChange(orderId, newStatus) {
       ...selectedInspectionReservation.value,
       status: newStatus,
     }
+  }
+
+  // Dispatch BroadcastChannel event so customer and other tabs update live
+  try {
+    const channel = new BroadcastChannel('kickcraft_reservations_channel')
+    channel.postMessage({
+      type: 'RESERVATION_STATUS_UPDATED',
+      id: orderId,
+      status: newStatus,
+    })
+    channel.close()
+  } catch (_) {}
+
+  // Sync with persistent backend API
+  try {
+    await api('reservations/update-status.php', {
+      method: 'POST',
+      body: {
+        id: orderId,
+        status: newStatus,
+      },
+    })
+    const ordersRes = await api('reservations/list.php')
+    if (ordersRes && Array.isArray(ordersRes.reservations)) {
+      orders.value = ordersRes.reservations
+      persistOrders()
+    }
+  } catch (err) {
+    console.warn('Backend reservation status update failed, keeping local state:', err)
   }
 }
 

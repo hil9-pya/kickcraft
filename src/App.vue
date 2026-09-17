@@ -104,6 +104,11 @@ onMounted(async () => {
               target.notes = event.data.notes
             }
           }
+        } else if (event.data?.type === 'RESERVATION_STATUS_UPDATED' && event.data.id && event.data.status) {
+          const target = myReservations.value.find(r => r.id === event.data.id)
+          if (target) {
+            target.status = event.data.status
+          }
         }
       }
     } catch (_) {}

@@ -251,3 +251,13 @@ test('Reservations view renders store cancellation reason callout for cancelled 
   )
 })
 
+test('App.vue updates myReservations in real time on RESERVATION_STATUS_UPDATED broadcast event', () => {
+  const content = fs.readFileSync(APP_PATH, 'utf8')
+
+  assert.match(
+    content,
+    /BroadcastChannel\(['"]kickcraft_reservations_channel['"]\)[\s\S]*?RESERVATION_STATUS_UPDATED/,
+    'App.vue must listen for RESERVATION_STATUS_UPDATED on kickcraft_reservations_channel'
+  )
+})
+

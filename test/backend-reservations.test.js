@@ -476,6 +476,22 @@ test('setup.sql defines arrived status and soft-delete columns on reservations t
     /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?reservations[\s\S]*?status\s+ENUM\([^)]*['"]arrived['"][^)]*\)/i,
     "setup.sql must include 'arrived' in reservations status ENUM"
   )
+  assert.match(
+    sql,
+    /ALTER\s+TABLE\s+reservations[\s\S]*?status\s+ENUM\([^)]*['"]arrived['"][^)]*\)/i,
+    'setup.sql must contain ALTER TABLE statement to migrate existing reservations table status ENUM'
+  )
+})
+
+test('db.php contains schema self-healing for reservations status and soft-delete columns', () => {
+  const dbPath = path.join(ROOT_DIR, 'api', 'db.php')
+  assert.ok(fs.existsSync(dbPath), 'api/db.php must exist')
+  const code = fs.readFileSync(dbPath, 'utf8')
+
+  assert.match(code, /SHOW\s+COLUMNS\s+FROM\s+reservations/i, 'db.php must inspect reservations columns')
+  assert.match(code, /deleted_at/i, 'db.php must ensure deleted_at exists')
+  assert.match(code, /permanently_deleted/i, 'db.php must ensure permanently_deleted exists')
+  assert.match(code, /arrived/i, 'db.php must ensure arrived status exists')
 })
 
 test('delete.php enforces POST, requireAdmin, prepared statements, and soft-delete', () => {

@@ -69,6 +69,10 @@ CREATE TABLE IF NOT EXISTS reservations (
   permanently_deleted TINYINT(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Migration for existing databases: ensure status ENUM includes arrived and soft-delete columns exist
+ALTER TABLE reservations
+  MODIFY COLUMN status ENUM('pending', 'paid', 'approved', 'ready', 'completed', 'cancelled', 'arrived') NOT NULL DEFAULT 'pending';
+
 -- --------------------------------------------------------
 -- Seed Data: Admin User
 -- --------------------------------------------------------

@@ -207,3 +207,28 @@ test('AdminPanel.vue implements requestDeleteReservation with adminConfirm and s
   assert.match(content, /setStoredOrders/, 'requestDeleteReservation must persist updated orders list')
 })
 
+test('AdminPanel.vue handleOrderStatusChange optimistically updates state, persists, and broadcasts RESERVATION_STATUS_UPDATED', () => {
+  const content = fs.readFileSync(ADMIN_PANEL_PATH, 'utf8')
+
+  assert.match(
+    content,
+    /async\s+function\s+handleOrderStatusChange\s*\(\s*orderId,\s*newStatus\s*\)/,
+    'AdminPanel must define handleOrderStatusChange'
+  )
+  assert.match(
+    content,
+    /updateOrderStatus\s*\(\s*orders\.value,\s*orderId,\s*newStatus\s*\)/,
+    'handleOrderStatusChange must optimistically update orders.value'
+  )
+  assert.match(
+    content,
+    /persistOrders\s*\(\s*\)/,
+    'handleOrderStatusChange must persist orders'
+  )
+  assert.match(
+    content,
+    /BroadcastChannel\(['"]kickcraft_reservations_channel['"]\)[\s\S]*?RESERVATION_STATUS_UPDATED/,
+    'handleOrderStatusChange must broadcast RESERVATION_STATUS_UPDATED on kickcraft_reservations_channel'
+  )
+})
+
