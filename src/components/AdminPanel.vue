@@ -3,23 +3,15 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import ConfirmModal from './ConfirmModal.vue'
 import { api } from '../api.js'
 import {
-  createShoeRecord,
-  deleteShoeRecord,
   getStoredShoes,
   highlightMaterial,
-  restockShoeRecord,
   setStoredShoes,
   slugify,
-  updateShoeRecord,
   validateShoe,
 } from '../admin.js'
 import {
-  calculateFinancialStats,
-  calculateSilhouetteBreakdown,
-  createOrder,
   getStoredOrders,
   setStoredOrders,
-  updateOrderStatus,
 } from '../financials.js'
 import { CATEGORIES } from '../customization.js'
 
@@ -74,6 +66,8 @@ const restockAmount = ref(10)
 // Folder & Model Upload
 const detectedFiles = ref([])
 const detectedModelFileName = ref('')
+const selectedModelFile = ref(null)
+const selectedThumbnailFile = ref(null)
 const uploadError = ref('')
 const folderInput = ref(null)
 const fileInput = ref(null)
@@ -496,11 +490,6 @@ async function loadData() {
   emit('shoesChanged', shoes.value)
 }
 
-function persistShoes() {
-  setStoredShoes(shoes.value)
-  emit('shoesChanged', shoes.value)
-}
-
 function persistOrders() {
   setStoredOrders(orders.value)
 }
@@ -520,7 +509,9 @@ const filteredShoes = computed(() => {
     const matchesStatus =
       activeTab.value === 'all' || activeTab.value === 'archived'
         ? true
-        : shoe.status === activeTab.value
+        : activeTab.value === 'available'
+          ? (shoe.status === 'available' || shoe.status === 'in_stock')
+          : shoe.status === activeTab.value
 
     const matchesQuery =
       !query ||
@@ -535,7 +526,7 @@ const filteredShoes = computed(() => {
 const stats = computed(() => {
   const activeShoes = shoes.value.filter(s => !s.permanentlyDeleted && !s.deletedAt)
   const total = activeShoes.length
-  const available = activeShoes.filter(s => s.status === 'available').length
+  const available = activeShoes.filter(s => s.status === 'available' || s.status === 'in_stock').length
   const comingSoon = activeShoes.filter(s => s.status === 'coming_soon').length
   const outOfStock = activeShoes.filter(s => s.status === 'out_of_stock').length
   const archived = shoes.value.filter(s => !s.permanentlyDeleted && s.deletedAt).length
@@ -610,35 +601,6 @@ function requestOrderStatusChange(order, newStatus) {
 }
 
 async function handleOrderStatusChange(orderId, newStatus) {
-  // Optimistically update local state and persistence immediately
-  orders.value = updateOrderStatus(orders.value, orderId, newStatus)
-  persistOrders()
-
-  if (selectedOrderForReceipt.value && selectedOrderForReceipt.value.id === orderId) {
-    selectedOrderForReceipt.value = {
-      ...selectedOrderForReceipt.value,
-      status: newStatus,
-    }
-  }
-  if (selectedInspectionReservation.value && selectedInspectionReservation.value.id === orderId) {
-    selectedInspectionReservation.value = {
-      ...selectedInspectionReservation.value,
-      status: newStatus,
-    }
-  }
-
-  // Dispatch BroadcastChannel event so customer and other tabs update live
-  try {
-    const channel = new BroadcastChannel('kickcraft_reservations_channel')
-    channel.postMessage({
-      type: 'RESERVATION_STATUS_UPDATED',
-      id: orderId,
-      status: newStatus,
-    })
-    channel.close()
-  } catch (_) {}
-
-  // Sync with persistent backend API
   try {
     await api('reservations/update-status.php', {
       method: 'POST',
@@ -647,13 +609,20 @@ async function handleOrderStatusChange(orderId, newStatus) {
         status: newStatus,
       },
     })
-    const ordersRes = await api('reservations/list.php')
-    if (ordersRes && Array.isArray(ordersRes.reservations)) {
-      orders.value = ordersRes.reservations
-      persistOrders()
+    await loadData()
+    if (selectedOrderForReceipt.value?.id === orderId) {
+      selectedOrderForReceipt.value = { ...selectedOrderForReceipt.value, status: newStatus }
+    }
+    if (selectedInspectionReservation.value?.id === orderId) {
+      selectedInspectionReservation.value = { ...selectedInspectionReservation.value, status: newStatus }
+    }
+    if (typeof BroadcastChannel !== 'undefined') {
+      const channel = new BroadcastChannel('kickcraft_reservations_channel')
+      channel.postMessage({ type: 'RESERVATION_STATUS_UPDATED', id: orderId, status: newStatus })
+      channel.close()
     }
   } catch (err) {
-    console.warn('Backend reservation status update failed, keeping local state:', err)
+    saveFeedback.value = `Could not update reservation: ${err.message || 'server error'}`
   }
 }
 
@@ -672,42 +641,25 @@ async function submitOwnerCancellation() {
         notes: reasonNotes,
       },
     })
-  } catch (_) {}
-
-  // Update local order status and cancellation notes
-  const matchedOrder = (orders.value || []).find(o => o.id === targetId)
-  if (matchedOrder) {
-    matchedOrder.status = 'cancelled'
-    matchedOrder.notes = reasonNotes
-  }
-  persistOrders()
-
-  // Update inspection modal if currently inspecting this reservation
-  if (selectedInspectionReservation.value && selectedInspectionReservation.value.id === targetId) {
-    selectedInspectionReservation.value.status = 'cancelled'
-    selectedInspectionReservation.value.notes = reasonNotes
+  } catch (err) {
+    saveFeedback.value = `Could not cancel reservation: ${err.message || 'server error'}`
+    return
   }
 
-  // Update receipt modal if active
-  if (selectedOrderForReceipt.value && selectedOrderForReceipt.value.id === targetId) {
-    selectedOrderForReceipt.value.status = 'cancelled'
-    selectedOrderForReceipt.value.notes = reasonNotes
+  const targetShoe = (shoes.value || []).find(s => s.id === target.shoeId)
+  if (targetShoe) {
+    targetShoe.stock = (targetShoe.stock || 0) + 1
+    if (targetShoe.status === 'out_of_stock') targetShoe.status = 'available'
+    setStoredShoes(shoes.value)
   }
-
-  // Restore shoe stock locally
-  const shoeId = target.shoeId
-  if (shoeId) {
-    const targetShoe = (shoes.value || []).find(s => s.id === shoeId)
-    if (targetShoe) {
-      targetShoe.stock = (targetShoe.stock || 0) + 1
-      if (targetShoe.status === 'out_of_stock') {
-        targetShoe.status = 'available'
-      }
-      persistShoes()
-    }
+  if (selectedInspectionReservation.value?.id === targetId) {
+    selectedInspectionReservation.value = { ...selectedInspectionReservation.value, status: 'cancelled', notes: reasonNotes }
   }
+  if (selectedOrderForReceipt.value?.id === targetId) {
+    selectedOrderForReceipt.value = { ...selectedOrderForReceipt.value, status: 'cancelled', notes: reasonNotes }
+  }
+  await loadData()
 
-  // Broadcast cancellation event to other tabs
   if (typeof BroadcastChannel !== 'undefined') {
     try {
       const channel = new BroadcastChannel('kickcraft_reservations_channel')
@@ -747,9 +699,13 @@ function requestDeleteReservation(order) {
           method: 'POST',
           body: { id: order.id },
         })
-      } catch (_) {}
+      } catch (err) {
+        saveFeedback.value = `Could not delete reservation: ${err.message || 'server error'}`
+        return
+      }
+      await loadData()
       orders.value = (orders.value || []).filter(o => o.id !== order.id)
-      setStoredOrders(orders.value)
+      persistOrders()
       if (selectedInspectionReservation.value && selectedInspectionReservation.value.id === order.id) {
         closeInspectionModal()
       }
@@ -784,12 +740,6 @@ function openWalkInSale() {
 }
 
 async function submitWalkInSale() {
-  const targetShoe = shoes.value.find(s => s.id === walkInForm.value.shoeId) || shoes.value[0] || {
-    id: 'kickcraft-one',
-    name: 'KickCraft One',
-    price: 4890,
-  }
-
   const today = new Date().toISOString().split('T')[0]
   let createdOrder = null
 
@@ -809,27 +759,9 @@ async function submitWalkInSale() {
     })
     createdOrder = res.reservation
     await loadData()
-  } catch {
-    createdOrder = createOrder(orders.value, {
-      customerName: walkInForm.value.customerName || 'Walk-in Customer',
-      customerEmail: walkInForm.value.customerEmail || 'walkin@kickcraft.local',
-      shoeId: targetShoe.id,
-      shoeName: targetShoe.name,
-      size: Number(walkInForm.value.size) || 9,
-      price: targetShoe.price || 4890,
-      status: 'paid', // Walk-in sale is immediately paid
-      paymentMethod: walkInForm.value.paymentMethod,
-      notes: walkInForm.value.notes,
-    })
-
-    // Decrement inventory stock
-    const currentStock = targetShoe.stock ?? 0
-    if (currentStock > 0) {
-      shoes.value = restockShoeRecord(shoes.value, targetShoe.id, currentStock - 1)
-      persistShoes()
-    }
-
-    persistOrders()
+  } catch (err) {
+    saveFeedback.value = `Could not record walk-in sale: ${err.message || 'server error'}`
+    return
   }
 
   showWalkInModal.value = false
@@ -919,6 +851,7 @@ function processSelectedFiles(fileList) {
   // Auto-detect thumbnail image if dropped alongside the model
   const imageList = fileList.filter(f => /\.(png|jpe?g|webp)$/i.test(f.name))
   if (imageList.length > 0) {
+    selectedThumbnailFile.value = imageList[0]
     const reader = new FileReader()
     reader.onload = (e) => {
       form.value.thumbnailPath = e.target.result
@@ -949,6 +882,7 @@ function formatFileSize(bytes) {
 }
 
 function configureDetectedModel(detected) {
+  selectedModelFile.value = detected.rawFile
   detectedModelFileName.value = detected.name
   const modelNameClean = detected.name.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' ')
   const capitalized = modelNameClean
@@ -965,6 +899,7 @@ function configureDetectedModel(detected) {
 }
 
 function selectLibraryModel(path, name) {
+  selectedModelFile.value = null
   detectedModelFileName.value = path.split('/').pop() || ''
   form.value.name = name
   form.value.description = `Customizable silhouette based on ${name}.`
@@ -975,6 +910,7 @@ function selectLibraryModel(path, name) {
 }
 
 function changeModel() {
+  selectedModelFile.value = null
   form.value.glbPath = ''
   detectedModelFileName.value = ''
   form.value.parts = []
@@ -988,6 +924,8 @@ function openNewShoeEditor() {
   form.value = defaultForm()
   detectedFiles.value = []
   detectedModelFileName.value = ''
+  selectedModelFile.value = null
+  selectedThumbnailFile.value = null
   uploadError.value = ''
   isEditing.value = false
   editingShoeId.value = null
@@ -1014,6 +952,8 @@ function openEditShoe(shoe) {
   editingShoeId.value = shoe.id
   detectedFiles.value = []
   detectedModelFileName.value = (shoe.glbPath || '').split('/').pop() || ''
+  selectedModelFile.value = null
+  selectedThumbnailFile.value = null
   uploadError.value = ''
   validationErrors.value = []
   saveFeedback.value = ''
@@ -1026,6 +966,8 @@ function closeEditor() {
   editingShoeId.value = null
   detectedFiles.value = []
   detectedModelFileName.value = ''
+  selectedModelFile.value = null
+  selectedThumbnailFile.value = null
   uploadError.value = ''
   activeHighlightedMaterial.value = null
   validationErrors.value = []
@@ -1110,11 +1052,24 @@ function resetHighlight() {
 function handleThumbnailUpload(event) {
   const file = event.target.files?.[0]
   if (!file) return
+  if (!/\.(png|jpe?g|webp)$/i.test(file.name)) {
+    uploadError.value = 'Thumbnail must be PNG, JPG, or WebP.'
+    return
+  }
+  selectedThumbnailFile.value = file
   const reader = new FileReader()
   reader.onload = e => {
     form.value.thumbnailPath = e.target.result
   }
   reader.readAsDataURL(file)
+}
+
+async function uploadAsset(file, kind) {
+  const body = new FormData()
+  body.append('file', file)
+  body.append('kind', kind)
+  const response = await api('shoes/upload.php', { method: 'POST', body })
+  return response.path
 }
 
 // ── Color Palette Controls ─────────────────────────────────────
@@ -1154,19 +1109,21 @@ async function handleSaveShoe() {
     return
   }
 
-  // Resolve permanent server GLB path
-  const serverGlbPath = form.value.glbPath.startsWith('blob:')
-    ? (detectedModelFileName.value ? `/models/${detectedModelFileName.value}` : form.value.glbPath)
-    : form.value.glbPath
-
-  const payload = {
-    ...form.value,
-    glbPath: serverGlbPath,
-    modelFileName: detectedModelFileName.value,
-    parts: customizableParts,
-  }
-
   try {
+    const serverGlbPath = selectedModelFile.value
+      ? await uploadAsset(selectedModelFile.value, 'model')
+      : form.value.glbPath
+    const serverThumbnailPath = selectedThumbnailFile.value
+      ? await uploadAsset(selectedThumbnailFile.value, 'thumbnail')
+      : form.value.thumbnailPath
+    const payload = {
+      ...form.value,
+      glbPath: serverGlbPath,
+      thumbnailPath: serverThumbnailPath,
+      modelFileName: detectedModelFileName.value,
+      parts: customizableParts,
+    }
+
     if (isEditing.value && editingShoeId.value) {
       await api('shoes/update.php', {
         method: 'POST',
@@ -1193,7 +1150,7 @@ async function handleSaveShoe() {
 }
 
 // ── Quick Actions ──────────────────────────────────────────────
-function handleToggleStatus(shoe) {
+async function handleToggleStatus(shoe) {
   const nextStatus =
     shoe.status === 'available'
       ? 'coming_soon'
@@ -1201,8 +1158,15 @@ function handleToggleStatus(shoe) {
         ? 'out_of_stock'
         : 'available'
 
-  shoes.value = updateShoeRecord(shoes.value, shoe.id, { status: nextStatus })
-  persistShoes()
+  try {
+    await api('shoes/update.php', {
+      method: 'POST',
+      body: { id: shoe.id, status: nextStatus },
+    })
+    await loadData()
+  } catch (err) {
+    saveFeedback.value = `Could not update shoe status: ${err.message || 'server error'}`
+  }
 }
 
 function openRestock(shoe) {
@@ -1213,8 +1177,6 @@ function openRestock(shoe) {
 
 async function confirmRestock() {
   if (!restockTargetShoe.value) return
-  const newStock = (restockTargetShoe.value.stock || 0) + Number(restockAmount.value)
-
   try {
     await api('shoes/restock.php', {
       method: 'POST',
@@ -1224,9 +1186,8 @@ async function confirmRestock() {
       },
     })
     await loadData()
-  } catch {
-    shoes.value = restockShoeRecord(shoes.value, restockTargetShoe.value.id, newStock)
-    persistShoes()
+  } catch (err) {
+    saveFeedback.value = `Could not restock shoe: ${err.message || 'server error'}`
   }
 
   showRestockModal.value = false
@@ -1251,9 +1212,9 @@ function deleteShoe(shoe, mode = 'soft') {
             body: { id: shoe.id, mode },
           })
           await loadData()
-        } catch {
-          shoes.value = deleteShoeRecord(shoes.value, shoe.id)
-          persistShoes()
+        } catch (err) {
+          saveFeedback.value = `Could not delete shoe: ${err.message || 'server error'}`
+          return
         }
         saveFeedback.value = `"${shoe.name}" has been permanently deleted.`
       },
@@ -1274,9 +1235,9 @@ function deleteShoe(shoe, mode = 'soft') {
             body: { id: shoe.id, mode },
           })
           await loadData()
-        } catch {
-          shoes.value = deleteShoeRecord(shoes.value, shoe.id)
-          persistShoes()
+        } catch (err) {
+          saveFeedback.value = `Could not delete shoe: ${err.message || 'server error'}`
+          return
         }
         saveFeedback.value = `"${shoe.name}" has been deleted.`
       },

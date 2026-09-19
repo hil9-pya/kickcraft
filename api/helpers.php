@@ -27,17 +27,56 @@ function requireMethod(string $method): void {
 }
 
 function requireAuth(): void {
-    if (!isset($_SESSION['user_id'])) {
+    if (currentSessionUser() === null) {
         jsonError('Authentication required', 401);
     }
 }
 
 function requireAdmin(): void {
-    if (!isset($_SESSION['user_id'])) {
+    $user = currentSessionUser();
+    if ($user === null) {
         jsonError('Authentication required', 401);
     }
-    if (($_SESSION['user_role'] ?? '') !== 'owner') {
+    if (($user['role'] ?? '') !== 'owner') {
         jsonError('Owner privileges required', 403);
+    }
+}
+
+/** Return the current active user, refreshing role/email from the database. */
+function currentSessionUser(): ?array {
+    if (!isset($_SESSION['user_id'])) {
+        return null;
+    }
+
+    // CLI endpoint checks inject a session and intentionally run without MySQL.
+    if (PHP_SAPI === 'cli' && isset($_SESSION['user_role'])) {
+        return [
+            'id' => (int)$_SESSION['user_id'],
+            'name' => (string)($_SESSION['user_name'] ?? ''),
+            'email' => (string)($_SESSION['user_email'] ?? ''),
+            'role' => (string)$_SESSION['user_role'],
+        ];
+    }
+
+    try {
+        $stmt = getDb()->prepare(
+            'SELECT id, name, email, role FROM users WHERE id = ? AND deleted_at IS NULL AND permanently_deleted = 0'
+        );
+        $stmt->execute([$_SESSION['user_id']]);
+        $user = $stmt->fetch();
+        if (!$user) {
+            session_unset();
+            session_destroy();
+            return null;
+        }
+        $_SESSION['user_id'] = (int)$user['id'];
+        $_SESSION['user_role'] = (string)$user['role'];
+        $_SESSION['user_email'] = (string)$user['email'];
+        $_SESSION['user_name'] = (string)$user['name'];
+        return $user;
+    } catch (Throwable $e) {
+        error_log('KickCraft auth lookup failed: ' . $e->getMessage());
+        jsonError('Authentication service unavailable', 503);
     }
 }
 
@@ -60,6 +99,14 @@ function sanitizeString(?string $val): string {
 function validateEmail(?string $val) {
     $email = trim((string)($val ?? ''));
     return filter_var($email, FILTER_VALIDATE_EMAIL);
+}
+
+function isLocalAssetPath(string $path, string $directory, array $extensions): bool {
+    if (!str_starts_with($path, "/{$directory}/")) {
+        return false;
+    }
+    $extension = strtolower(pathinfo((string)(parse_url($path, PHP_URL_PATH) ?: ''), PATHINFO_EXTENSION));
+    return in_array($extension, $extensions, true) && !str_contains($path, '..');
 }
 
 function formatShoeRow(array $row): array {

@@ -91,7 +91,7 @@ Run: `npm.cmd test`
 Expected: FAIL (missing `api/database/setup.sql` and `api/db.php`)
 
 - [ ] **Step 3: Implement `api/database/setup.sql`**
-Write schema with `users`, `shoes`, `reservations` tables, soft delete columns, and initial seed data (admin with password `kickcraft2026` hashed with bcrypt, 3 initial shoes with JSON parts/colors/categories, and 4 sample reservations).
+Write schema with `users`, `shoes`, `reservations` tables, soft delete columns, and initial seed data (3 initial shoes with JSON parts/colors/categories and 4 sample reservations). Bootstrap the owner account from ignored `api/.env` using `database/create-owner.php`.
 
 - [ ] **Step 4: Implement `api/config.php`, `api/db.php`, `api/helpers.php`, and `api/.env.example`**
 Ensure `api/config.php` starts session with secure cookie flags, parses `api/.env`, sets CORS headers for `http://localhost:5173`. Ensure `api/db.php` exports singleton PDO with real prepared statements. Ensure `api/helpers.php` implements auth check, json response, and body parsing.

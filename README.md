@@ -1,6 +1,6 @@
 # KickCraft
 
-Interactive 3D shoe customization and pickup-reservation system for an original shoe brand, backed by a persistent PHP REST API and MySQL database.
+Interactive 3D shoe customization and pickup-reservation system for KickCraft's original shoe design, with Nike demo entries retained for educational testing, backed by a persistent PHP REST API and MySQL database.
 
 ## Architecture
 
@@ -11,6 +11,8 @@ Vue 3 Frontend (Vite) ──> PHP REST API (Apache / XAMPP) ──> MySQL Databa
 - **Frontend:** Vue 3 `<script setup>`, Tailwind CSS, Google `<model-viewer>` for local 3D GLB shoe models, custom charm anchors.
 - **Backend API:** Flat PHP endpoints under `api/` served via XAMPP Apache, PDO prepared statements on 100% of queries (SQL injection free), native session authentication (`PHPSESSID`), soft & hard delete flags (zero physical row deletion).
 - **Database:** MySQL (`kickcraft_db`) with tables for `users`, `shoes`, and `reservations`.
+
+Owner shoe uploads use the admin editor's GLB and thumbnail pickers. Files are validated by `api/shoes/upload.php`, stored under ignored `public/models/uploads/` or `public/images/uploads/`, then saved as local paths in MySQL.
 
 ---
 
@@ -32,10 +34,15 @@ Import `api/database/setup.sql` into MySQL:
 & "C:\xampp\mysql\bin\mysql.exe" -u root < "api/database/setup.sql"
 ```
 
-This creates `kickcraft_db` and seeds:
-- **Default Owner/Admin:** `admin@kickcraft.local` / `kickcraft2026`
-- **Initial Silhouettes:** KickCraft One, Nike Air Max, Nike Dunk (with full parts, palette, and stock)
-- **Sample Reservations:** KC-2026-1041 through KC-2026-1044
+This creates `kickcraft_db` and seeds the initial silhouettes (KickCraft One, Nike Air Max, and Nike Dunk) plus sample reservations `KC-2026-1041` through `KC-2026-1044`. Nike entries are demo data only.
+
+Create the owner account from local environment values (do not put a password in Git):
+
+```powershell
+Copy-Item api/.env.example api/.env
+# Edit api/.env and set KICKCRAFT_OWNER_NAME, KICKCRAFT_OWNER_EMAIL, and KICKCRAFT_OWNER_PASSWORD.
+& "C:\xampp\php\php.exe" api/database/create-owner.php
+```
 
 ### 3. Deploy API to XAMPP Apache
 Link or copy the project folder to `C:\xampp\htdocs\kickcraft`:
@@ -62,15 +69,12 @@ Open `http://localhost:5173`. The Vite development server automatically proxies 
 ## Testing & Quality Assurance
 
 ```powershell
-npm test        # Runs all 118 unit and integration tests
+npm test        # Runs the unit and integration checks
 npm run build   # Verifies production client bundle compilation
 ```
 
 ---
 
-## Default Credentials
-- **Owner / Admin Portal:**
-  - Email: `admin@kickcraft.local`
-  - Password: `kickcraft2026`
-- **Customer:**
-  - Customers can register accounts or place reservations as guests directly through the 3D studio.
+## Accounts
+- Owner credentials come from `api/.env` and the one-time `create-owner.php` bootstrap.
+- Customers can register accounts or place reservations as guests directly through the 3D studio.

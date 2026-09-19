@@ -14,9 +14,10 @@ const REQUIRED_FILES = [
   'restock.php',
   'delete.php',
   'restore.php',
+  'upload.php',
 ]
 
-test('all 6 shoe catalog endpoint files exist', () => {
+test('all shoe catalog endpoint files exist', () => {
   for (const file of REQUIRED_FILES) {
     const filePath = path.join(SHOES_DIR, file)
     assert.ok(fs.existsSync(filePath), `Expected endpoint file to exist: api/shoes/${file}`)
@@ -85,6 +86,7 @@ test('create.php enforces POST, requireAdmin, prepared statements, and JSON enco
   assert.match(code, /prepare\s*\(/i, 'Must use PDO prepare')
   assert.match(code, /INSERT\s+INTO\s+shoes/i, 'Must insert into shoes table')
   assert.match(code, /json_encode\s*\(/i, 'Must encode JSON columns')
+  assert.match(code, /isLocalAssetPath\s*\(/i, 'Must accept only local model and thumbnail paths')
   assert.match(code, /201/, 'Must respond with 201 Created')
 })
 
@@ -99,6 +101,7 @@ test('update.php enforces POST, requireAdmin, prepared statements, and guards pe
   assert.match(code, /prepare\s*\(/i, 'Must use PDO prepare')
   assert.match(code, /UPDATE\s+shoes/i, 'Must update shoes table')
   assert.match(code, /permanently_deleted\s*=\s*0/i, 'Must prevent updating permanently deleted shoes')
+  assert.match(code, /isLocalAssetPath\s*\(/i, 'Must validate updated asset paths')
 })
 
 test('restock.php enforces POST, requireAdmin, amount validation, and status transition', () => {

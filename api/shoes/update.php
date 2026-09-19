@@ -66,13 +66,21 @@ if (isset($body['status'])) {
 }
 
 if (isset($body['glbPath']) || isset($body['glb_path'])) {
+    $glbPath = trim((string)($body['glbPath'] ?? $body['glb_path']));
+    if (!isLocalAssetPath($glbPath, 'models', ['glb'])) {
+        jsonError('A valid local GLB model path is required', 400);
+    }
     $fields[] = 'glb_path = ?';
-    $params[] = trim((string)($body['glbPath'] ?? $body['glb_path']));
+    $params[] = $glbPath;
 }
 
 if (isset($body['thumbnailPath']) || isset($body['thumbnail_path'])) {
+    $thumbnailPath = trim((string)($body['thumbnailPath'] ?? $body['thumbnail_path']));
+    if (!isLocalAssetPath($thumbnailPath, 'images', ['png', 'jpg', 'jpeg', 'webp'])) {
+        jsonError('A valid local thumbnail path is required', 400);
+    }
     $fields[] = 'thumbnail_path = ?';
-    $params[] = trim((string)($body['thumbnailPath'] ?? $body['thumbnail_path']));
+    $params[] = $thumbnailPath;
 }
 
 if (isset($body['charmsEnabled']) || isset($body['charms_enabled'])) {

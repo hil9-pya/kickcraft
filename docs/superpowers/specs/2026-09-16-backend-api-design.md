@@ -136,7 +136,7 @@ Reservations are never deleted — they are historical records. The `cancelled` 
 
 The `setup.sql` script inserts:
 
-1. **1 admin user**: `admin@kickcraft.local` / `kickcraft2026` (bcrypt hashed via `password_hash()`), role `'owner'`.
+1. **Owner account**: created once from `api/.env` with `database/create-owner.php`; no password is stored in the repository.
 2. **3 shoes**: KickCraft One (8 parts, 50 stock), Nike Air Max (3 parts, 50 stock), Nike Dunk (3 parts, 50 stock) — with full parts JSON, colors JSON, and categories JSON matching current `customization.js` definitions.
 3. **4 sample reservations**: Matching the current `loadInitialOrders()` seed data in `financials.js` (KC-2026-1041 through KC-2026-1044).
 

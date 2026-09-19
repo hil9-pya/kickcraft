@@ -37,8 +37,13 @@ if (!in_array($status, ['available', 'coming_soon', 'out_of_stock'], true)) {
 
 $glbPath = trim((string)($body['glbPath'] ?? ($body['glb_path'] ?? '')));
 $thumbnailPath = trim((string)($body['thumbnailPath'] ?? ($body['thumbnail_path'] ?? '/images/kickcraft-one-card.png')));
+if (!isLocalAssetPath($glbPath, 'models', ['glb'])) {
+    jsonError('A valid local GLB model path is required', 400);
+}
 if ($thumbnailPath === '') {
     $thumbnailPath = '/images/kickcraft-one-card.png';
+} elseif (!isLocalAssetPath($thumbnailPath, 'images', ['png', 'jpg', 'jpeg', 'webp'])) {
+    jsonError('A valid local thumbnail path is required', 400);
 }
 
 $charmsEnabled = isset($body['charmsEnabled']) ? ($body['charmsEnabled'] ? 1 : 0) : (isset($body['charms_enabled']) ? ($body['charms_enabled'] ? 1 : 0) : 1);

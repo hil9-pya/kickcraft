@@ -87,7 +87,7 @@ test('create.php enforces POST, transactions, DB price lookup, stock decrement, 
   assert.match(code, /UPDATE\s+shoes\s+SET\s+stock/i, 'Must decrement shoe stock')
   assert.match(code, /INSERT\s+INTO\s+reservations/i, 'Must insert reservation record')
   assert.match(code, /201/, 'Must return 201 Created on success')
-  assert.match(code, /\$_SESSION\[['"]user_role['"]\]\s*===\s*['"]owner['"]/, 'Must verify owner role for walk-in paid status')
+  assert.match(code, /currentSessionUser\s*\(\s*\)/, 'Must refresh owner role from the active session/database')
   assert.match(code, /paid/, 'Must allow paid status for owner walk-in sale')
   assert.match(code, /pending/, 'Must default to pending status for customer reservation')
 })

@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS users (
   permanently_deleted TINYINT(1) NOT NULL DEFAULT 0
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- Disable the old demo credential if this migration is run on an existing database.
+UPDATE users SET deleted_at = CURRENT_TIMESTAMP, permanently_deleted = 1
+WHERE email = 'admin@kickcraft.local';
+
 -- --------------------------------------------------------
 -- Shoes Table
 -- --------------------------------------------------------
@@ -30,7 +34,7 @@ CREATE TABLE IF NOT EXISTS shoes (
   stock INT NOT NULL DEFAULT 0,
   status ENUM('available', 'in_stock', 'coming_soon', 'out_of_stock') NOT NULL DEFAULT 'available',
   glb_path VARCHAR(500) NOT NULL,
-  thumbnail_path VARCHAR(500) DEFAULT '/images/kickcraft-one-card.png',
+  thumbnail_path VARCHAR(2048) DEFAULT '/images/kickcraft-one-card.png',
   charms_enabled TINYINT(1) NOT NULL DEFAULT 1,
   charm_offset VARCHAR(100) DEFAULT NULL,
   charm_scale VARCHAR(100) DEFAULT '1 1 1',
@@ -72,21 +76,6 @@ CREATE TABLE IF NOT EXISTS reservations (
 -- Migration for existing databases: ensure status ENUM includes arrived and soft-delete columns exist
 ALTER TABLE reservations
   MODIFY COLUMN status ENUM('pending', 'paid', 'approved', 'ready', 'completed', 'cancelled', 'arrived') NOT NULL DEFAULT 'pending';
-
--- --------------------------------------------------------
--- Seed Data: Admin User
--- --------------------------------------------------------
--- Password: kickcraft2026
-INSERT INTO users (name, email, password_hash, role)
-VALUES (
-  'KickCraft Owner',
-  'admin@kickcraft.local',
-  '$2y$12$QGS3OmhfjIFpByutrjRdW.JdAewtuJU6St5o.lsYKS9wN.a0ASpIu',
-  'owner'
-)
-ON DUPLICATE KEY UPDATE
-  name = VALUES(name),
-  role = VALUES(role);
 
 -- --------------------------------------------------------
 -- Seed Data: Initial Shoes

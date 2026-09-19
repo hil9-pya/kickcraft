@@ -10,8 +10,8 @@ const API_DIR = path.join(ROOT_DIR, 'api')
 test('backend infrastructure files exist', () => {
   const requiredFiles = [
     path.join(API_DIR, 'database', 'setup.sql'),
+    path.join(API_DIR, 'database', 'create-owner.php'),
     path.join(API_DIR, '.env.example'),
-    path.join(API_DIR, '.env'),
     path.join(API_DIR, 'config.php'),
     path.join(API_DIR, 'db.php'),
     path.join(API_DIR, 'helpers.php'),
@@ -53,10 +53,9 @@ test('setup.sql defines schema without physical DELETE statements', () => {
   assert.match(sql, /CREATE\s+TABLE\s+(IF\s+NOT\s+EXISTS\s+)?reservations/i)
   assert.match(sql, /part_colors\s+JSON/i)
   assert.match(sql, /charm_id\s+VARCHAR/i)
-  assert.match(sql, /status\s+ENUM\('pending',\s*'paid',\s*'approved',\s*'ready',\s*'completed',\s*'cancelled'\)/i)
+  assert.match(sql, /status\s+ENUM\('pending',\s*'paid',\s*'approved',\s*'ready',\s*'completed',\s*'cancelled',\s*'arrived'\)/i)
 
   // Seeds
-  assert.match(sql, /admin@kickcraft\.local/)
   assert.match(sql, /'owner'/)
   assert.match(sql, /kickcraft-one/)
   assert.match(sql, /nike-air-max/)
@@ -69,11 +68,9 @@ test('setup.sql defines schema without physical DELETE statements', () => {
 
 test('environment config and gitignore rules are configured', () => {
   const envExamplePath = path.join(API_DIR, '.env.example')
-  const envPath = path.join(API_DIR, '.env')
   const gitignorePath = path.join(ROOT_DIR, '.gitignore')
 
   assert.ok(fs.existsSync(envExamplePath), '.env.example must exist')
-  assert.ok(fs.existsSync(envPath), '.env must exist')
 
   const envExample = fs.readFileSync(envExamplePath, 'utf8')
   assert.match(envExample, /DB_HOST=/)
@@ -81,6 +78,7 @@ test('environment config and gitignore rules are configured', () => {
   assert.match(envExample, /DB_NAME=kickcraft_db/)
   assert.match(envExample, /DB_USER=/)
   assert.match(envExample, /DB_PASS=/)
+  assert.match(envExample, /KICKCRAFT_OWNER_PASSWORD=/)
 
   const gitignore = fs.readFileSync(gitignorePath, 'utf8')
   assert.match(gitignore, /api\/\.env(\s|$)/, '.gitignore must ignore api/.env')
@@ -125,6 +123,7 @@ assert(function_exists('requireAdmin'));
 assert(function_exists('getJsonBody'));
 assert(function_exists('sanitizeString'));
 assert(function_exists('validateEmail'));
+assert(function_exists('isLocalAssetPath'));
 
 $clean = sanitizeString('  <script>alert("xss")</script>  ');
 if ($clean !== '&lt;script&gt;alert(&quot;xss&quot;)&lt;/script&gt;') {
@@ -138,6 +137,10 @@ if (!validateEmail('test@kickcraft.local')) {
 }
 if (validateEmail('not-an-email')) {
     echo "validateEmail invalid failed";
+    exit(1);
+}
+if (!isLocalAssetPath('/models/demo.glb', 'models', ['glb']) || isLocalAssetPath('blob:demo', 'models', ['glb'])) {
+    echo "isLocalAssetPath failed";
     exit(1);
 }
 
@@ -159,4 +162,5 @@ test('.htaccess configures RewriteEngine', () => {
   assert.ok(fs.existsSync(htaccessPath), '.htaccess must exist')
   const content = fs.readFileSync(htaccessPath, 'utf8')
   assert.match(content, /RewriteEngine\s+On/i)
+  assert.match(content, /FilesMatch\s+"\^\\\.env/i, 'api/.htaccess must block environment files')
 })

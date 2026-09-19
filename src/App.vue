@@ -5,7 +5,7 @@ import ConfirmModal from './components/ConfirmModal.vue'
 import KickCraftCalendar from './components/KickCraftCalendar.vue'
 import { api } from './api.js'
 import { adminShoeToCatalogCard, getStoredShoes, setStoredShoes } from './admin.js'
-import { createOrder, getStoredOrders, setStoredOrders } from './financials.js'
+import { getStoredOrders, setStoredOrders } from './financials.js'
 import {
   CATALOG,
   CATEGORIES,
@@ -216,7 +216,7 @@ function getPickupDateOffset(days) {
   const y = String(d.getFullYear())
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${d}`
+  return `${y}-${m}-${day}`
 }
 
 const minPickupDate = computed(() => getPickupDateOffset(7))
@@ -449,7 +449,7 @@ function requestCancelCustomerReservation(reservation) {
         if (shoeIndex !== -1) {
           adminShoes.value[shoeIndex].stock += 1
           if (adminShoes.value[shoeIndex].status === 'out_of_stock') {
-            adminShoes.value[shoeIndex].status = 'in_stock'
+            adminShoes.value[shoeIndex].status = 'available'
           }
           setStoredShoes(adminShoes.value)
         }

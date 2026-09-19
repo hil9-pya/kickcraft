@@ -5,5 +5,7 @@ tmp/
 .DS_Store
 *.log
 api/.env
+public/models/uploads/
+public/images/uploads/
 .superpowers/
 output/

@@ -21,13 +21,14 @@ export async function api(endpoint, options = {}) {
 
   const method = (options.method || 'GET').toUpperCase()
 
+  let body = options.body
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(options.headers || {}),
   }
 
-  let body = options.body
-  if (body !== undefined && typeof body === 'object' && !(body instanceof FormData)) {
+  if (body !== undefined && typeof body === 'object' && !isFormData) {
     body = JSON.stringify(body)
   }
 

@@ -7,7 +7,12 @@ require_once __DIR__ . '/../helpers.php';
 
 requireMethod('GET');
 
-$includeArchived = isset($_GET['include_archived']) && (string)$_GET['include_archived'] === '1' && isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'owner';
+$includeArchivedRequested = isset($_GET['include_archived']) && (string)$_GET['include_archived'] === '1';
+$includeArchived = $includeArchivedRequested && isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'owner';
+if ($includeArchived) {
+    // Refresh the role before exposing archived records; a demoted owner must not retain access.
+    $includeArchived = (currentSessionUser()['role'] ?? '') === 'owner';
+}
 
 $db = getDb();
 

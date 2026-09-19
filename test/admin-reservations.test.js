@@ -207,7 +207,7 @@ test('AdminPanel.vue implements requestDeleteReservation with adminConfirm and s
   assert.match(content, /setStoredOrders/, 'requestDeleteReservation must persist updated orders list')
 })
 
-test('AdminPanel.vue handleOrderStatusChange optimistically updates state, persists, and broadcasts RESERVATION_STATUS_UPDATED', () => {
+test('AdminPanel.vue handleOrderStatusChange persists on the server before broadcasting', () => {
   const content = fs.readFileSync(ADMIN_PANEL_PATH, 'utf8')
 
   assert.match(
@@ -215,11 +215,7 @@ test('AdminPanel.vue handleOrderStatusChange optimistically updates state, persi
     /async\s+function\s+handleOrderStatusChange\s*\(\s*orderId,\s*newStatus\s*\)/,
     'AdminPanel must define handleOrderStatusChange'
   )
-  assert.match(
-    content,
-    /updateOrderStatus\s*\(\s*orders\.value,\s*orderId,\s*newStatus\s*\)/,
-    'handleOrderStatusChange must optimistically update orders.value'
-  )
+  assert.doesNotMatch(content, /updateOrderStatus\s*\(\s*orders\.value,\s*orderId,\s*newStatus\s*\)/, 'status changes must not claim success before the API responds')
   assert.match(
     content,
     /persistOrders\s*\(\s*\)/,

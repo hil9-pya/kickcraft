@@ -30,22 +30,31 @@ if (file_exists($envFile)) {
 
 // 2. Configure session cookies & start session
 if (session_status() === PHP_SESSION_NONE) {
+    // PHP CLI (used by local checks) may inherit an unwritable XAMPP session path.
+    if (PHP_SAPI === 'cli') {
+        $cliSessionPath = sys_get_temp_dir();
+        if (is_dir($cliSessionPath) && is_writable($cliSessionPath)) {
+            session_save_path($cliSessionPath);
+        }
+    }
     session_set_cookie_params([
         'lifetime' => 86400 * 7,
         'path' => '/',
-        'secure' => false, // local dev
+        'secure' => !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off',
         'httponly' => true,
         'samesite' => 'Lax'
     ]);
     session_start();
 }
 
-// 3. Set CORS headers
-$origin = $_SERVER['HTTP_ORIGIN'] ?? 'http://localhost:5173';
-if (preg_match('/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/', $origin)) {
+// 3. Set CORS headers from a small explicit allowlist.
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+$configuredOrigins = getenv('CORS_ORIGINS') ?: 'http://localhost:5173,http://127.0.0.1:5173';
+$allowedOrigins = array_values(array_filter(array_map('trim', explode(',', $configuredOrigins))));
+if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
     header("Access-Control-Allow-Origin: {$origin}");
 } else {
-    header('Access-Control-Allow-Origin: http://localhost:5173');
+    header('Access-Control-Allow-Origin: ' . ($allowedOrigins[0] ?? 'http://localhost:5173'));
 }
 header('Access-Control-Allow-Credentials: true');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');

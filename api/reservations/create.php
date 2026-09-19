@@ -21,7 +21,14 @@ if (!$email) {
 }
 
 $pickupDate = trim((string)($body['pickupDate'] ?? ''));
-if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $pickupDate) || !strtotime($pickupDate)) {
+$requestedStatus = strtolower(trim((string)($body['status'] ?? '')));
+$sessionUser = $requestedStatus === 'paid' ? currentSessionUser() : null;
+$isOwner = is_array($sessionUser) && (($sessionUser['role'] ?? '') === 'owner');
+$isImmediateOwnerSale = $isOwner && $requestedStatus === 'paid';
+$dateObject = DateTime::createFromFormat('!Y-m-d', $pickupDate);
+$dateErrors = DateTime::getLastErrors();
+$hasDateErrors = is_array($dateErrors) && ($dateErrors['warning_count'] > 0 || $dateErrors['error_count'] > 0);
+if (!$dateObject || $hasDateErrors || $dateObject->format('Y-m-d') !== $pickupDate) {
     jsonError('Valid pickup date (YYYY-MM-DD) is required', 400);
 }
 
@@ -29,7 +36,7 @@ $pickupTimestamp = strtotime($pickupDate);
 $minTimestamp = strtotime('+6 days 00:00:00');
 $maxTimestamp = strtotime('+366 days 23:59:59');
 
-if ($pickupTimestamp < $minTimestamp || $pickupTimestamp > $maxTimestamp) {
+if (!$isImmediateOwnerSale && ($pickupTimestamp < $minTimestamp || $pickupTimestamp > $maxTimestamp)) {
     jsonError('Pickup date must be between 1 week and 1 year from today', 400);
 }
 
@@ -39,10 +46,11 @@ if ($shoeId === '') {
 }
 
 $rawSize = $body['size'] ?? null;
-if (!is_numeric($rawSize) || (int)$rawSize < 5 || (int)$rawSize > 15) {
+$parsedSize = filter_var($rawSize, FILTER_VALIDATE_INT, FILTER_NULL_ON_FAILURE);
+if ($parsedSize === null || $parsedSize < 5 || $parsedSize > 15) {
     jsonError('Valid shoe size between 5 and 15 is required', 400);
 }
-$size = (int)$rawSize;
+$size = $parsedSize;
 
 // 2. Optional fields with safe defaults
 $charmId = sanitizeString($body['charmId'] ?? 'none') ?: 'none';
@@ -56,9 +64,7 @@ if (!is_array($partColors) && !is_object($partColors)) {
 }
 $partColorsJson = json_encode($partColors, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-// 3. Status handling: owner walk-in can set paid, otherwise default pending
-$isOwner = isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'owner';
-$requestedStatus = strtolower(trim((string)($body['status'] ?? '')));
+// 3. Status handling: only an active owner session can create a paid walk-in sale.
 $status = ($isOwner && $requestedStatus === 'paid') ? 'paid' : 'pending';
 
 // 4. Database Transaction & Stock / Price Integrity
@@ -71,7 +77,7 @@ try {
     $stmtShoe->execute([$shoeId]);
     $shoe = $stmtShoe->fetch();
 
-    if (!$shoe || (int)$shoe['stock'] <= 0) {
+    if (!$shoe || (int)$shoe['stock'] <= 0 || !in_array($shoe['status'], ['available', 'in_stock'], true)) {
         $db->rollBack();
         jsonError('Shoe is out of stock or unavailable', 400);
     }
@@ -131,9 +137,10 @@ try {
         'success' => true,
         'reservation' => formatReservationRow($reservationRow),
     ], 201);
-} catch (Exception $e) {
+} catch (Throwable $e) {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
-    jsonError('Failed to create reservation: ' . $e->getMessage(), 500);
+    error_log('KickCraft reservation create failed: ' . $e->getMessage());
+    jsonError('Failed to create reservation. Please try again.', 500);
 }
