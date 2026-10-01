@@ -8,4 +8,5 @@ api/.env
 public/models/uploads/
 public/images/uploads/
 .superpowers/
+docs/superpowers/
 output/
