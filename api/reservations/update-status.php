@@ -6,9 +6,15 @@ require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers.php';
 
 requireMethod('POST');
-requireAdmin();
+requireAuth();
+$actor=currentSessionUser();
+if($actor['role']!=='owner')requireApprovedSeller();
 
 $body = getJsonBody();
+foreach (['id'=>64,'status'=>20,'notes'=>2000] as $field=>$maximum) {
+    if (array_key_exists($field,$body) && (!is_string($body[$field]) || mb_strlen($body[$field])>$maximum)) jsonError('Invalid '.$field,400);
+}
+
 $id = trim((string)($body['id'] ?? ''));
 $status = strtolower(trim((string)($body['status'] ?? '')));
 $allowedStatuses = ['pending', 'approved', 'ready', 'completed', 'cancelled'];
@@ -36,11 +42,11 @@ try {
     $db->beginTransaction();
 
     $stmtCheck = $db->prepare(
-        'SELECT id, email, status, shoe_id, notes FROM reservations WHERE id = ? AND deleted_at IS NULL AND permanently_deleted = 0 FOR UPDATE'
+        'SELECT id, email, status, shoe_id, notes, seller_user_id FROM reservations WHERE id = ? AND deleted_at IS NULL AND permanently_deleted = 0 FOR UPDATE'
     );
     $stmtCheck->execute([$id]);
     $reservation = $stmtCheck->fetch();
-    if (!$reservation) {
+    if (!$reservation || ($actor['role']!=='owner' && (int)($reservation['seller_user_id']??0)!==(int)$actor['id'])) {
         $db->rollBack();
         jsonError('Reservation not found', 404);
     }
@@ -52,6 +58,9 @@ try {
     }
 
     $updatedNotes = array_key_exists('notes', $body) ? $notes : (string)($reservation['notes'] ?? '');
+    if(strlen($updatedNotes)>2000 || ($status==='cancelled' && $previousStatus!=='cancelled' && strlen(trim($updatedNotes))<3)){
+        $db->rollBack();jsonError('Add a cancellation reason of 3–2000 characters',422);
+    }
     $stmtUpdate = $db->prepare('UPDATE reservations SET status = ?, notes = ?, updated_at = NOW() WHERE id = ?');
     $stmtUpdate->execute([$status, $updatedNotes, $id]);
 

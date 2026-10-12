@@ -1,6 +1,9 @@
 <script setup>
+import {forgetCompletedScan} from '../scan-capture.js'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import ConfirmModal from './ConfirmModal.vue'
+import PhotoScanner from './PhotoScanner.vue'
+import SellerModeration from './SellerModeration.vue'
 import { api } from '../api.js'
 import {
   highlightMaterial,
@@ -95,6 +98,15 @@ const defaultForm = () => ({
 })
 
 const form = ref(defaultForm())
+const showPhotoScanner = ref(false)
+function acceptPhotoScan(draft) {
+  Object.assign(form.value, draft)
+  selectedModelFile.value = null
+  selectedThumbnailFile.value = null
+  detectedModelFileName.value = draft.glbPath.split('/').pop()
+  showPhotoScanner.value = false
+  editorModelReady.value = false
+}
 const newColorName = ref('')
 const newColorHex = ref('#245fa8')
 
@@ -482,6 +494,7 @@ async function loadData() {
 const filteredShoes = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
   return shoes.value.filter(shoe => {
+    if(shoe.sellerUserId)return false
     if (shoe.permanentlyDeleted) return false
 
     if (activeTab.value === 'archived') {
@@ -508,12 +521,12 @@ const filteredShoes = computed(() => {
 })
 
 const stats = computed(() => {
-  const activeShoes = shoes.value.filter(s => !s.permanentlyDeleted && !s.deletedAt)
+  const activeShoes = shoes.value.filter(s => !s.sellerUserId && !s.permanentlyDeleted && !s.deletedAt)
   const total = activeShoes.length
   const available = activeShoes.filter(s => s.status === 'available' || s.status === 'in_stock').length
   const comingSoon = activeShoes.filter(s => s.status === 'coming_soon').length
   const outOfStock = activeShoes.filter(s => s.status === 'out_of_stock').length
-  const archived = shoes.value.filter(s => !s.permanentlyDeleted && s.deletedAt).length
+  const archived = shoes.value.filter(s => !s.sellerUserId && !s.permanentlyDeleted && s.deletedAt).length
   return { total, available, comingSoon, outOfStock, archived }
 })
 
@@ -927,6 +940,7 @@ function openEditShoe(shoe) {
 }
 
 function closeEditor() {
+  showPhotoScanner.value = false
   editorMode.value = false
   isEditing.value = false
   editingShoeId.value = null
@@ -965,6 +979,7 @@ function handleEditorModelLoad() {
   const model = editorViewer.value?.model
   if (!model) return
 
+  if (form.value.parts?.some(part => part.recolorTexturePath)) return
   const modelMats = model.materials || []
   if (!modelMats.length) return
 
@@ -1004,6 +1019,10 @@ function testHighlightPart(materialName) {
   activeHighlightedMaterial.value = materialName
   const model = editorViewer.value?.model
   if (!model) return
+  if (form.value.parts?.some(part => part.recolorTexturePath)) {
+    for (const material of model.materials) material.setEmissiveFactor(material.name === materialName ? '#550000' : '#000000')
+    return
+  }
   highlightMaterial(model, materialName, '#ff2222')
 }
 
@@ -1011,6 +1030,10 @@ function resetHighlight() {
   activeHighlightedMaterial.value = null
   const model = editorViewer.value?.model
   if (!model) return
+  if (form.value.parts?.some(part => part.recolorTexturePath)) {
+    for (const material of model.materials) material.setEmissiveFactor('#000000')
+    return
+  }
   highlightMaterial(model, null)
 }
 
@@ -1103,6 +1126,7 @@ async function handleSaveShoe() {
       })
       saveFeedback.value = `Published "${candidate.name}" to database successfully!`
     }
+    forgetCompletedScan(serverGlbPath,props.currentUser?.id)
     await loadData()
     setTimeout(() => {
       closeEditor()
@@ -1261,7 +1285,7 @@ async function restoreShoe(shoe) {
     </div>
 
     <!-- ── Admin Section Tabs (Inventory vs Financials) ────────── -->
-    <div class="mb-6 flex border-b border-[#cfd2ce] bg-white shadow-sm">
+    <div class="mb-6 flex flex-wrap border-b border-[#cfd2ce] bg-white shadow-sm">
       <button
         type="button"
         class="border-b-2 px-6 py-3.5 text-xs font-bold transition-all duration-150 focus-visible:outline-2 focus-visible:outline-[#245fa8]"
@@ -1306,7 +1330,9 @@ async function restoreShoe(shoe) {
           {{ userStats.total }}
         </span>
       </button>
+      <button v-for="item in [{id:'sellers',label:'Seller applications'},{id:'seller-products',label:'Seller products'}]" :key="item.id" type="button" class="border-b-2 px-6 py-3.5 text-xs font-bold" :class="adminSection===item.id?'border-[#b94d27] text-[#202220]':'border-transparent text-[#5f635f]'" @click="adminSection=item.id;editorMode=false">{{item.label}}</button>
     </div>
+    <SellerModeration v-if="['sellers','seller-products'].includes(adminSection)" :mode="adminSection==='sellers'?'sellers':'products'" @changed="loadData" />
 
     <div v-if="dataLoading" role="status" class="mb-6 border border-[#cfd2ce] bg-white px-4 py-3 text-sm font-semibold text-[#5f635f]">
       Refreshing owner data…
@@ -1705,6 +1731,7 @@ async function restoreShoe(shoe) {
             </div>
           </div>
 
+          <button type="button" class="border border-[#202220] px-5 py-3 font-semibold text-[#202220]" @click="showPhotoScanner = true">Scan from photos</button>
           <!-- Or Choose from Existing Model Library -->
           <div class="mt-10 border-t border-[#d9dcd8] pt-6">
             <p class="text-[11px] font-bold uppercase tracking-wider text-[#8e938e]">
@@ -2754,7 +2781,7 @@ async function restoreShoe(shoe) {
               KickCraft Flagship Studio
             </h2>
             <p class="text-[11px] text-[#5f635f]">
-              123 Craft Studio Way, Bonifacio Global City, Taguig
+              {{selectedInspectionReservation?.pickupStore}} — {{selectedInspectionReservation?.pickupAddress}}
             </p>
             <p class="text-[10px] text-[#8e938e]">
               Official Custom Shoe Order &amp; Store Pickup Receipt
@@ -3278,7 +3305,8 @@ async function restoreShoe(shoe) {
       </div>
     </div>
 
-    <ConfirmModal
+    <PhotoScanner :account-id="currentUser?.id" v-if="editorMode && showPhotoScanner" class="fixed inset-4 z-50 overflow-auto" @complete="acceptPhotoScan" @cancel="showPhotoScanner = false" />
+  <ConfirmModal
       :show="adminConfirm.show"
       :title="adminConfirm.title"
       :message="adminConfirm.message"

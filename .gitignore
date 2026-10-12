@@ -10,3 +10,6 @@ public/images/uploads/
 .superpowers/
 docs/superpowers/
 output/
+
+.local-tools/
+.scan-data/

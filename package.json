@@ -15,8 +15,8 @@
     "@tailwindcss/vite": "latest",
     "@vitejs/plugin-vue": "latest",
     "tailwindcss": "latest",
+    "three": "0.183.2",
     "vite": "latest",
     "vue": "latest"
-  },
-  "devDependencies": {}
+  }
 }

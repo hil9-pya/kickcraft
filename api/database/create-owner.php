@@ -9,9 +9,9 @@ if (PHP_SAPI !== 'cli') {
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../db.php';
 
-$name = trim((string)(getenv('KICKCRAFT_OWNER_NAME') ?: ''));
-$email = strtolower(trim((string)(getenv('KICKCRAFT_OWNER_EMAIL') ?: '')));
-$password = (string)(getenv('KICKCRAFT_OWNER_PASSWORD') ?: '');
+$name = trim((string)(configValue('KICKCRAFT_OWNER_NAME') ?: ''));
+$email = strtolower(trim((string)(configValue('KICKCRAFT_OWNER_EMAIL') ?: '')));
+$password = (string)(configValue('KICKCRAFT_OWNER_PASSWORD') ?: '');
 
 if ($name === '' || !filter_var($email, FILTER_VALIDATE_EMAIL) || strlen($password) < 8) {
     fwrite(STDERR, "Set KICKCRAFT_OWNER_NAME, KICKCRAFT_OWNER_EMAIL, and an 8+ character KICKCRAFT_OWNER_PASSWORD in api/.env.\n");

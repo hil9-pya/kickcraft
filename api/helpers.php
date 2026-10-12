@@ -60,7 +60,7 @@ function currentSessionUser(): ?array {
 
     try {
         $stmt = getDb()->prepare(
-            "SELECT id, name, email, role FROM users WHERE id = ? AND role = 'owner' AND deleted_at IS NULL AND permanently_deleted = 0"
+            "SELECT u.id, u.name, u.email, u.role, sp.status AS seller_status FROM users u LEFT JOIN seller_profiles sp ON sp.user_id=u.id WHERE u.id = ? AND u.role IN ('owner','seller') AND u.deleted_at IS NULL AND u.permanently_deleted = 0"
         );
         $stmt->execute([$_SESSION['user_id']]);
         $user = $stmt->fetch();
@@ -130,6 +130,14 @@ function formatShoeRow(array $row): array {
         'formattedPrice' => $formattedPrice,
         'stock' => (int)($row['stock'] ?? 0),
         'status' => (string)($row['status'] ?? 'available'),
+        'sellerUserId' => isset($row['seller_user_id']) ? (int)$row['seller_user_id'] : null,
+        'publicationState' => $row['publication_state'] ?? 'approved',
+        'reviewNote' => $row['review_note'] ?? '',
+        'sourceScanId' => $row['source_scan_id'] ?? null,
+        'sizes' => $decodeJson($row['sizes'] ?? '[7,8,9,10,11]'),
+        'storeName' => $row['seller_store_name'] ?? 'KickCraft Flagship Studio',
+        'pickupAddress' => $row['pickup_address'] ?? 'KickCraft Flagship Studio — contact pickup desk for directions',
+        'storeContact' => $row['seller_contact'] ?? '',
         'glbPath' => (string)($row['glb_path'] ?? ''),
         'thumbnailPath' => (string)($row['thumbnail_path'] ?? '/images/kickcraft-one-card.png'),
         'charmsEnabled' => (bool)($row['charms_enabled'] ?? true),
@@ -179,6 +187,9 @@ function formatReservationRow(array $row): array {
 
     return [
         'id' => (string)($row['id'] ?? ''),
+        'sellerUserId' => isset($row['seller_user_id']) ? (int)$row['seller_user_id'] : null,
+        'pickupStore' => $row['pickup_store'] ?? 'KickCraft Flagship Studio',
+        'pickupAddress' => $row['pickup_address'] ?? 'KickCraft Flagship Studio — contact pickup desk for directions',
         'customerName' => (string)($row['customer_name'] ?? ''),
         'email' => $email,
         'customerEmail' => $email,
@@ -197,4 +208,17 @@ function formatReservationRow(array $row): array {
         'createdAt' => $row['created_at'] ?? null,
         'updatedAt' => $row['updated_at'] ?? null,
     ];
+}
+
+function requireApprovedSeller(): array {
+    $user=currentSessionUser();
+    if (!$user) jsonError('Authentication required',401);
+    if ($user['role']!=='seller' || ($user['seller_status'] ?? '')!=='approved') jsonError('An approved seller account is required',403);
+    return $user;
+}
+function requireScanAccess(): array {
+    $user=currentSessionUser();
+    if (!$user) jsonError('Authentication required',401);
+    if ($user['role']==='owner') return $user;
+    return requireApprovedSeller();
 }

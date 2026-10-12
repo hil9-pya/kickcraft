@@ -2,16 +2,17 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { CATALOG, CATEGORIES, filterCatalog, prioritizeLiveCatalog } from '../src/customization.js'
 
-test('defines all 6 required categories', () => {
+test('defines store and seller marketplace categories', () => {
   assert.deepEqual(CATEGORIES.map(c => c.id), [
     'all',
+    'marketplace',
     'kickcraft',
     'fashion',
     'sneakers',
     'basketball',
     'running',
   ])
-  assert.equal(CATEGORIES.length, 6)
+  assert.equal(CATEGORIES.length, 7)
   assert.equal(CATEGORIES[0].label, 'All')
 })
 

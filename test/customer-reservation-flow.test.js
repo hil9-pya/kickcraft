@@ -294,8 +294,8 @@ test('Reservation success dialog renders spring pop animation, brutalist verific
   )
   assert.match(
     successContent,
-    /123 Craft Studio Way,\s*Manila/,
-    'Success view must display store pickup address "123 Craft Studio Way, Manila"'
+    /reservationReceipt\?\.pickupStore[\s\S]*reservationReceipt\?\.pickupAddress/,
+    'Success view must display the server-confirmed pickup store and address'
   )
   assert.match(
     successContent,

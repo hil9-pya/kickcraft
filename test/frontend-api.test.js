@@ -13,16 +13,21 @@ test('src/api.js exists and exports api function with credentials include', () =
   assert.match(code, /credentials:\s*['"]include['"]/i, 'Must specify credentials: include')
 })
 
-test('vite.config.js contains /api proxy configuration targeting backend', () => {
-  const vitePath = path.join(ROOT_DIR, 'vite.config.js')
-  assert.ok(fs.existsSync(vitePath), 'vite.config.js must exist')
-  const code = fs.readFileSync(vitePath, 'utf8')
-  assert.match(code, /proxy:\s*\{/i, 'vite.config.js must define server.proxy')
-  assert.match(code, /['"]\/api['"]\s*:\s*\{/i, 'proxy must include /api route')
-  assert.match(code, /target:\s*['"]http:\/\/localhost\/kickcraft['"]/i, 'proxy must target http://localhost/kickcraft')
-  assert.match(code, /changeOrigin:\s*true/i, 'proxy must set changeOrigin: true')
+test('Vite proxy keeps the original default and permits isolated scan development', async () => {
+  const previous = process.env.KICKCRAFT_API_TARGET
+  try {
+    delete process.env.KICKCRAFT_API_TARGET
+    const defaults = (await import('../vite.config.js?scan-default')).default
+    assert.equal(defaults.server.proxy['/api'].target, 'http://localhost/kickcraft')
+    assert.equal(defaults.server.proxy['/api'].changeOrigin, true)
+    process.env.KICKCRAFT_API_TARGET = 'http://localhost/kickcraft-photo-scan'
+    const isolated = (await import('../vite.config.js?scan-isolated')).default
+    assert.equal(isolated.server.proxy['/api'].target, 'http://localhost/kickcraft-photo-scan')
+  } finally {
+    if (previous === undefined) delete process.env.KICKCRAFT_API_TARGET
+    else process.env.KICKCRAFT_API_TARGET = previous
+  }
 })
-
 test('api() performs GET request with normalized endpoint and credentials', async () => {
   const { api } = await import('../src/api.js')
   const originalFetch = globalThis.fetch

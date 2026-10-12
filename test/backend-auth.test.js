@@ -72,7 +72,7 @@ test('login.php enforces POST, prepared statements, bcrypt verification, and ses
   assert.match(code, /deleted_at\s+IS\s+NULL/i, 'Must check deleted_at IS NULL')
   assert.match(code, /permanently_deleted\s*=\s*0/i, 'Must check permanently_deleted = 0')
   assert.match(code, /prepare\s*\(/i, 'Must use PDO prepare')
-  assert.match(code, /role\s*=\s*['"]owner['"]/i, 'Customer accounts must not be able to log in')
+  assert.match(code, /role\s+IN\s*\(\s*['"]owner['"]\s*,\s*['"]seller['"]\s*\)/i, 'Only owners and sellers may sign in')
 })
 
 test('logout.php destroys session and returns success', () => {
@@ -99,8 +99,11 @@ test('session.php checks active user session and validates in DB', () => {
   assert.match(code, /authenticated/i, 'Must return authenticated flag')
 })
 
-test('public customer registration endpoint is removed', () => {
-  assert.equal(fs.existsSync(path.join(AUTH_DIR, 'register.php')), false)
+test('public registration creates pending sellers only', () => {
+  const code=fs.readFileSync(path.join(AUTH_DIR,'register.php'),'utf8')
+  assert.match(code,/INSERT INTO users[\s\S]*'seller'/)
+  assert.match(code,/seller_profiles/)
+  assert.doesNotMatch(code,/\$body\[['"]role['"]\]/)
 })
 
 test('users.php enforces requireAdmin and supports archived toggle', () => {

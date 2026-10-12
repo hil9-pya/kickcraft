@@ -16,7 +16,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost/kickcraft',
+        target: process.env.KICKCRAFT_API_TARGET || 'http://localhost/kickcraft',
         changeOrigin: true,
       },
     },

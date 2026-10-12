@@ -3,6 +3,7 @@ import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 
 import ConfirmModal from './components/ConfirmModal.vue'
 import KickCraftCalendar from './components/KickCraftCalendar.vue'
 import { api } from './api.js'
+import {publicCatalog,palettePresets} from './seller.js'
 import { adminShoeToCatalogCard } from './admin.js'
 import {
   CATALOG,
@@ -12,14 +13,18 @@ import {
   buildPartColorway,
   charmScale,
   charmSource,
+  availableCharms,
   filterCatalog,
   prioritizeLiveCatalog,
   setMaterialColor,
+  prepareScanMaterials,
+  restoreMaterialColor,
 } from './customization.js'
 
 const AdminPanel = defineAsyncComponent(() => import('./components/AdminPanel.vue'))
 
-const sizes = [7, 8, 9, 10, 11]
+const SellerAccess = defineAsyncComponent(() => import('./components/SellerAccess.vue'))
+const SellerDashboard = defineAsyncComponent(() => import('./components/SellerDashboard.vue'))
 const colors = [
   { name: 'Chalk', value: '#f1efe8' },
   { name: 'Graphite', value: '#292b2d' },
@@ -37,7 +42,8 @@ const COLORWAY_PRESETS = [
 ]
 
 const adminShoes = ref([])
-const currentUser = ref(null) // owner/admin only
+const currentUser = ref(null)
+const catalogLoaded = ref(false)
 const catalogLoading = ref(false)
 const catalogError = ref('')
 
@@ -46,9 +52,10 @@ async function loadCatalog() {
   catalogError.value = ''
   try {
     const shoesRes = await api('shoes/list.php')
-    if (Array.isArray(shoesRes?.shoes) && shoesRes.shoes.length > 0) {
-      adminShoes.value = shoesRes.shoes
-    }
+    if (!Array.isArray(shoesRes?.shoes)) throw new Error('Catalog response is incomplete.')
+    adminShoes.value = shoesRes.shoes
+    catalogLoaded.value = true
+    if (view.value === 'studio' && !shoesRes.shoes.some(shoe => shoe.id === selectedShoeId.value)) goToShop()
   } catch (err) {
     catalogError.value = err.message || 'Could not load the latest shoe catalog.'
   } finally {
@@ -108,9 +115,8 @@ onMounted(async () => {
 
 })
 
-function onShoesChanged(updatedShoes) {
-  adminShoes.value = updatedShoes
-}
+function onShoesChanged() { loadCatalog() }
+function sellerAuthenticated(user) {currentUser.value=user;view.value=user.role==='owner'?'admin':'seller'}
 
 const modelViewer = ref(null)
 const selectedShoeId = ref(SHOES[0].id)
@@ -126,12 +132,16 @@ const selectedShoe = computed(() => {
   return SHOES.find(shoe => shoe.id === selectedShoeId.value) || SHOES[0]
 })
 
+const sizes = computed(() => selectedShoe.value.sizes || [7,8,9,10,11])
+
 const shoeColors = computed(() => {
   if (selectedShoe.value?.colors && selectedShoe.value.colors.length) {
     return selectedShoe.value.colors
   }
   return colors
 })
+
+const productPresets=computed(()=>{const supported=COLORWAY_PRESETS.filter(p=>p.colors.every(c=>shoeColors.value.some(s=>s.value===c.value)));return supported.length?supported:palettePresets(shoeColors.value)})
 
 const selectedParts = computed(() => selectedShoe.value.parts || [])
 const selectedPartId = ref(selectedParts.value[0]?.id || 'upper')
@@ -306,23 +316,18 @@ const selectedPart = computed(() => selectedParts.value.find(part => part.id ===
 const selectedCharm = computed(() => CHARMS.find(charm => charm.id === selectedCharmId.value))
 const customizedCount = computed(() => Object.keys(partColors.value).length)
 const selectedColor = computed(() => partColors.value[selectedPartId.value])
-const charmModels = computed(() => CHARMS
+const charmOptions = computed(() => availableCharms(selectedShoe.value))
+const charmModels = computed(() => charmOptions.value
   .filter(charm => charm.src)
   .map(charm => ({ ...charm, src: charmSource(charm, selectedShoe.value) })))
 
 const searchQuery = ref('')
 const activeCategory = ref('all')
 
-const dynamicCatalog = computed(() => {
-  const adminIds = new Set(adminShoes.value.map(s => s.id))
-  const cardsFromAdmin = adminShoes.value.map(adminShoeToCatalogCard)
-
-  const remaining = CATALOG.filter(c => !adminIds.has(c.id))
-  return [...cardsFromAdmin, ...remaining]
-})
+const dynamicCatalog = computed(() => publicCatalog(adminShoes.value.map(adminShoeToCatalogCard),catalogLoaded.value,CATALOG.filter(card=>card.categories.includes('kickcraft'))))
 
 const filteredCatalog = computed(() => {
-  return filterCatalog(dynamicCatalog.value, searchQuery.value, activeCategory.value)
+  return filterCatalog(view.value==='marketplace'?dynamicCatalog.value.filter(card=>card.sellerUserId):dynamicCatalog.value, searchQuery.value, activeCategory.value)
 })
 const displayCatalog = computed(() => prioritizeLiveCatalog(filteredCatalog.value))
 const liveCatalogCount = computed(() => displayCatalog.value.filter(card => card.status === 'live').length)
@@ -332,7 +337,9 @@ function clearFilters() {
   activeCategory.value = 'all'
 }
 
-function handleModelLoad() {
+async function handleModelLoad() {
+  const loadingShoe = selectedShoeId.value
+  const loadingViewer = modelViewer.value
   const model = modelViewer.value?.model
   const missingPart = selectedParts.value.find(part => !model?.getMaterialByName(part.material))
 
@@ -341,6 +348,13 @@ function handleModelLoad() {
     return
   }
 
+  try {
+    await prepareScanMaterials(loadingViewer, selectedParts.value)
+    if (loadingShoe !== selectedShoeId.value || model !== modelViewer.value?.model) return
+  } catch (error) {
+    if (loadingShoe === selectedShoeId.value) modelError.value = error.message || 'Could not prepare scan textures.'
+    return
+  }
   modelReady.value = true
   modelError.value = ''
 
@@ -392,7 +406,7 @@ function applyColorway(preset) {
 
 function resetDesign() {
   if (!modelReady.value) return
-  if (selectedParts.value.every(part => setMaterialColor(modelViewer.value.model, part.material, '#ffffff'))) {
+  if (selectedParts.value.every(part => restoreMaterialColor(modelViewer.value.model, part.material))) {
     partColors.value = {}
   }
 }
@@ -402,13 +416,13 @@ function requestResetDesign() {
   confirmModal.value = {
     show: true,
     title: 'Reset Custom Design?',
-    message: 'This will reset all custom color choices back to original white/chalk. Your current combination will be lost.',
-    confirmText: 'Reset to White',
+    message: 'This will reset all custom color choices back to the original appearance. Your current combination will be lost.',
+    confirmText: 'Restore Original',
     cancelText: 'Keep My Design',
     variant: 'warning',
     icon: 'reset',
     onConfirm: () => {
-      if (selectedParts.value.every(part => setMaterialColor(modelViewer.value.model, part.material, '#ffffff'))) {
+      if (selectedParts.value.every(part => restoreMaterialColor(modelViewer.value.model, part.material))) {
         partColors.value = {}
       }
     },
@@ -693,7 +707,7 @@ function getInitialView() {
     const target = (cleanPath && cleanPath !== 'index.html') ? cleanPath : hash
 
     if (target) {
-      if (['shop', 'studio', 'track'].includes(target)) {
+      if (['shop', 'studio', 'track', 'seller', 'seller-register', 'marketplace'].includes(target)) {
         return target
       }
       if (target === 'admin') {
@@ -704,7 +718,7 @@ function getInitialView() {
 
     try {
       const saved = localStorage.getItem('kickcraft_view')
-      if (saved && ['shop', 'studio', 'admin', 'track'].includes(saved)) {
+      if (saved && ['shop', 'studio', 'admin', 'track', 'seller', 'marketplace'].includes(saved)) {
         return saved === 'admin' ? 'login' : saved
       }
     } catch (_) {}
@@ -728,7 +742,8 @@ function resolveCurrentRoute() {
     return
   }
 
-  if (['studio', 'track'].includes(target)) {
+  if (['studio', 'track', 'seller', 'seller-register', 'marketplace'].includes(target)) {
+    if(target==='marketplace')activeCategory.value='all'
     view.value = target
     notFoundPath.value = ''
     return
@@ -796,7 +811,7 @@ function requestLogout() {
   confirmModal.value = {
     show: true,
     title: 'Sign Out of KickCraft?',
-    message: 'You will be signed out of the Owner Portal.',
+    message: 'You will be signed out of KickCraft.',
     confirmText: 'Sign Out',
     cancelText: 'Stay Logged In',
     variant: 'default',
@@ -834,9 +849,9 @@ async function handleLoginSubmit() {
       },
     })
     currentUser.value = res.user
-    loginFeedback.value = 'Owner login successful. Redirecting…'
+    loginFeedback.value = 'Login successful. Redirecting…'
     setTimeout(() => {
-      goToAdmin()
+      sellerAuthenticated(res.user)
     }, 400)
   } catch (err) {
     loginError.value = err.message || 'Login failed'
@@ -848,8 +863,8 @@ async function handleLoginSubmit() {
 function resetStudioState() {
   partColors.value = {}
   selectedCharmId.value = 'none'
-  selectedPartId.value = selectedParts.value[0].id
-  selectedSize.value = 9
+  selectedPartId.value = selectedParts.value[0]?.id || 'upper'
+  selectedSize.value = sizes.value.includes(9) ? 9 : sizes.value[0]
   modelReady.value = false
   modelError.value = ''
   reserved.value = false
@@ -858,6 +873,7 @@ function resetStudioState() {
 }
 
 function goToStudio(shoeId) {
+  if (catalogLoaded.value && !adminShoes.value.some(shoe=>shoe.id===shoeId)) {catalogError.value='This shoe is no longer available.';return}
   selectedShoeId.value = shoeId
   resetStudioState()
   notFoundPath.value = ''
@@ -866,6 +882,7 @@ function goToStudio(shoeId) {
 }
 
 function goToShop() {
+  activeCategory.value='all'
   selectedShoeId.value = SHOES[0].id
   resetStudioState()
   notFoundPath.value = ''
@@ -883,7 +900,7 @@ function scrollToTop() {
 
     <!-- ── Header ───────────────────────────────────────────── -->
     <header class="border-b border-[#cfd2ce] bg-[#fcfdfb]">
-      <div class="mx-auto flex h-14 max-w-[1480px] items-center justify-between px-5 lg:px-8">
+      <div class="mx-auto flex min-h-14 max-w-[1480px] flex-wrap items-center justify-between gap-3 py-3 sm:flex-nowrap sm:py-0 px-5 lg:px-8">
         <button
           class="flex items-center gap-3 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#245fa8]"
           @click="goToShop"
@@ -891,7 +908,7 @@ function scrollToTop() {
           <span class="grid size-7 place-items-center bg-[#292b2d] text-xs font-black text-white">K</span>
           <span class="font-display text-base font-extrabold tracking-[-0.03em]">KickCraft</span>
         </button>
-        <nav class="flex h-full items-center gap-4 text-[13px] font-semibold sm:gap-6" aria-label="Main navigation">
+        <nav class="flex min-h-8 flex-wrap items-center gap-4 text-[13px] font-semibold sm:gap-6" aria-label="Main navigation">
           <!-- Shop link (hide when in admin to avoid redundant buttons) -->
           <button
             v-if="view !== 'admin'"
@@ -930,6 +947,8 @@ function scrollToTop() {
             Admin Portal
           </button>
 
+          <a href="#marketplace" class="text-[#5f635f] hover:text-[#b94d27]">Marketplace</a>
+          <a v-if="currentUser?.role !== 'owner'" href="#seller" class="text-[#5f635f] hover:text-[#b94d27]">{{currentUser?.role==='seller'?'Seller Studio':'Sell with us'}}</a>
           <!-- User session / Auth buttons -->
           <template v-if="currentUser">
             <span class="hidden text-xs text-[#6a6e6a] sm:inline">
@@ -948,7 +967,7 @@ function scrollToTop() {
     </header>
 
     <div
-      v-if="catalogError && ['shop', 'studio', 'track'].includes(view)"
+      v-if="catalogError && ['shop', 'studio', 'track', 'marketplace'].includes(view)"
       role="alert"
       class="border-b border-[#d5a28f] bg-[#fdf2ef]"
     >
@@ -968,10 +987,10 @@ function scrollToTop() {
     <!-- ══════════════════════════════════════════════════════ -->
     <!-- SHOP VIEW                                              -->
     <!-- ══════════════════════════════════════════════════════ -->
-    <main v-if="view === 'shop'" class="mx-auto max-w-[1480px] px-5 py-8 lg:px-8 lg:py-10">
+    <main v-if="view === 'shop' || view === 'marketplace'" class="mx-auto max-w-[1480px] px-5 py-8 lg:px-8 lg:py-10">
 
       <!-- The product is the hero: a real, interactive local 3D shoe. -->
-      <section class="mb-8 grid overflow-hidden border border-[#bfc3bf] bg-[#fcfdfb] lg:grid-cols-[minmax(320px,.72fr)_minmax(0,1.28fr)]" aria-labelledby="shop-heading">
+      <section v-if="view==='shop'" class="mb-8 grid overflow-hidden border border-[#bfc3bf] bg-[#fcfdfb] lg:grid-cols-[minmax(320px,.72fr)_minmax(0,1.28fr)]" aria-labelledby="shop-heading">
         <div class="flex flex-col justify-center border-b border-[#bfc3bf] p-7 sm:p-9 lg:border-b-0 lg:border-r lg:p-10">
           <h1 id="shop-heading" class="font-display max-w-lg text-4xl font-black leading-[0.95] tracking-[-0.045em] text-[#202220] sm:text-5xl">
             Build your pair in 3D.
@@ -1018,6 +1037,7 @@ function scrollToTop() {
         </div>
       </section>
 
+      <div v-if="view==='marketplace'" class="mb-7 border-b border-[#cfd2ce] pb-6"><h1 class="font-display text-3xl font-black">Original shoes from approved studios</h1><p class="mt-2 text-[#626662]">Customize independent parts, choose your size, and reserve for pickup at the seller’s store.</p></div>
       <!-- Search & Filters Toolbar -->
       <div class="mb-8 space-y-3 border-y border-[#cfd2ce] py-4">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -1148,7 +1168,7 @@ function scrollToTop() {
             <div class="flex flex-1 flex-col p-5">
               <div class="flex items-start justify-between gap-3">
                 <div>
-                  <h2 class="font-display text-xl font-black tracking-[-0.03em] text-[#202220]">{{ card.name }}</h2>
+                  <h2 class="font-display text-xl font-black tracking-[-0.03em] text-[#202220]">{{ card.name }}</h2><p v-if="card.storeName" class="mt-1 text-xs font-semibold text-[#626662]">{{card.storeName}}</p>
                   <p class="mt-0.5 text-xs text-[#6a6e6a]">{{ card.subtitle }}</p>
                 </div>
                 <p class="shrink-0 text-lg font-black text-[#b94d27]">{{ card.price }}</p>
@@ -1318,7 +1338,7 @@ function scrollToTop() {
                 <h2 class="font-display text-2xl font-black tracking-[-0.04em] text-[#202220]">{{ selectedShoe.name }}</h2>
                 <p class="mt-1 text-sm leading-6 text-[#626662]">{{ selectedShoe.description }}</p>
               </div>
-              <p class="shrink-0 text-xl font-black text-[#b94d27]">{{ selectedShoe.price }}</p>
+              <p class="shrink-0 text-xl font-black text-[#b94d27]">{{ selectedShoe.formattedPrice || selectedShoe.price }}</p>
             </div>
           </div>
 
@@ -1339,7 +1359,7 @@ function scrollToTop() {
               </div>
               <div class="grid grid-cols-2 gap-2">
                 <button
-                  v-for="preset in COLORWAY_PRESETS"
+                  v-for="preset in productPresets"
                   :key="preset.name"
                   type="button"
                   class="flex min-h-10 items-center justify-between border border-[#c5c9c5] bg-white px-3 text-left text-xs font-semibold hover:border-[#6f746f] disabled:opacity-50"
@@ -1409,7 +1429,7 @@ function scrollToTop() {
               </div>
               <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2">
                 <button
-                  v-for="charm in CHARMS"
+                  v-for="charm in charmOptions"
                   :key="charm.id"
                   type="button"
                   class="min-h-10 border px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#245fa8]"
@@ -1525,7 +1545,7 @@ function scrollToTop() {
         </div>
         <div class="p-4">
           <p class="font-display text-base font-bold">In-store pickup</p>
-          <p class="mt-1 text-sm leading-5 text-white/65">Reserve online, then inspect and collect in store.</p>
+          <p class="mt-1 text-sm leading-5 text-white/65">{{selectedShoe.storeName || 'KickCraft Flagship Studio'}} — {{selectedShoe.pickupAddress || 'Contact pickup desk for directions'}}</p>
         </div>
       </div>
 
@@ -1555,6 +1575,12 @@ function scrollToTop() {
       @open-studio="goToStudio"
       @shoes-changed="onShoesChanged"
     />
+
+    <template v-else-if="['seller','seller-register'].includes(view)">
+      <SellerDashboard v-if="currentUser?.role==='seller'" :key="currentUser.id" :user="currentUser" @changed="loadCatalog" @signed-out="currentUser=null" />
+      <main v-else-if="currentUser?.role==='owner'" class="mx-auto max-w-2xl p-8"><p>You are signed in as owner. Use Seller applications in the Admin Portal to review studios.</p><button class="mt-4 border p-3" @click="goToAdmin">Open Admin Portal</button></main>
+      <SellerAccess v-else :key="view" :register="view==='seller-register'" @authenticated="sellerAuthenticated" />
+    </template>
 
     <!-- ══════════════════════════════════════════════════════ -->
     <!-- LOGIN VIEW                                             -->
@@ -1751,7 +1777,7 @@ function scrollToTop() {
             <dl class="grid gap-px bg-[#d9dcd8] sm:grid-cols-2">
               <div class="bg-white py-4 sm:pr-4">
                 <dt class="text-xs font-bold text-[#6a6e6a]">Pickup date</dt>
-                <dd class="mt-1 text-sm font-semibold text-[#202220]">{{ trackedReservation.pickupDate }}</dd>
+                <dd class="mt-1 text-sm font-semibold text-[#202220]">{{ trackedReservation.pickupDate }}<br>{{trackedReservation.pickupStore}}<br>{{trackedReservation.pickupAddress}}</dd>
               </div>
               <div class="bg-white py-4 sm:pl-4">
                 <dt class="text-xs font-bold text-[#6a6e6a]">Accessory</dt>
@@ -1976,6 +2002,7 @@ function scrollToTop() {
             <span class="text-[#626662]">Estimated Total:</span>
             <span class="font-bold text-[#292b2d]">{{ selectedShoe.formattedPrice || '₱4,890' }}</span>
           </div>
+          <p class="text-sm"><strong>{{selectedShoe.storeName || 'KickCraft Flagship Studio'}}</strong><br>{{selectedShoe.pickupAddress || 'Contact pickup desk for directions'}}</p>
           <p class="text-xs text-[#737773]">No online charge today. Payment is collected upon inspection and pickup in-store.</p>
           <button
             type="submit"
@@ -2039,7 +2066,7 @@ function scrollToTop() {
           </div>
           <div class="flex items-start justify-between border-b border-[#e2e5e1] py-2">
             <span class="font-semibold text-[#626662]">Store address</span>
-            <span class="font-medium text-right text-[#292b2d]">123 Craft Studio Way, Manila</span>
+            <span class="font-medium text-right text-[#292b2d]">{{reservationReceipt?.pickupStore}} — {{reservationReceipt?.pickupAddress}}</span>
           </div>
           <div class="flex items-start justify-between pt-2">
             <span class="font-semibold text-[#626662]">Status</span>
@@ -2210,4 +2237,3 @@ function scrollToTop() {
   animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 </style>
-

@@ -25,6 +25,7 @@ export async function api(endpoint, options = {}) {
   const isFormData = typeof FormData !== 'undefined' && body instanceof FormData
   const headers = {
     ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+    'X-Requested-With': 'KickCraft',
     ...(options.headers || {}),
   }
 

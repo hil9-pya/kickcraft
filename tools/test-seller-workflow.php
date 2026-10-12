@@ -1,0 +1,151 @@
+<?php
+if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
+require_once __DIR__.'/../api/scans/common.php';
+session_write_close();
+if(configValue('DB_NAME')!=='kickcraft_photo_scan_dev') throw new RuntimeException('Isolated scan database required');
+$options=getopt('', ['base:','scan:']);$base=rtrim($options['base']??'http://localhost:5174/api','/');
+if(!in_array(parse_url($base,PHP_URL_HOST),['localhost','127.0.0.1'],true))throw new RuntimeException('Test target must be localhost');
+$db=getDb();$ids=[];$products=[];$receipts=[];$jobs=[];$checks=0;
+function check($ok,string $message): void {global $checks;if(!$ok)throw new RuntimeException($message);$checks++;}
+function req(string $path,string $cookie='', $body=null,array $headers=[]): array {
+ global $base;$h=curl_init($base.'/'.$path);$all=array_filter($headers,fn($h)=>str_starts_with(strtolower($h),'x-requested-with:'))?[]:['X-Requested-With: KickCraft'];
+ if($body!==null && !is_array($body))$all[]='Content-Type: application/json';
+ curl_setopt_array($h,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_HEADER=>true,CURLOPT_TIMEOUT=>30,CURLOPT_COOKIE=>$cookie,CURLOPT_HTTPHEADER=>array_merge($all,$headers)]);
+ if($body!==null){curl_setopt($h,CURLOPT_POST,true);curl_setopt($h,CURLOPT_POSTFIELDS,is_array($body)?$body:$body);}
+ $raw=curl_exec($h);if($raw===false)throw new RuntimeException(curl_error($h));
+ $size=curl_getinfo($h,CURLINFO_HEADER_SIZE);$data=json_decode(substr($raw,$size),true);
+ preg_match_all('/^Set-Cookie:\s*([^;\r\n]+)/mi',substr($raw,0,$size),$cookies);
+ return ['status'=>curl_getinfo($h,CURLINFO_RESPONSE_CODE),'data'=>$data,'cookie'=>end($cookies[1])?:''];
+}
+function post(string $path,string $cookie,array $body,array $headers=[]): array {return req($path,$cookie,json_encode($body),$headers);}
+function raceCheckout(array $body): array {
+ global $base;$multi=curl_multi_init();$handles=[];$results=[];
+ for($i=0;$i<2;$i++){$h=curl_init($base.'/reservations/create.php');curl_setopt_array($h,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>json_encode($body),CURLOPT_TIMEOUT=>30,CURLOPT_HTTPHEADER=>['X-Requested-With: KickCraft','Content-Type: application/json']]);$handles[]=$h;curl_multi_add_handle($multi,$h);}
+ do{curl_multi_exec($multi,$running);if($running)curl_multi_select($multi,1);}while($running);
+ foreach($handles as $h){$results[]=['status'=>curl_getinfo($h,CURLINFO_RESPONSE_CODE),'data'=>json_decode(curl_multi_getcontent($h),true)];curl_multi_remove_handle($multi,$h);}curl_multi_close($multi);return $results;
+}
+function signIn(string $email,string $password): string {$r=post('auth/login.php','',['email'=>$email,'password'=>$password]);check($r['status']===200,'Login failed: '.json_encode($r['data']));return $r['cookie'];}
+try {
+ $admin=signIn(configValue('KICKCRAFT_OWNER_EMAIL'),configValue('KICKCRAFT_OWNER_PASSWORD'));
+ $password=bin2hex(random_bytes(16));$accounts=[];
+ foreach([1,2] as $n){
+  $email='seller-check-'.bin2hex(random_bytes(5)).'@example.com';
+  $form=['name'=>'Seller Verification '.$n,'email'=>$email,'password'=>$password,'confirmPassword'=>$password,'storeName'=>'Verification Studio '.$n,'description'=>'Original shoes for local verification','pickupAddress'=>'Studio '.$n.', Verification Street'];
+  $r=post('auth/register.php','',$form);check($r['status']===201,'Registration expected 201, got '.$r['status'].': '.json_encode($r['data']));
+  $ids[]=$r['data']['user']['id'];$id=end($ids);$cookie=signIn($email,$password);$accounts[]=['id'=>$id,'cookie'=>$cookie,'form'=>$form];
+  check(post('auth/register.php','',$form)['status']===409,'Duplicate account allowed');
+  check(req('sellers/profile.php',$cookie)['data']['seller']['status']==='pending','Seller not pending');
+  check(post('scans/create.php',$cookie,[],['X-Requested-With: KickCraftScan'])['status']===403,'Pending seller scanning allowed');
+  check(req('sellers/list.php',$cookie)['status']===403,'Seller got admin list');
+  check(post('sellers/review.php',$cookie,['id'=>$id,'status'=>'approved'])['status']===403,'Seller self-approved');
+  check(post('sellers/review.php',$admin,['id'=>$id,'status'=>'approved'])['status']===200,'Admin could not approve');
+  check(req('sellers/profile.php',$cookie)['data']['seller']['status']==='approved','Existing session missed approval');
+  $hash=$db->prepare('SELECT password_hash FROM users WHERE id=?');$hash->execute([$id]);check(password_verify($password,$hash->fetchColumn()),'Password not securely stored');
+ }
+ $a=$accounts[0];$b=$accounts[1];
+ check(post('auth/register.php','',array_merge($a['form'],['email'=>'invalid']))['status']===422,'Invalid email accepted');
+ check(post('auth/register.php','',array_merge($a['form'],['email'=>'bad-pass@example.com','password'=>'short','confirmPassword'=>'short']))['status']===422,'Weak password accepted');
+ check(post('auth/register.php','',$a['form'],['Origin: https://untrusted.invalid'])['status']===403,'Untrusted registration accepted');
+ check(post('sellers/review.php',$admin,['id'=>$a['id'],'status'=>'suspended','note'=>'Verification suspension'])['status']===200,'Suspend failed');
+ check(post('scans/create.php',$a['cookie'],[],['X-Requested-With: KickCraftScan'])['status']===403,'Suspended session kept scanning');
+ check(post('sellers/review.php',$admin,['id'=>$a['id'],'status'=>'approved'])['status']===200,'Restore approval failed');
+ $upload=req('products/upload.php',$a['cookie'],['file'=>new CURLFile(realpath(__DIR__.'/../public/models/shoe-soleview-final.glb'),'model/gltf-binary','original.glb'),'thumbnail'=>new CURLFile(realpath(__DIR__.'/../public/images/kickcraft-one-card.png'),'image/png','original.png')]);
+ check($upload['status']===201,'Multi-material GLB upload failed');$products[]=$upload['data']['shoe']['id'];
+ check(count($upload['data']['shoe']['parts'])===8 && $upload['data']['shoe']['charmsEnabled']===false,'Uploaded regions were guessed or unverified charm enabled');
+ $listed=req('products/list.php',$a['cookie'])['data']['shoes'];check(count($listed)===1,'Uploaded draft not owned by seller');
+ $r=post('products/create.php',$a['cookie'],['source'=>'template','template'=>'kickcraft-one']);check($r['status']===201,'Template draft creation failed: '.json_encode($r['data']));
+ $product=$r['data']['shoe'];$products[]=$product['id'];$pid=$product['id'];
+ check($product['sellerUserId']===$a['id'] && $product['publicationState']==='draft','Draft owner/state untrusted');
+ check(count($product['parts'])===8,'Original template parts missing');
+ check(post('products/create.php',$a['cookie'],['source'=>'template','template'=>'nike-air-max'])['status']===422,'Third-party template allowed');
+ check(post('products/create.php',$a['cookie'],['source'=>'scan','scanId'=>'250270ba-ce17-411a-8cf0-b3da60f40963'])['status']===404,'Foreign scan imported');
+ check(req('products/scan.php?id='.$pid)['status']===401,'Guest accessed private source review');
+ check(req('products/scan.php?id='.$pid,$a['cookie'])['status']===403,'Seller accessed admin source review');
+ check(req('products/scan.php?id='.$pid,$admin)['status']===404,'Template reported photographed source');
+ check(req('products/list.php',$b['cookie'])['data']['shoes']===[],'Foreign seller products listed');
+ $update=['id'=>$pid,'name'=>'Seller verification original','description'=>'Original template used only for integration verification','price'=>1234,'stock'=>1,'sizes'=>[8,9]];
+ check(post('products/save.php',$b['cookie'],$update)['status']===404,'Foreign product edited');
+ check(post('products/save.php',$a['cookie'],array_merge($update,['glbPath'=>'/models/private.glb']))['status']===422,'Arbitrary model path accepted');
+ check(post('products/save.php',$a['cookie'],$update)['status']===200,'Own product save failed');
+ $public=req('shoes/list.php')['data']['shoes'];check(!in_array($pid,array_column($public,'id'),true),'Draft visible publicly');
+ check(post('products/submit.php',$a['cookie'],['id'=>$pid])['data']['shoe']['publicationState']==='pending','Submit did not queue review');
+ check(post('products/review.php',$a['cookie'],['id'=>$pid,'status'=>'approved'])['status']===403,'Seller published own listing');
+ check(post('products/review.php',$admin,['id'=>$pid,'status'=>'approved'])['data']['shoe']['publicationState']==='approved','Admin publication failed');
+ check(in_array($pid,array_column(req('shoes/list.php')['data']['shoes'],'id'),true),'Approved listing not public');
+ check(post('sellers/review.php',$admin,['id'=>$a['id'],'status'=>'suspended','note'=>'Verification suspension'])['status']===200,'Suspension failed');
+ check(!in_array($pid,array_column(req('shoes/list.php')['data']['shoes'],'id'),true),'Suspended listing remained public');
+ check(post('products/save.php',$a['cookie'],$update)['status']===403,'Suspended seller edited product');
+ check(post('sellers/review.php',$admin,['id'=>$a['id'],'status'=>'approved'])['status']===200,'Approval restore failed');
+ check(post('products/save.php',$a['cookie'],$update)['data']['shoe']['publicationState']==='draft','Editing published listing did not withdraw it');
+ check(!in_array($pid,array_column(req('shoes/list.php')['data']['shoes'],'id'),true),'Edited listing stayed public');
+ $scan=post('scans/create.php',$a['cookie'],[],['X-Requested-With: KickCraftScan']);check($scan['status']===201,'Approved seller scan denied');$jobs[]=$scan['data']['job']['id'];
+ check(req('scans/status.php?id='.end($jobs),$b['cookie'])['status']===404,'Foreign seller scan visible');
+ check(in_array(end($jobs),array_column(req('scans/list.php',$a['cookie'])['data']['jobs'],'id'),true),'Own capture missing from recovery');
+ check(!in_array(end($jobs),array_column(req('scans/list.php',$b['cookie'])['data']['jobs'],'id'),true),'Foreign capture exposed in recovery');
+ if(isset($options['scan'])) {
+  $owner=$db->prepare('SELECT id FROM users WHERE email=?');$owner->execute([configValue('KICKCRAFT_OWNER_EMAIL')]);$source=scanJob($db,scanId($options['scan']),(int)$owner->fetchColumn());
+  check($source['state']==='finalized','Scan fixture must be a finalized owner capture');$draft=json_decode($source['finalized_payload'],true)['draft'];$jobId=end($jobs);$dir=scanJobDir($jobId);$sourceDir=scanJobDir($source['id']);
+  // Integration fixture reuses a real reconstruction; this does not assert seller capture quality.
+  check(copy($sourceDir.'/preview.glb',$dir.'/preview.glb'),'Cannot stage actual preview');$image=$source['images'][0];
+  check(copy($sourceDir.'/images/'.$image['file'],$dir.'/images/'.$image['file']),'Cannot stage source photo');
+  $db->prepare("UPDATE scan_jobs SET state='ready',output_glb='preview.glb',images=? WHERE id=?")->execute([json_encode([$image]),$jobId]);$project=dirname(__DIR__).'/public';
+  $multipart=['id'=>$jobId,'file'=>new CURLFile($project.$draft['glbPath'],'model/gltf-binary','scan.glb'),'neutralTexture'=>new CURLFile($project.$draft['parts'][0]['recolorTexturePath'],'image/png','neutral.png'),'thumbnail'=>new CURLFile($project.$draft['thumbnailPath'],'image/png','thumbnail.png'),'charmPoint'=>'null'];
+  check(req('scans/finalize.php',$b['cookie'],$multipart,['X-Requested-With: KickCraftScan'])['status']===404,'Foreign seller finalized scan');
+  check(req('scans/finalize.php',$a['cookie'],$multipart,['X-Requested-With: KickCraftScan'])['status']===200,'Seller region finalization failed');
+  $scanProduct=post('products/create.php',$a['cookie'],['source'=>'scan','scanId'=>$jobId]);check($scanProduct['status']===201,'Owned finalized scan import failed');$scanPid=$scanProduct['data']['shoe']['id'];$products[]=$scanPid;
+  check(post('products/create.php',$a['cookie'],['source'=>'scan','scanId'=>$jobId])['data']['shoe']['id']===$scanPid,'Scan retry duplicated listing');
+  check(!in_array($jobId,array_column(req('scans/list.php',$a['cookie'])['data']['jobs'],'id'),true),'Linked scan still offered as an unlinked draft');
+  check(req('products/scan.php?id='.$scanPid,$a['cookie'])['status']===403,'Seller accessed admin comparison');
+  $reference=req('products/scan.php?id='.$scanPid,$admin);check($reference['status']===200 && count($reference['data']['job']['images'])===1,'Admin source comparison missing');
+  check(!isset($reference['data']['job']['draft']) && !isset($reference['data']['job']['images'][0]['maskUrl']),'Admin review exposed unrelated draft assets');
+  $asset='products/scan-asset.php?id='.$scanPid.'&image='.$image['id'];check(req($asset)['status']===401,'Guest source photo exposed');check(req($asset,$b['cookie'])['status']===403,'Other seller source photo exposed');check(req($asset,$admin)['status']===200,'Admin could not read linked source photo');
+  check(post('products/save.php',$a['cookie'],['id'=>$scanPid,'name'=>'Synthetic scan integration fixture','description'=>'Copied actual reconstruction only for seller API tests, not physical fidelity proof.','price'=>1234,'stock'=>1,'sizes'=>[9]])['status']===200,'Scan details save failed');
+  check(post('products/submit.php',$a['cookie'],['id'=>$scanPid])['status']===200,'Scan submission failed');
+  check(post('products/review.php',$admin,['id'=>$scanPid,'status'=>'approved'])['status']===422,'Scan published without source comparison');
+  check(post('products/review.php',$admin,['id'=>$scanPid,'status'=>'approved','photoReviewed'=>true])['status']===200,'Explicit scan review attestation failed');
+ }
+ $pickup=(new DateTimeImmutable('today'))->modify('+8 days')->format('Y-m-d');
+ $checkout=['shoeId'=>$pid,'customerName'=>'Guest Verification','email'=>'guest-verification@example.com','pickupDate'=>$pickup,'size'=>8,'charmId'=>'none','partColors'=>['upper'=>['name'=>'Injected label','value'=>'#ffffff']],'price'=>1,'sellerUserId'=>$b['id']];
+ foreach(['customerName','email','pickupDate','shoeId','charmId'] as $field){$invalid=post('reservations/create.php','',array_merge($checkout,[$field=>['invalid']]));check($invalid['status']===400 && is_array($invalid['data']),'Malformed checkout '.$field.' broke JSON or passed validation');}
+ check(post('reservations/create.php','',array_merge($checkout,['customerName'=>str_repeat('x',256)]))['status']===400,'Oversized guest name accepted');
+ foreach(['id','status','notes'] as $field){$invalid=post('reservations/update-status.php',$a['cookie'],array_merge(['id'=>'invalid','status'=>'approved'],[$field=>['invalid']]));check($invalid['status']===400 && is_array($invalid['data']),'Malformed fulfillment '.$field.' broke JSON or passed validation');}
+ check(post('reservations/create.php','',$checkout)['status']===400,'Draft accepted checkout');
+ check(post('products/submit.php',$a['cookie'],['id'=>$pid])['status']===200,'Resubmit failed');
+ check(post('products/review.php',$admin,['id'=>$pid,'status'=>'approved'])['status']===200,'Reapproval failed');
+ check(post('reservations/create.php','',array_merge($checkout,['size'=>10]))['status']===400,'Unavailable size reserved');
+ $race=raceCheckout($checkout);$statuses=array_column($race,'status');sort($statuses);check($statuses===[201,400],'Concurrent last-pair checkout oversold or failed');$r=$race[0]['status']===201?$race[0]:$race[1];check($r['status']===201,'Guest checkout failed: '.json_encode($r['data']));$reservation=$r['data']['reservation'];$rid=$reservation['id'];$receipts[]=$rid;
+ check($reservation['price']==1234 && $reservation['sellerUserId']===$a['id'],'Checkout trusted browser price or owner');
+ check($reservation['pickupStore']===$a['form']['storeName'] && $reservation['pickupAddress']===$a['form']['pickupAddress'],'Pickup snapshots missing');
+ check($reservation['partColors']['upper']['name']==='White','Browser color label trusted');
+ check(post('reservations/create.php','',$checkout)['status']===400,'Last pair oversold');
+ check(post('products/save.php',$a['cookie'],array_merge($update,['expectedStock'=>1]))['status']===409,'Stale editor overwrote reserved stock');
+ check(post('reservations/update-status.php',$a['cookie'],['id'=>$rid,'status'=>'cancelled','notes'=>''])['status']===422,'Cancellation reason missing');
+ check(req('sellers/orders.php',$b['cookie'])['data']['reservations']===[],'Foreign orders listed');
+ check(post('reservations/update-status.php',$b['cookie'],['id'=>$rid,'status'=>'approved'])['status']===404,'Foreign order fulfilled');
+ check(post('sellers/review.php',$admin,['id'=>$a['id'],'status'=>'suspended','note'=>'Verification existing-session revocation'])['status']===200,'Suspend with orders failed');
+ check(post('reservations/update-status.php',$a['cookie'],['id'=>$rid,'status'=>'approved'])['status']===403,'Suspended session fulfilled an order');
+ check(post('sellers/review.php',$admin,['id'=>$a['id'],'status'=>'approved'])['status']===200,'Restore fulfillment permission failed');
+ check(post('reservations/update-status.php',$a['cookie'],['id'=>$rid,'status'=>'ready'])['status']===409,'Order skipped confirmation');
+ check(post('reservations/update-status.php',$a['cookie'],['id'=>$rid,'status'=>'cancelled','notes'=>'Verification cancellation'])['status']===200,'Seller cancellation failed');
+ check(post('reservations/update-status.php',$a['cookie'],['id'=>$rid,'status'=>'cancelled'])['status']===200,'Cancellation retry failed');
+ $stock=$db->prepare('SELECT stock FROM shoes WHERE id=?');$stock->execute([$pid]);check((int)$stock->fetchColumn()===1,'Cancellation restored stock more than once');
+ $r=post('reservations/create.php','',$checkout);check($r['status']===201,'Restored pair not reservable');$rid2=$r['data']['reservation']['id'];$receipts[]=$rid2;
+ foreach(['approved','ready','completed'] as $state)check(post('reservations/update-status.php',$a['cookie'],['id'=>$rid2,'status'=>$state])['status']===200,'Seller fulfillment failed: '.$state);
+ check(post('reservations/update-status.php',$a['cookie'],['id'=>$rid2,'status'=>'cancelled'])['status']===409,'Completed order reopened');
+ $orders=req('sellers/orders.php',$a['cookie'])['data']['reservations'];check(count($orders)===2,'Seller own orders missing');
+ check(post('sellers/update-profile.php',$a['cookie'],['storeName'=>'Changed verification studio','description'=>'New details','pickupAddress'=>'Changed pickup address'])['data']['seller']['status']==='pending','Address change did not require review');
+ $saved=$db->prepare('SELECT pickup_store,pickup_address FROM reservations WHERE id=?');$saved->execute([$rid2]);$snapshot=$saved->fetch();check($snapshot['pickup_store']===$a['form']['storeName'] && $snapshot['pickup_address']===$a['form']['pickupAddress'],'Store edit changed old receipt');
+ check(post('sellers/review.php',$admin,['id'=>$b['id'],'status'=>'rejected'])['status']===422,'Rejection without explanation accepted');
+ check(post('sellers/review.php',$admin,['id'=>$b['id'],'status'=>'rejected','note'=>'Clarify pickup directions'])['status']===200,'Request changes failed');
+ check(post('sellers/update-profile.php',$b['cookie'],$b['form'])['data']['seller']['status']==='pending','Corrected application did not return to pending');
+ check(post('products/create.php',$b['cookie'],['source'=>'template','template'=>'kickcraft-one'])['status']===403,'Resubmitted pending store unlocked products');
+ check(post('sellers/review.php',$admin,['id'=>$b['id'],'status'=>'approved'])['status']===200,'Corrected store approval failed');
+ check(post('sellers/update-profile.php',$b['cookie'],['tutorialStep'=>3])['data']['seller']['tutorialStep']===3,'Walkthrough progress was not saved');
+ check(req('sellers/profile.php',$b['cookie'])['data']['seller']['tutorialStep']===3,'Walkthrough progress did not persist');
+ echo "PASS: $checks seller workflow checks\n";
+} finally {
+ foreach($jobs as $id)$db->prepare("UPDATE scan_jobs SET state='failed',stage='Retired verification' WHERE id=? AND state NOT IN ('queued','processing')")->execute([$id]);
+ foreach($products as $id){$db->prepare('UPDATE shoes SET deleted_at=NOW() WHERE id=?')->execute([$id]);$db->prepare('UPDATE reservations SET deleted_at=NOW() WHERE shoe_id=?')->execute([$id]);}
+ foreach($receipts as $id)$db->prepare('UPDATE reservations SET deleted_at=NOW() WHERE id=?')->execute([$id]);
+ foreach($ids as $id)$db->prepare('UPDATE users SET deleted_at=NOW() WHERE id=?')->execute([$id]);
+}

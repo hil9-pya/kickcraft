@@ -63,9 +63,41 @@ export const SHOES = [
   },
 ]
 
+const scanMaterialTextures = new WeakMap()
+
+export async function prepareScanMaterials(viewer, parts) {
+  const model = viewer.model
+  for (const part of parts) {
+    if (!part.recolorTexturePath) continue
+    if (!/^\/images\/uploads\/[a-zA-Z0-9_-]+\.png$/.test(part.recolorTexturePath)) throw new Error('Invalid scan detail texture path.')
+    const material = model?.getMaterialByName(part.material)
+    if (!material) throw new Error('A scanned shoe part is missing.')
+    if (scanMaterialTextures.has(material)) continue
+    const pbr = material.pbrMetallicRoughness
+    const original = pbr.baseColorTexture.texture
+    const factor = [...pbr.baseColorFactor]
+    const neutral = await viewer.createTexture(part.recolorTexturePath)
+    if (!neutral || viewer.model !== model) throw new Error('Shoe changed while preparing scan textures. Reload the shoe.')
+    scanMaterialTextures.set(material, { original, factor, neutral })
+  }
+}
+
+export function restoreMaterialColor(model, materialName) {
+  const material = model?.getMaterialByName(materialName)
+  if (!material) return false
+  const saved = scanMaterialTextures.get(material)
+  if (saved) {
+    material.pbrMetallicRoughness.baseColorTexture.setTexture(saved.original)
+    material.pbrMetallicRoughness.setBaseColorFactor(saved.factor)
+  } else material.pbrMetallicRoughness.setBaseColorFactor('#ffffff')
+  return true
+}
+
 export function setMaterialColor(model, materialName, color) {
   const material = model?.getMaterialByName(materialName)
   if (!material) return false
+  const saved = scanMaterialTextures.get(material)
+  if (saved) material.pbrMetallicRoughness.baseColorTexture.setTexture(saved.neutral)
   material.pbrMetallicRoughness.setBaseColorFactor(color)
   return true
 }
@@ -82,6 +114,10 @@ export const CHARMS = [
   { id: 'k-tag', label: 'K tag', src: '/models/charms/k-tag-charm.glb' },
 ]
 
+export function availableCharms(shoe) {
+  return shoe?.charmsEnabled === false ? CHARMS.filter(charm => charm.id === 'none') : CHARMS
+}
+
 export function charmSource(charm, shoe) {
   if (!charm?.src || !shoe?.charmDir) return charm?.src || null
   return `${shoe.charmDir}${charm.src.split('/').pop()}`
@@ -93,6 +129,7 @@ export function charmScale(charmId, selectedCharmId, scale = '1 1 1') {
 
 export const CATEGORIES = [
   { id: 'all', label: 'All' },
+  { id: 'marketplace', label: 'Seller marketplace' },
   { id: 'kickcraft', label: 'KickCraft Original' },
   { id: 'fashion', label: 'Fashion' },
   { id: 'sneakers', label: 'Sneakers' },
@@ -216,4 +253,3 @@ export function filterCatalog(catalog, query = '', category = 'all') {
 export function prioritizeLiveCatalog(catalog) {
   return [...catalog].sort((a, b) => Number(b.status === 'live') - Number(a.status === 'live'))
 }
-

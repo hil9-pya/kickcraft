@@ -84,7 +84,7 @@ test('create.php enforces POST, transactions, DB price lookup, stock decrement, 
   assert.match(code, /beginTransaction\s*\(/i, 'Must wrap operations in a database transaction')
   assert.match(code, /commit\s*\(/i, 'Must commit transaction')
   assert.match(code, /rollBack\s*\(/i, 'Must rollback transaction on failure')
-  assert.match(code, /SELECT\s+.*price.*FROM\s+shoes/i, 'Must query shoe price directly from DB')
+  assert.match(code, /SELECT\s+(?:\*|[^'\n]*price[^'\n]*)\s+FROM\s+shoes/i, 'Must query shoe price directly from DB')
   assert.match(code, /FOR\s+UPDATE/i, 'Must lock shoe record during stock check to prevent race conditions')
   assert.match(code, /UPDATE\s+shoes\s+SET\s+stock/i, 'Must decrement shoe stock')
   assert.match(code, /INSERT\s+INTO\s+reservations/i, 'Must insert reservation record')
@@ -114,7 +114,7 @@ test('update-status.php enforces POST, requireAdmin, status validation, and prep
   const code = fs.readFileSync(filePath, 'utf8')
 
   assert.match(code, /requireMethod\s*\(\s*['"]POST['"]\s*\)/i, 'Must enforce POST method')
-  assert.match(code, /requireAdmin\s*\(\s*\)/i, 'Must require owner admin privileges')
+  assert.match(code, /requireApprovedSeller\s*\(\s*\)/i, 'Non-owner status updates require an approved seller')
   assert.match(code, /prepare\s*\(/i, 'Must use PDO prepare')
   assert.match(code, /UPDATE\s+reservations\s+SET\s+status/i, 'Must update reservation status')
   assert.match(code, /pending/i, 'Must validate against pending status')
@@ -202,7 +202,7 @@ require __DIR__ . '/update-status.php';
   try {
     const output = execSync(`php "${runnerCustomer}"`, { encoding: 'utf8' })
     const json = JSON.parse(output)
-    assert.equal(json.error, 'Owner privileges required', 'update-status.php must reject customer role with 403')
+    assert.equal(json.error, 'An approved seller account is required', 'update-status.php must reject customer role with 403')
   } finally {
     if (fs.existsSync(runnerCustomer)) fs.unlinkSync(runnerCustomer)
   }
@@ -594,7 +594,7 @@ test('update-status.php supports owner transitions, cancellation notes, and stoc
   assert.match(code, /approved/i, 'update-status.php must allow approved status')
   assert.match(code, /ready/i, 'update-status.php must allow ready status')
   assert.match(code, /notes/i, 'update-status.php must support notes parameter')
-  assert.match(code, /requireAdmin\s*\(\s*\)/i, 'Status management must require owner access')
+  assert.match(code, /requireApprovedSeller\s*\(\s*\)/i, 'Status management must restrict sellers')
   assert.match(code, /pending/i, 'Must check existing status is pending')
   assert.match(
     code,
@@ -635,11 +635,11 @@ require __DIR__ . '/update-status.php';
 
   // 3. Customer role attempting non-cancellation status is rejected with 403
   const custApproved = runStatus({ user_id: 42, user_role: 'customer', user_email: 'cust@example.com' }, { id: 'KC-2026-1041', status: 'approved' })
-  assert.equal(custApproved.error, 'Owner privileges required', 'Customer must not be allowed to approve reservations')
+  assert.equal(custApproved.error, 'An approved seller account is required', 'Customer must not be allowed to approve reservations')
 
   // 4. Customer role cannot use owner status endpoint
   const custCancelNoId = runStatus({ user_id: 42, user_role: 'customer', user_email: 'cust@example.com' }, { id: '', status: 'cancelled' })
-  assert.equal(custCancelNoId.error, 'Owner privileges required')
+  assert.equal(custCancelNoId.error, 'An approved seller account is required')
 })
 
 test('list.php excludes soft-deleted and permanently deleted reservations', () => {

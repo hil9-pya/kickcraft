@@ -152,6 +152,8 @@ export function adminShoeToCatalogCard(shoe) {
   return {
     id: shoe.id,
     name: shoe.name,
+    sellerUserId: shoe.sellerUserId || null,
+    storeName: shoe.storeName || 'KickCraft Flagship Studio',
     subtitle: shoe.description || `${shoe.parts?.length || 0} customizable parts`,
     price: shoe.formattedPrice || `₱${Number(shoe.price || 4890).toLocaleString()}`,
     categories: shoe.categories || ['kickcraft'],

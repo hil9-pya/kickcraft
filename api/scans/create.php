@@ -1,0 +1,18 @@
+<?php
+require_once __DIR__.'/common.php';
+scanRequest('POST', function(int $owner) {
+    $db = getDb();
+    $db->beginTransaction();
+    $db->prepare('SELECT id FROM users WHERE id = ? FOR UPDATE')->execute([$owner]);
+    $count = $db->prepare("SELECT COUNT(*) FROM scan_jobs WHERE owner_id = ? AND state IN ('uploading','queued','processing','ready')");
+    $count->execute([$owner]);
+    if ($count->fetchColumn() >= 10) scanFail('Finish existing scans before creating more', 429);
+    $hex = bin2hex(random_bytes(16));
+    $id = substr($hex,0,8).'-'.substr($hex,8,4).'-4'.substr($hex,13,3).'-8'.substr($hex,17,3).'-'.substr($hex,20);
+    $dir = scanJobDir($id);
+    if (!@mkdir($dir.'/images',0700,true)) scanFail('Cannot create private scan folder',503);
+    $db->prepare("INSERT INTO scan_jobs (id,owner_id,images) VALUES (?,?,'[]')")->execute([$id,$owner]);
+    $db->commit();
+    jsonResponse(['success'=>true,'job'=>scanPublic(scanJob($db,$id,$owner))],201);
+});
+

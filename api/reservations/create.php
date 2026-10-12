@@ -8,6 +8,10 @@ require_once __DIR__ . '/../helpers.php';
 requireMethod('POST');
 
 $body = getJsonBody();
+foreach (['customerName'=>255,'email'=>254,'pickupDate'=>10,'shoeId'=>100,'charmId'=>50] as $field=>$maximum) {
+    if (array_key_exists($field,$body) && (!is_string($body[$field]) || mb_strlen($body[$field])>$maximum)) jsonError('Invalid '.$field,400);
+}
+
 
 // 1. Server-side input validations
 $customerName = sanitizeString($body['customerName'] ?? '');
@@ -62,7 +66,7 @@ $db->beginTransaction();
 
 try {
     // Select shoe price & stock directly from database with row lock
-    $stmtShoe = $db->prepare('SELECT id, name, price, stock, status, parts, colors, charms_enabled FROM shoes WHERE id = ? AND deleted_at IS NULL AND permanently_deleted = 0 FOR UPDATE');
+    $stmtShoe = $db->prepare('SELECT * FROM shoes WHERE id = ? AND deleted_at IS NULL AND permanently_deleted = 0 FOR UPDATE');
     $stmtShoe->execute([$shoeId]);
     $shoe = $stmtShoe->fetch();
 
@@ -70,6 +74,16 @@ try {
         $db->rollBack();
         jsonError('Shoe is out of stock or unavailable', 400);
     }
+
+    $sellerId=$shoe['seller_user_id']===null?null:(int)$shoe['seller_user_id'];
+    $pickupStore='KickCraft Flagship Studio';$pickupAddress='KickCraft Flagship Studio — contact pickup desk for directions';
+    if($sellerId!==null){
+        $sellerStmt=$db->prepare("SELECT sp.*,u.role,u.deleted_at,u.permanently_deleted FROM seller_profiles sp JOIN users u ON u.id=sp.user_id WHERE sp.user_id=? FOR UPDATE");$sellerStmt->execute([$sellerId]);$seller=$sellerStmt->fetch();
+        if($shoe['publication_state']!=='approved' || !$seller || $seller['status']!=='approved' || $seller['role']!=='seller' || $seller['deleted_at']!==null || (int)$seller['permanently_deleted']!==0){$db->rollBack();jsonError('This seller listing is unavailable',400);}
+        $pickupStore=$seller['store_name'];$pickupAddress=$seller['pickup_address'];
+    }
+    $availableSizes=json_decode($shoe['sizes']??'[7,8,9,10,11]',true)?:[7,8,9,10,11];
+    if(!in_array($size,$availableSizes,true)){$db->rollBack();jsonError('This shoe is not available in that size',400);}
 
     $price = (float)$shoe['price'];
     $shoeName = (string)$shoe['name'];
@@ -96,7 +110,8 @@ try {
             $db->rollBack();
             jsonError('Customization contains an unknown shoe part', 400);
         }
-        $value = strtolower(trim((string)($color['value'] ?? '')));
+        if (!is_string($color['value'] ?? null)) { $db->rollBack(); jsonError('Customization contains an invalid color',400); }
+        $value = strtolower(trim($color['value']));
         if (!isset($allowedColors[$value])) {
             $db->rollBack();
             jsonError('Customization contains an unsupported color', 400);
@@ -113,7 +128,7 @@ try {
     $reservationId = generateReceiptId($db);
 
     // Insert reservation record with prepared statement
-    $stmtInsert = $db->prepare('INSERT INTO reservations (id, customer_name, email, pickup_date, shoe_id, shoe_name, size, price, part_colors, charm_id, charm_label, status, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmtInsert = $db->prepare('INSERT INTO reservations (id, customer_name, email, pickup_date, shoe_id, shoe_name, size, price, part_colors, charm_id, charm_label, status, notes, seller_user_id, pickup_store, pickup_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     $stmtInsert->execute([
         $reservationId,
         $customerName,
@@ -128,10 +143,14 @@ try {
         $charmLabels[$charmId],
         'pending',
         '',
+        $sellerId,
+        $pickupStore,
+        $pickupAddress,
     ]);
 
     // Decrement stock; mark out_of_stock if stock <= 0
-    $stmtStock = $db->prepare("UPDATE shoes SET stock = stock - 1, status = CASE WHEN stock - 1 <= 0 THEN 'out_of_stock' ELSE status END WHERE id = ?");
+    // MySQL's second assignment sees the already-decremented stock.
+    $stmtStock = $db->prepare("UPDATE shoes SET stock = stock - 1, status = CASE WHEN stock <= 0 THEN 'out_of_stock' ELSE status END WHERE id = ?");
     $stmtStock->execute([$shoeId]);
 
     $db->commit();
@@ -144,6 +163,9 @@ try {
         'pickup_date' => $pickupDate,
         'shoe_id' => $shoeId,
         'shoe_name' => $shoeName,
+        'seller_user_id' => $sellerId,
+        'pickup_store' => $pickupStore,
+        'pickup_address' => $pickupAddress,
         'size' => $size,
         'price' => $price,
         'part_colors' => $partColorsJson,

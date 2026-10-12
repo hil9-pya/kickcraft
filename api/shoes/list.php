@@ -17,9 +17,9 @@ if ($includeArchived) {
 $db = getDb();
 
 if ($includeArchived) {
-    $stmt = $db->prepare('SELECT * FROM shoes WHERE permanently_deleted = 0 ORDER BY created_at DESC');
+    $stmt = $db->prepare('SELECT s.*,sp.store_name AS seller_store_name,sp.pickup_address,sp.contact AS seller_contact FROM shoes s LEFT JOIN seller_profiles sp ON sp.user_id=s.seller_user_id WHERE s.permanently_deleted = 0 ORDER BY s.created_at DESC');
 } else {
-    $stmt = $db->prepare('SELECT * FROM shoes WHERE deleted_at IS NULL AND permanently_deleted = 0 ORDER BY created_at DESC');
+    $stmt = $db->prepare('SELECT s.*,sp.store_name AS seller_store_name,sp.pickup_address,sp.contact AS seller_contact FROM shoes s LEFT JOIN seller_profiles sp ON sp.user_id=s.seller_user_id LEFT JOIN users u ON u.id=s.seller_user_id WHERE s.deleted_at IS NULL AND s.permanently_deleted = 0 AND (s.seller_user_id IS NULL OR (s.publication_state=\'approved\' AND sp.status=\'approved\' AND u.role=\'seller\' AND u.deleted_at IS NULL AND u.permanently_deleted=0)) ORDER BY s.created_at DESC');
 }
 
 $stmt->execute();

@@ -6,11 +6,11 @@ require_once __DIR__ . '/config.php';
 function getDb(): PDO {
     static $pdo = null;
     if ($pdo === null) {
-        $host = getenv('DB_HOST') ?: 'localhost';
-        $port = getenv('DB_PORT') ?: '3306';
-        $db   = getenv('DB_NAME') ?: 'kickcraft_db';
-        $user = getenv('DB_USER') ?: 'root';
-        $pass = getenv('DB_PASS') !== false ? getenv('DB_PASS') : '';
+        $host = configValue('DB_HOST') ?: 'localhost';
+        $port = configValue('DB_PORT') ?: '3306';
+        $db   = configValue('DB_NAME') ?: 'kickcraft_db';
+        $user = configValue('DB_USER') ?: 'root';
+        $pass = configValue('DB_PASS', '');
         $dsn = "mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4";
         $pdo = new PDO($dsn, $user, $pass, [
             PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,

@@ -1,6 +1,13 @@
 <?php
 // KickCraft Shared Configuration & Environment Bootstrap
 
+// Apache threads share putenv(); keep each site's configuration inside this request.
+function configValue(string $key, ?string $default = null): ?string {
+    if (array_key_exists($key, $_ENV)) return (string)$_ENV[$key];
+    $value=getenv($key);
+    return $value===false ? $default : $value;
+}
+
 // 1. Load .env file from __DIR__ . '/.env'
 $envFile = __DIR__ . '/.env';
 if (file_exists($envFile)) {
@@ -17,13 +24,10 @@ if (file_exists($envFile)) {
             if (preg_match('/^([\'"]).*\1$/', $value)) {
                 $value = substr($value, 1, -1);
             }
-            if (!array_key_exists($key, $_ENV)) {
-                $_ENV[$key] = $value;
-            }
+            $_ENV[$key] = $value;
             if (!array_key_exists($key, $_SERVER)) {
                 $_SERVER[$key] = $value;
             }
-            putenv("{$key}={$value}");
         }
     }
 }
@@ -37,6 +41,7 @@ if (session_status() === PHP_SESSION_NONE) {
             session_save_path($cliSessionPath);
         }
     }
+    session_name(configValue('SESSION_NAME') ?: 'PHPSESSID');
     session_set_cookie_params([
         'lifetime' => 86400 * 7,
         'path' => '/',
@@ -49,7 +54,7 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // 3. Set CORS headers from a small explicit allowlist.
 $origin = $_SERVER['HTTP_ORIGIN'] ?? '';
-$configuredOrigins = getenv('CORS_ORIGINS') ?: 'http://localhost:5173,http://127.0.0.1:5173';
+$configuredOrigins = configValue('CORS_ORIGINS') ?: 'http://localhost:5173,http://127.0.0.1:5173';
 $allowedOrigins = array_values(array_filter(array_map('trim', explode(',', $configuredOrigins))));
 if ($origin !== '' && in_array($origin, $allowedOrigins, true)) {
     header("Access-Control-Allow-Origin: {$origin}");
