@@ -81,7 +81,7 @@ async function fragment(source,values){
 test('public footer only appears where it helps and never advertises unverified contact details',async()=>{
  const footer=appSource.match(/<footer[\s\S]*?<\/footer>/)[0]
  const actions={goToShop(){},goToTrackReservation(){},goToStudio(){},openFeedbackModal(){}}
- for(const view of ['shop','marketplace']){
+ for(const view of ['shop']){
   const html=await fragment(footer,{view,...actions})
   assert.match(html,/KickCraft/)
   assert.doesNotMatch(html,/<nav\b|<a\b/)
@@ -92,7 +92,7 @@ test('public footer only appears where it helps and never advertises unverified 
  const tracking=await fragment(footer,{view:'track',...actions})
  assert.match(tracking,/© 2026 KickCraft/)
  assert.doesNotMatch(tracking,/href="#marketplace"/)
- for(const view of ['studio','seller','admin','seller-register','login','not-found']){
+ for(const view of ['marketplace','studio','seller','admin','seller-register','login','not-found']){
   const html=await fragment(footer,{view,...actions})
   assert.doesNotMatch(html,/<footer/)
  }
@@ -116,4 +116,25 @@ test('tracking starts with lookup only; verified result keeps seller pickup deta
  const failed=await fragment(source,{...values,trackError:'Receipt or email did not match.'})
  assert.match(failed,/role="alert"/)
  assert.match(failed,/value="guest@example.test"/)
+})
+
+
+test('one Shop exposes source filters separately from shoe types and header has no duplicate marketplace link',async()=>{
+ const header=appSource.match(/<header[\s\S]*?<\/header>/)[0]
+ assert.doesNotMatch(header,/#marketplace|>Marketplace</)
+ const start=appSource.indexOf('<div id="shop-catalog"')
+ const source=appSource.slice(start,appSource.indexOf('<!-- Catalog loading state -->',start))
+ const {CATEGORIES}=await import('../src/customization.js')
+ for(const selected of ['all','kickcraft','seller']){
+  const html=await fragment(source,{catalogSource:selected,searchQuery:'',activeCategory:'all',filteredCatalog:[],CATEGORIES})
+  const sourceGroup=html.match(/<div[^>]*aria-label="Shoe source"[^>]*>([\s\S]*?)<\/div>/)[1]
+  assert.equal((sourceGroup.match(/<button\b/g)||[]).length,3)
+  assert.equal((sourceGroup.match(/aria-pressed="true"/g)||[]).length,1)
+  assert.match(sourceGroup,/All shoes/)
+  assert.match(sourceGroup,/KickCraft originals/)
+  assert.match(sourceGroup,/Seller designs/)
+  assert.match(html,/All types/)
+  assert.match(html,/Sneakers/)
+  assert.doesNotMatch(html,/Seller marketplace/)
+ }
 })

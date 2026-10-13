@@ -230,9 +230,10 @@ export const CATALOG = [
   },
 ]
 
-export function filterCatalog(catalog, query = '', category = 'all') {
+export function filterCatalog(catalog, query = '', category = 'all', source = 'all') {
   const q = query.trim().toLowerCase()
   return catalog.filter(card => {
+    const matchesSource = source === 'all' || (source === 'seller' ? Boolean(card.sellerUserId) : !card.sellerUserId)
     const matchesCategory =
       category === 'all'
         ? true
@@ -246,7 +247,7 @@ export function filterCatalog(catalog, query = '', category = 'all') {
       card.subtitle.toLowerCase().includes(q) ||
       card.categories.some(c => c.toLowerCase().includes(q))
 
-    return matchesCategory && matchesSearch
+    return matchesSource && matchesCategory && matchesSearch
   })
 }
 

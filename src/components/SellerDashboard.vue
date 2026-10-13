@@ -74,7 +74,7 @@ onBeforeUnmount(()=>{closed=true;clearInterval(timer)})
 </script>
 <template>
  <main class="seller seller-portal">
-  <header><div><p class="portal-title">Seller Studio</p><h1>{{profile?.storeName || 'Your store'}}</h1></div><div class="actions"><a href="#marketplace">Marketplace</a><Button variant="outline" :disabled="loading||busy" @click="refresh()">Refresh</Button></div></header>
+  <header><div><p class="portal-title">Seller Studio</p><h1>{{profile?.storeName || 'Your store'}}</h1></div><div class="actions"><a href="#shop">Shop</a><Button variant="outline" :disabled="loading||busy" @click="refresh()">Refresh</Button></div></header>
   <p v-if="loading" role="status">Loading Seller Studio…</p><p v-if="error" class="error" role="alert">{{error}}</p><p v-if="message" class="success" role="status">{{message}}</p>
   <div v-if="profile" class="seller-layout" :class="{'without-navigation':profile.status!=='approved'}">
    <nav v-if="profile.status==='approved'" class="seller-navigation" aria-label="Seller sections"><Button variant="outline" v-for="item in ['products','templates','orders','settings']" :key="item" :aria-current="tab===item" :disabled="busy||loading" @click="tab!==item&&(editing||scanning||uploading?leaving=item:navigate(item))">{{item==='products'?'My products':item==='templates'?'Shared templates':item==='orders'?'Pickup orders':'Store settings'}}</Button></nav>

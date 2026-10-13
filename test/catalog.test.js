@@ -102,3 +102,18 @@ test('prioritizes customizable shoes without mutating catalog order', () => {
   assert.deepEqual(prioritizeLiveCatalog(catalog).map(card => card.id), ['live-1', 'live-2', 'soon', 'out'])
   assert.equal(catalog[0].id, 'soon')
 })
+
+
+test('source filters use seller ownership independently from names, categories and search',()=>{
+ const cards=[
+  {id:'original',name:'KickCraft One',subtitle:'Original studio shoe',categories:['kickcraft','sneakers'],sellerUserId:null},
+  {id:'seller-template',name:'KickCraft seller template',subtitle:'Independent design',categories:['kickcraft','sneakers'],sellerUserId:42},
+  {id:'seller-runner',name:'Trail runner',subtitle:'Independent running shoe',categories:['running'],sellerUserId:43},
+ ]
+ assert.deepEqual(filterCatalog(cards,'','all','all').map(c=>c.id),['original','seller-template','seller-runner'])
+ assert.deepEqual(filterCatalog(cards,'','all','kickcraft').map(c=>c.id),['original'])
+ assert.deepEqual(filterCatalog(cards,'','all','seller').map(c=>c.id),['seller-template','seller-runner'])
+ assert.deepEqual(filterCatalog(cards,'','sneakers','seller').map(c=>c.id),['seller-template'])
+ assert.deepEqual(filterCatalog(cards,'runner','all','seller').map(c=>c.id),['seller-runner'])
+ assert.deepEqual(filterCatalog(cards,'runner','all','kickcraft'),[])
+})

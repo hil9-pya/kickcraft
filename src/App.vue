@@ -328,16 +328,18 @@ const charmModels = computed(() => charmOptions.value
 
 const searchQuery = ref('')
 const activeCategory = ref('all')
+const catalogSource = ref('all')
 
 const dynamicCatalog = computed(() => publicCatalog(adminShoes.value.map(adminShoeToCatalogCard),catalogLoaded.value,CATALOG.filter(card=>card.categories.includes('kickcraft'))))
 
 const filteredCatalog = computed(() => {
-  return filterCatalog(view.value==='marketplace'?dynamicCatalog.value.filter(card=>card.sellerUserId):dynamicCatalog.value, searchQuery.value, activeCategory.value)
+  return filterCatalog(dynamicCatalog.value, searchQuery.value, activeCategory.value, catalogSource.value)
 })
 const displayCatalog = computed(() => prioritizeLiveCatalog(filteredCatalog.value))
 const liveCatalogCount = computed(() => displayCatalog.value.filter(card => card.status === 'live').length)
 
 function clearFilters() {
+  catalogSource.value = 'all'
   searchQuery.value = ''
   activeCategory.value = 'all'
 }
@@ -702,6 +704,14 @@ function getAttemptedPath() {
 
 const notFoundPath = ref(getAttemptedPath())
 
+function redirectMarketplace() {
+  clearFilters()
+  catalogSource.value = 'seller'
+  const pathname = window.location.pathname.replace(/marketplace\/?$/, '')
+  window.history.replaceState(window.history.state, '', pathname + window.location.search + '#shop')
+  return 'shop'
+}
+
 function getInitialView() {
   if (typeof window !== 'undefined') {
     let p = window.location.pathname || ''
@@ -712,7 +722,8 @@ function getInitialView() {
     const target = (cleanPath && cleanPath !== 'index.html') ? cleanPath : hash
 
     if (target) {
-      if (['shop', 'studio', 'track', 'seller', 'seller-register', 'marketplace'].includes(target)) {
+      if (target === 'marketplace') return redirectMarketplace()
+      if (['shop', 'studio', 'track', 'seller', 'seller-register'].includes(target)) {
         return target
       }
       if (target === 'admin') {
@@ -723,7 +734,8 @@ function getInitialView() {
 
     try {
       const saved = localStorage.getItem('kickcraft_view')
-      if (saved && ['shop', 'studio', 'admin', 'track', 'seller', 'marketplace'].includes(saved)) {
+      if (saved === 'marketplace') return redirectMarketplace()
+      if (saved && ['shop', 'studio', 'admin', 'track', 'seller'].includes(saved)) {
         return saved === 'admin' ? 'login' : saved
       }
     } catch (_) {}
@@ -741,14 +753,19 @@ function resolveCurrentRoute() {
   const hash = window.location.hash.replace(/^#\/?/, '').trim()
   const target = (cleanPath && cleanPath !== 'index.html') ? cleanPath : hash
 
+  if (target === 'marketplace') {
+    view.value = redirectMarketplace()
+    notFoundPath.value = ''
+    return
+  }
+
   if (!target || target === 'shop') {
     view.value = 'shop'
     notFoundPath.value = ''
     return
   }
 
-  if (['studio', 'track', 'seller', 'seller-register', 'marketplace'].includes(target)) {
-    if(target==='marketplace')activeCategory.value='all'
+  if (['studio', 'track', 'seller', 'seller-register'].includes(target)) {
     view.value = target
     notFoundPath.value = ''
     return
@@ -887,12 +904,19 @@ function goToStudio(shoeId) {
 }
 
 function goToShop() {
+  catalogSource.value='all'
   activeCategory.value='all'
   selectedShoeId.value = SHOES[0].id
   resetStudioState()
   notFoundPath.value = ''
   view.value = 'shop'
   scrollToTop()
+}
+
+function browseSellerDesigns() {
+  clearFilters()
+  catalogSource.value = 'seller'
+  document.getElementById('shop-catalog')?.scrollIntoView({block:'start'})
 }
 
 function scrollToTop() {
@@ -924,8 +948,6 @@ function scrollToTop() {
           >
             Shop
           </button>
-
-          <a href="#marketplace" class="border-b-2 border-transparent hover:text-primary" :class="view==='marketplace'?'!border-primary text-foreground':'text-muted-foreground'" :aria-current="view==='marketplace'?'page':undefined">Marketplace</a>
 
           <button
             v-if="view !== 'admin'"
@@ -973,7 +995,7 @@ function scrollToTop() {
     </header>
 
     <div
-      v-if="catalogError && ['shop', 'studio', 'track', 'marketplace'].includes(view)"
+      v-if="catalogError && ['shop', 'studio', 'track'].includes(view)"
       role="alert"
       class="border-b border-[#d5a28f] bg-[#fdf2ef]"
     >
@@ -993,7 +1015,7 @@ function scrollToTop() {
     <!-- ══════════════════════════════════════════════════════ -->
     <!-- SHOP VIEW                                              -->
     <!-- ══════════════════════════════════════════════════════ -->
-    <main v-if="view === 'shop' || view === 'marketplace'" class="mx-auto max-w-[1440px] px-5 py-6 lg:px-8 lg:py-8">
+    <main v-if="view === 'shop'" class="mx-auto max-w-[1440px] px-5 py-6 lg:px-8 lg:py-8">
 
       <!-- The product is the hero: a real, interactive local 3D shoe. -->
       <section v-if="view==='shop'" class="kc-shop-intro mb-6 grid overflow-hidden rounded-lg border border-border bg-card lg:grid-cols-[.95fr_1.05fr]" aria-labelledby="shop-heading">
@@ -1002,7 +1024,7 @@ function scrollToTop() {
           <p class="mt-3 max-w-md text-sm leading-6 text-muted-foreground">Recolor shoe parts, add a charm, choose your size, then reserve your design for store pickup.</p>
           <div class="mt-5 flex flex-wrap gap-3">
             <Button type="button" @click="goToStudio(SHOES[0].id)">Start designing</Button>
-            <Button as="a" href="#marketplace" variant="outline">Browse marketplace</Button>
+            <Button type="button" variant="outline" @click="browseSellerDesigns">Browse seller designs</Button>
           </div>
           <p class="mt-3 text-xs text-muted-foreground">No account needed to reserve. Pay when you collect.</p>
         </div>
@@ -1026,10 +1048,12 @@ function scrollToTop() {
         </div>
       </section>
 
-      <div v-if="view==='marketplace'" class="mb-6"><h1 class="font-display text-3xl font-bold tracking-tight">Marketplace</h1><p class="mt-2 text-sm text-muted-foreground">Original shoes from approved studios. Customize independent parts, choose your size, and reserve for pickup at the seller’s store.</p></div>
       <!-- Search & Filters Toolbar -->
-      <div class="mb-6 space-y-3 border-b border-border pb-4">
-        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div id="shop-catalog" class="mb-6 space-y-3 border-b border-border pb-4">
+        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div class="flex flex-wrap gap-2" role="group" aria-label="Shoe source">
+            <Button variant="outline" v-for="source in [{id:'all',label:'All shoes'},{id:'kickcraft',label:'KickCraft originals'},{id:'seller',label:'Seller designs'}]" :key="source.id" type="button" :aria-pressed="catalogSource===source.id" :class="catalogSource===source.id?'bg-foreground text-white hover:bg-foreground/90 hover:text-white':''" @click="catalogSource=source.id">{{source.label}}</Button>
+          </div>
           <!-- Search input -->
           <div class="relative w-full sm:max-w-md">
             <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[#6a6e6a]">
@@ -1066,7 +1090,7 @@ function scrollToTop() {
         <!-- Category pills -->
         <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Shoe categories">
           <Button variant="ghost"
-            v-for="cat in CATEGORIES"
+            v-for="cat in CATEGORIES.filter(cat=>!['kickcraft','marketplace'].includes(cat.id))"
             :key="cat.id"
             type="button"
             class="px-3.5 py-1.5 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -1074,7 +1098,7 @@ function scrollToTop() {
             :aria-pressed="activeCategory === cat.id"
             @click="activeCategory = cat.id"
           >
-            {{ cat.label }}
+            {{ cat.id==='all'?'All types':cat.label }}
           </Button>
         </div>
       </div>
@@ -1807,7 +1831,7 @@ function scrollToTop() {
     </main>
 
     <!-- ── Footer ───────────────────────────────────────────── -->
-    <footer v-if="['shop','marketplace','track'].includes(view)" class="public-footer border-t border-border bg-card">
+    <footer v-if="['shop','track'].includes(view)" class="public-footer border-t border-border bg-card">
       <div class="kc-page flex items-center justify-between gap-4 px-5 py-5 lg:px-8">
         <p class="text-xs text-muted-foreground">© 2026 KickCraft</p>
         <Button variant="ghost" size="sm" type="button" @click="openFeedbackModal">Feedback</Button>

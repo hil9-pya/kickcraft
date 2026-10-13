@@ -33,7 +33,7 @@ async function save(submit=false) {
   if(submit){result=await api('products/submit.php',{method:'POST',body:{id:form.id}});Object.assign(form,result.shoe);form.stockAtLoad=result.shoe.stock}
   if(!templateName.value)templateName.value=form.name
   if(!templateDescription.value)templateDescription.value=form.description
-  message.value=submit?'Submitted. Admin must approve before this appears in the marketplace.':'Draft saved. Preview colors are temporary; customers choose their own colors.'
+  message.value=submit?'Submitted. Admin must approve before this appears in Shop.':'Draft saved. Preview colors are temporary; customers choose their own colors.'
   emit('saved',result.shoe)
  }catch(cause){error.value=cause.message}finally{busy.value=false}
 }
