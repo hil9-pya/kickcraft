@@ -1,7 +1,11 @@
-import {BufferGeometry,BufferAttribute,Mesh,Scene,Vector2,Vector3,Triangle,Ray} from 'three'
+import {BufferGeometry,BufferAttribute,Mesh,Scene,Vector2,Vector3,Triangle,Ray,MOUSE} from 'three'
 import {Octree} from 'three/addons/math/Octree.js'
 import {GLTFExporter} from 'three/addons/exporters/GLTFExporter.js'
 import {PARTS} from './customization.js'
+
+export function setRegionControls(controls,tool) {
+ controls.mouseButtons={LEFT:['rotate','preview'].includes(tool)?MOUSE.ROTATE:null,MIDDLE:MOUSE.ROTATE,RIGHT:MOUSE.PAN}
+}
 
 export function createRegionState(mesh) {
  const geometry=mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone()

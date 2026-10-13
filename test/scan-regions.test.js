@@ -107,3 +107,34 @@ test('face color sampling follows texture UV transforms and flipY',async()=>{
  const vertical={width:1,height:2,data:new Uint8ClampedArray([200,100,50,255,20,30,40,255])}
  assert.deepEqual(Array.from(sampleFaceColors(state,texture,vertical).slice(0,3)),[20,30,40])
 })
+
+
+test('multiple overlapping fills apply together; removal and clearing a part remain undoable',()=>{
+ const state=fillFixture(),fills=[[0,1,2],[2,3],[6,7]]
+ fills.splice(1,1)
+ paintFaces(state,fills.flat(),'upper')
+ assert.deepEqual(state.assignments,['upper','upper','upper',null,null,null,'upper','upper'])
+ undoStroke(state);assert.deepEqual(state.assignments,Array(8).fill(null))
+ paintFaces(state,fills.flat(),'upper');paintFaces(state,[3,4],'midsole');cropFaces(state,[5])
+ paintFaces(state,state.assignments.flatMap((part,id)=>part==='upper'?[id]:[]),null)
+ assert.deepEqual(state.assignments,[null,null,null,'midsole','midsole','removed',null,null])
+ undoStroke(state);assert.equal(state.assignments[6],'upper');assert.equal(state.assignments[5],'removed')
+})
+
+
+test('middle drag rotates camera in paint/fill tools; left drag stays available for selection',async()=>{
+ const {OrbitControls}=await import('three/addons/controls/OrbitControls.js')
+ const {PerspectiveCamera}=await import('three')
+ const {setRegionControls}=await import('../src/scan-regions.js')
+ const doc=new EventTarget(),canvas=new EventTarget();Object.assign(canvas,{style:{},ownerDocument:doc,clientWidth:800,clientHeight:600,getRootNode:()=>doc,setPointerCapture(){},releasePointerCapture(){}})
+ const camera=new PerspectiveCamera(40,4/3,0.01,20);camera.position.set(0,0,3)
+ const controls=new OrbitControls(camera,canvas)
+ function event(target,type,button,x){const e=new Event(type);Object.assign(e,{pointerId:1,pointerType:'mouse',button,clientX:x,clientY:100,pageX:x,pageY:100,ctrlKey:false,metaKey:false,shiftKey:false});target.dispatchEvent(e)}
+ function drag(button){event(canvas,'pointerdown',button,100);event(doc,'pointermove',button,180);event(doc,'pointerup',button,180)}
+ try {
+  for(const tool of ['paint','fill','erase','charm']){
+   setRegionControls(controls,tool);const before=camera.position.clone();drag(0);assert.ok(before.distanceTo(camera.position)<1e-9,tool+' left drag must not orbit');drag(1);assert.ok(before.distanceTo(camera.position)>0.1,tool+' middle drag must orbit')
+  }
+  setRegionControls(controls,'rotate');const before=camera.position.clone();drag(0);assert.ok(before.distanceTo(camera.position)>0.1)
+ }finally{controls.dispose()}
+})
