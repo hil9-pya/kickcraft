@@ -119,22 +119,37 @@ test('tracking starts with lookup only; verified result keeps seller pickup deta
 })
 
 
-test('one Shop exposes source filters separately from shoe types and header has no duplicate marketplace link',async()=>{
+test('Shop keeps source filters and search without the removed shoe-type row',async()=>{
  const header=appSource.match(/<header[\s\S]*?<\/header>/)[0]
  assert.doesNotMatch(header,/#marketplace|>Marketplace</)
  const start=appSource.indexOf('<div id="shop-catalog"')
  const source=appSource.slice(start,appSource.indexOf('<!-- Catalog loading state -->',start))
- const {CATEGORIES}=await import('../src/customization.js')
  for(const selected of ['all','kickcraft','seller']){
-  const html=await fragment(source,{catalogSource:selected,searchQuery:'',activeCategory:'all',filteredCatalog:[],CATEGORIES})
+  const html=await fragment(source,{catalogSource:selected,searchQuery:'',filteredCatalog:[]})
   const sourceGroup=html.match(/<div[^>]*aria-label="Shoe source"[^>]*>([\s\S]*?)<\/div>/)[1]
   assert.equal((sourceGroup.match(/<button\b/g)||[]).length,3)
   assert.equal((sourceGroup.match(/aria-pressed="true"/g)||[]).length,1)
   assert.match(sourceGroup,/All shoes/)
   assert.match(sourceGroup,/KickCraft originals/)
   assert.match(sourceGroup,/Seller designs/)
-  assert.match(html,/All types/)
-  assert.match(html,/Sneakers/)
+  assert.doesNotMatch(html,/Shoe categories|All types|Fashion|Sneakers|Basketball Shoes|Running Shoes/)
+  assert.match(html,/aria-label="Search styles by name or description"/)
+  assert.match(html,/Showing/)
   assert.doesNotMatch(html,/Seller marketplace/)
+ }
+ assert.doesNotMatch(appSource,/activeCategory/)
+})
+
+
+test('customer color picker remains available alongside seller swatches and disables while loading',async()=>{
+ const start=appSource.indexOf('            <!-- Color picker -->')
+ const source=appSource.slice(start,appSource.indexOf('            </fieldset>',start)+'            </fieldset>'.length)
+ for(const ready of [false,true]){
+  const html=await fragment(source,{modelReady:ready,selectedColor:{name:'Custom #13ABCD',value:'#13abcd'},shoeColors:[{name:'White',value:'#ffffff'}],chooseCustomColor(){},chooseColor(){}})
+  assert.match(html,/type="color"/)
+  assert.match(html,/aria-label="Custom shoe color"/)
+  assert.match(html,/value="#13abcd"/)
+  assert.match(html,/White/)
+  assert.equal(/<fieldset[^>]*disabled/.test(html),!ready)
  }
 })

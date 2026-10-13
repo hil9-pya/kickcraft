@@ -1,6 +1,11 @@
 <?php
 require_once __DIR__.'/common.php';
 const TRIPO_SCAN_CREDITS=30;
+function tripoCaptureEngine($engine): string {
+ if(in_array($engine,['meshroom','realityscan'],true))scanFail('Local photo/video scanning is retired. Use Generate from photos.',410);
+ if($engine!=='tripo')scanFail('Unknown scan engine',400);
+ return 'tripo';
+}
 function tripoKey(): string {
  $key=trim((string)configValue('TRIPO_API_KEY'));
  if($key==='') {

@@ -146,10 +146,10 @@ function scanPublic(array $job): array {
         'maskCount'=>count(array_filter($job['images'],fn($image)=>!empty($image['maskFile']) && !empty($image['maskReviewed']))),
         'images'=>array_map(fn($image)=>array_merge(array_intersect_key($image, array_flip(['id','name','width','height','bytes','orientation','maskReviewed','cameraMetadata','view'])), ['previewUrl'=>'/api/scans/asset.php?id='.$id.'&image='.$image['id'], 'maskUrl'=>empty($image['maskFile']) ? null : '/api/scans/asset.php?id='.$id.'&mask='.$image['id'].'&v='.$image['maskHash']]), $job['images'])];
     $public['alignmentMinPercent']=(int)($job['alignment_min_percent'] ?? 80);
-    $public['canRetry']=scanRetryable($job) && $public['imageCount']>=30 && $public['imageCount']<=120 && $public['maskCount']===$public['imageCount'];
+    $public['canRetry']=false;
     if(($job['engine']??'meshroom')==='tripo'){$public['canRetry']=tripoCanResume($job);$public['generationCredits']=TRIPO_SCAN_CREDITS;try{$public['tripoTaskSaved']=isset(tripoRecord(scanJobDir($id).'/tripo-task.json')['task_id']);$public['tripoUseMasks']=tripoRecord(scanJobDir($id).'/tripo-options.json')['useMasks']??null;}catch(Throwable $e){$public['tripoTaskSaved']=false;}}
     $public['alignment']=scanFailedAlignment($job);
-    $public['canExperimentalRetry']=$public['canRetry'] && scanExperimentalEligible($public['alignment']);
+    $public['canExperimentalRetry']=false;
     $video=json_decode($job['input_video'] ?? 'null',true);
     if ($video) $public['video']=array_intersect_key($video,array_flip(['key','name','received','total','width','height','duration']));
     if ($job['state']==='finalized') $public['draft']=json_decode($job['finalized_payload'],true)['draft'] ?? null;

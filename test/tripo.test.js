@@ -86,3 +86,9 @@ test('Tripo client sends explicit cleaned-photo choice without starting backgrou
  globalThis.fetch=async(url,options)=>{assert.equal(url,'/api/scans/start.php');choices.push(JSON.parse(options.body).useMasks);return Response.json({job:{id:'saved'}})}
  try{await startTripoScan('saved');await startTripoScan('saved',true);assert.deepEqual(choices,[false,true])}finally{globalThis.fetch=saved}
 })
+
+
+test('capture engine accepts only Tripo and marks local reconstruction engines retired',()=>{
+ const result=php(`$out=[];foreach(['tripo','meshroom','realityscan','template',null,[],false] as $engine){try{$out[]=tripoCaptureEngine($engine);}catch(Throwable $e){$out[]=$e->getCode();}}echo json_encode($out);`)
+ assert.deepEqual(result,['tripo',410,410,400,400,400,400])
+})

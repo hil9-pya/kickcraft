@@ -8,8 +8,8 @@ sellerRequest('POST',function($user){
  }elseif($source==='scan'){
   $scan=scanId($body['scanId']??null);$job=scanJob($db,$scan,(int)$user['id'],true);
   if($job['state']!=='finalized')scanFail('Finish scan region painting first',409);
-  $existing=$db->prepare('SELECT id FROM shoes WHERE source_scan_id=? AND seller_user_id=? AND deleted_at IS NULL');$existing->execute([$scan,$user['id']]);
-  if($id=$existing->fetchColumn()){$db->commit();jsonResponse(['success'=>true,'shoe'=>formatShoeRow(productRow($id,(int)$user['id']))]);}
+  $existing=$db->prepare('SELECT id,deleted_at,permanently_deleted FROM shoes WHERE source_scan_id=? AND seller_user_id=?');$existing->execute([$scan,$user['id']]);
+  if($saved=$existing->fetch()){if($saved['deleted_at']!==null || $saved['permanently_deleted'])scanFail('This capture belongs to a removed product. Restore it from Removed products.',409);$db->commit();jsonResponse(['success'=>true,'shoe'=>formatShoeRow(productRow($saved['id'],(int)$user['id']))]);}
   $asset=json_decode($job['finalized_payload'],true)['draft'];
  }else scanFail('Choose photos, a GLB upload, or the original template');
  $shoe=productInsert((int)$user['id'],$asset,$scan);$db->commit();jsonResponse(['success'=>true,'shoe'=>$shoe],201);

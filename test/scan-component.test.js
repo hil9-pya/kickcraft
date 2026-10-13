@@ -23,35 +23,20 @@ test('accepting scan clears stale model and thumbnail uploads',()=>{
 
 test('recapture retains the saved job when retirement fails',async()=>{
  const job={value:{id:'saved-scan'}},busy={value:false},error={value:''},accepted={value:true},progress={value:'Saved'}
- let removed=false,cleared=false
- const bindings={job,busy,error,accepted,progress,maskImageId:{value:null},likenessChecks:{value:[]},referenceId:{value:null},timer:null,clearTimeout(){},clearFiles(){cleared=true},discardScan:async id=>{assert.equal(id,'saved-scan');throw new Error('Reconstruction still active')},localStorage:{removeItem(){removed=true}},storageKey:'scan'}
+ let removed=false
+ const bindings={job,busy,error,accepted,progress,maskImageId:{value:null},likenessChecks:{value:[]},referenceId:{value:null},timer:null,clearTimeout(){},discardScan:async id=>{assert.equal(id,'saved-scan');throw new Error('Reconstruction still active')},localStorage:{removeItem(){removed=true}},storageKey:'scan'}
  await componentFunction('PhotoScanner.vue','newCapture','async function complete(',bindings)()
- assert.equal(job.value.id,'saved-scan');assert.equal(removed,false);assert.equal(cleared,false);assert.equal(error.value,'Reconstruction still active');assert.equal(busy.value,false)
+ assert.equal(job.value.id,'saved-scan');assert.equal(removed,false);assert.equal(error.value,'Reconstruction still active');assert.equal(busy.value,false)
  bindings.discardScan=async()=>({state:'failed'})
  await componentFunction('PhotoScanner.vue','newCapture','async function complete(',bindings)()
- assert.equal(job.value,null);assert.equal(removed,true);assert.equal(cleared,true);assert.equal(accepted.value,false)
+ assert.equal(job.value,null);assert.equal(removed,true);assert.equal(accepted.value,false)
 })
 
 test('likeness acceptance requires all three photo comparisons',()=>{
  const accepted={value:false},likenessChecks={value:['front','sides']}
- const accept=componentFunction('PhotoScanner.vue','acceptLikeness','async function start(',{accepted,likenessChecks})
+ const accept=componentFunction('PhotoScanner.vue','acceptLikeness','async function observe(',{accepted,likenessChecks})
  accept();assert.equal(accepted.value,false)
  likenessChecks.value.push('details');accept();assert.equal(accepted.value,true)
-})
-
-
-test('video frames append without replacing selected photos and cannot exceed saved capture capacity',()=>{
- const original={file:{name:'original.jpg'},url:'existing'},files={value:[original]},job={value:{imageCount:117}},error={value:''},progress={value:''}
- let created=0
- const bindings={closed:false,files,job,error,progress,URL:{createObjectURL(){return 'frame-'+(++created)}}}
- const append=componentFunction('PhotoScanner.vue','addVideoFrames','function remove(',bindings)
- append([{name:'view-1.jpg'},{name:'view-2.jpg'}])
- assert.equal(files.value.length,3);assert.equal(files.value[0],original);assert.equal(created,2)
- append([{name:'extra.jpg'}])
- assert.equal(files.value.length,3);assert.equal(created,2);assert.match(error.value,/120/)
- bindings.closed=true
- componentFunction('PhotoScanner.vue','addVideoFrames','function remove(',bindings)([{name:'late.jpg'}])
- assert.equal(files.value.length,3);assert.equal(created,2)
 })
 
 
@@ -97,13 +82,47 @@ test('AI mask queue uses current capture and preserves masks when API fails',asy
 })
 
 
-test('retry forwards explicit mode and resets prior likeness only after queue succeeds',async()=>{
- const job={value:{id:'saved',state:'failed'}},busy={value:false},error={value:''},accepted={value:true},likenessChecks={value:['front','sides','details']},maskImageId={value:'old'}
- let observed=0,mode
- const bindings={job,busy,error,accepted,likenessChecks,maskImageId,startScan:async(id,experimental)=>{assert.equal(id,'saved');mode=experimental;return {...job.value,state:'queued'}},remember:value=>{job.value=value},observe:async()=>{observed++}}
- await componentFunction('PhotoScanner.vue','start','async function observe(',bindings)(true)
- assert.equal(mode,true);assert.equal(accepted.value,false);assert.deepEqual(likenessChecks.value,[]);assert.equal(observed,1)
- accepted.value=true;likenessChecks.value=['front'];bindings.startScan=async()=>{throw new Error('Missing mask')}
- await componentFunction('PhotoScanner.vue','start','async function observe(',bindings)()
- assert.equal(accepted.value,true);assert.deepEqual(likenessChecks.value,['front']);assert.equal(error.value,'Missing mask');assert.equal(busy.value,false)
+test('retired capture cannot replace active Tripo state or its saved pointer',()=>{
+ const job={value:{id:'current',engine:'tripo'}},localStorage={setItem(){throw new Error('Retired capture must not be remembered')}}
+ const remember=componentFunction('PhotoScanner.vue','remember','async function tripoQueued(',{job,localStorage,storageKey:'saved'})
+ assert.throws(()=>remember({id:'old',engine:'meshroom'}),/retired/);assert.equal(job.value.id,'current')
+})
+
+test('startup ignores saved local capture without deleting it and offers only saved Tripo generations',async()=>{
+ const source=readFileSync(new URL('../src/components/PhotoScanner.vue',import.meta.url),'utf8').replaceAll('\r\n','\n'),start=source.indexOf('onMounted(async()=>{')+'onMounted(async()=>{'.length,end=source.indexOf('\n})\nonBeforeUnmount',start)
+ assert.ok(end>start)
+ const legacy={id:'legacy',engine:'meshroom',state:'ready'},tripo={id:'tripo',engine:'tripo',state:'uploading'},job={value:null},recoverable={value:[]},removed=[]
+ const bindings={job,recoverable,maskAvailable:{value:false},tripoAvailable:{value:false},error:{value:''},storageKey:'saved',localStorage:{getItem:()=>legacy.id,removeItem:key=>removed.push(key)},fetchScanJob:async id=>{assert.equal(id,legacy.id);return legacy},api:async endpoint=>endpoint.includes('capabilities')?{aiMasks:true,tripo:true}:{jobs:[legacy,tripo]},remember(){throw new Error('Must not restore retired engine')},observe(){throw new Error('Must not restart retired engine')}}
+ await new Function(...Object.keys(bindings),'return(async()=>{'+source.slice(start,end)+'})()')(...Object.values(bindings))
+ assert.equal(job.value,null);assert.deepEqual(removed,['saved']);assert.deepEqual(recoverable.value,[tripo]);assert.equal(legacy.state,'ready')
+})
+
+test('region save captures only kept original-texture geometry and releases it on failure',async()=>{
+ const {Mesh,BufferGeometry}=await import('three')
+ const geometry=new BufferGeometry();geometry.dispose=function(){this.disposed=true}
+ const original={name:'original'},mesh={material:[original],localToWorld(point){return point}}
+ const payload={},busy={value:false},error={value:''},charm={value:null}
+ let emitted,refreshes=0
+ const bindings={busy,props:{saving:false},fills:{value:[]},error,up(){},exportScanRegions:async()=>payload,mesh,state:{},buildRegionGroups:()=>({geometry}),THREE:{Mesh},charm,refresh(){refreshes++},emit:(_,value)=>{emitted=value},captureShoeThumbnail:async shoe=>{
+  assert.equal(shoe.geometry,geometry);assert.equal(shoe.material,original)
+  return 'transparent-auto-fit-png'
+ }}
+ await componentFunction('ScanRegionEditor.vue','finish','onMounted(',bindings)()
+ assert.equal(emitted.payload.thumbnail,'transparent-auto-fit-png')
+ assert.equal(geometry.disposed,true);assert.equal(busy.value,false);assert.equal(refreshes,1)
+ geometry.disposed=false;emitted=null
+ bindings.captureShoeThumbnail=async()=>{throw new Error('WebGL capture failed')}
+ await componentFunction('ScanRegionEditor.vue','finish','onMounted(',bindings)()
+ assert.equal(emitted,null);assert.equal(error.value,'WebGL capture failed');assert.equal(geometry.disposed,true);assert.equal(busy.value,false)
+})
+
+test('dragging scan preview color reuses geometry/materials and skips painting refresh',async()=>{
+ const THREE=await import('three'),state={},scene={objects:[],add(object){this.objects.push(object)}},mode={value:'paint'},busy={value:false}
+ let builds=0,switches=0
+ const texture=new THREE.Texture(),material=new THREE.MeshStandardMaterial({map:texture})
+ const bindings={THREE,state,scene,mode,busy,mesh:{material:[material]},fills:{value:[]},error:{value:''},previewColors:{},previewMesh:null,previewParts:[],neutralMap:new THREE.Texture(),neutralPreparing:null,disposed:false,region:{value:'laces'},testColor:{value:'#112233'},buildRegionGroups(){builds++;return {geometry:new THREE.BufferGeometry(),parts:[{id:'laces'}]}},setMode(value){switches++;mode.value=value}}
+ const preview=componentFunction('ScanRegionEditor.vue','previewColor','async function finish()',bindings)
+ await preview();bindings.testColor.value='#445566';await preview();bindings.testColor.value='#778899';await preview()
+ assert.equal(builds,1);assert.equal(scene.objects.length,1);assert.equal(switches,1)
+ assert.equal(scene.objects[0].material[1].color.getHexString(),'778899')
 })

@@ -13,3 +13,5 @@ output/
 
 .local-tools/
 .scan-data/
+
+.env*.local

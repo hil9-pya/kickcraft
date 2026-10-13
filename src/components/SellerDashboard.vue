@@ -4,7 +4,7 @@ import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
 import {ref,reactive,computed,onMounted,onBeforeUnmount} from 'vue'
 import {api} from '../api.js'
-import {validateStore,pickupActions,pickupLabels} from '../seller.js'
+import {validateStore,pickupActions,pickupLabels,productLabels} from '../seller.js'
 import {forgetCompletedScan} from '../scan-capture.js'
 import PhotoScanner from './PhotoScanner.vue'
 import ConfirmModal from './ConfirmModal.vue'
@@ -16,24 +16,44 @@ const props=defineProps({user:{type:Object,required:true}})
 const emit=defineEmits(['changed','signedOut'])
 const profile=ref(null),products=ref([]),orders=ref([]),tab=ref('products'),editing=ref(null),scanning=ref(false),uploading=ref(false),busy=ref(false),loading=ref(true),error=ref(''),message=ref('')
 const store=reactive({storeName:'',description:'',pickupAddress:'',contact:''}),glb=ref(null),thumbnail=ref(null)
-const completing=ref(null),leaving=ref(null)
+const completing=ref(null),leaving=ref(null),productAction=ref(null),productView=ref('active')
+const visibleProducts=computed(()=>products.value.filter(shoe=>productView.value==='archived'?!!shoe.deletedAt:!shoe.deletedAt))
 const orderFilter=ref('all'),orderNotes=reactive({})
 const visibleOrders=computed(()=>orders.value.filter(o=>orderFilter.value==='all'||o.status===orderFilter.value))
-const guideSteps=[{title:'Your store is approved',text:'Customers see your store name and pickup address. Check these under Store settings.',tab:'settings'},{title:'Create a shoe',text:'Use Generate from photos for your actual shoe. Choose overlapping photos or a video of three slow passes around the shoe, review background masks, and wait for reconstruction.',tab:'products'},{title:'Make parts customizable',text:'Compare the scan against the photographs. Paint at least two real shoe regions, name them, then test each color in Product details.',tab:'products'},{title:'Request listing review',text:'Set description, price, stock, sizes and palette. Submit for review. Only admin-approved listings appear publicly.',tab:'products'},{title:'Fulfill pickup orders',text:'Confirm each reservation, mark it ready, then complete it after collection and payment in your store. Cancellation restores one pair.',tab:'orders'}]
+const guideSteps=[{title:'Your store is approved',text:'Customers see your store name and pickup address. Check these under Store settings.',tab:'settings'},{title:'Create a shoe',text:'Use Generate from photos for your actual shoe. Choose one clear photo or up to four labeled views. Remove backgrounds if needed, then generate a model.',tab:'products'},{title:'Make parts customizable',text:'Compare the scan against the photographs. Paint at least two real shoe regions, name them, then test each color in Product details.',tab:'products'},{title:'Request listing review',text:'Set description, price, stock, sizes and palette. Submit for review. Only admin-approved listings appear publicly.',tab:'products'},{title:'Fulfill pickup orders',text:'Confirm each reservation, mark it ready, then complete it after collection and payment in your store. Cancellation restores one pair.',tab:'orders'}]
 const guide=computed(()=>guideSteps[profile.value?.tutorialStep || 0])
-let timer,closed=false
+const reviewNotices=ref([])
+let timer,closed=false,refreshing=false
 async function refresh(quiet=false) {
- if(closed)return
+ if(closed||refreshing)return
+ refreshing=true
  if(!quiet)loading.value=true
  try {
   const result=await api('sellers/profile.php');const previous=profile.value?.status;profile.value=result.seller
   if(!quiet||previous!==profile.value.status)Object.assign(store,result.seller)
   if(profile.value.status==='approved') {
-   if(!quiet||previous!==profile.value.status){const results=await Promise.all([api('products/list.php'),api('sellers/orders.php')]);products.value=results[0].shoes;orders.value=results[1].reservations}
-  }else {products.value=[];orders.value=[];editing.value=null;scanning.value=false;uploading.value=false}
+   const results=await Promise.all([api('products/list.php?include_archived=1'),api('sellers/orders.php')]);if(closed)return
+   const prior=new Map(products.value.map(shoe=>[shoe.id,shoe.publicationState+Boolean(shoe.deletedAt)]))
+   const changed=results[0].shoes.filter(shoe=>prior.has(shoe.id)&&prior.get(shoe.id)!==shoe.publicationState+Boolean(shoe.deletedAt))
+   const notices=changed.filter(shoe=>!shoe.deletedAt&&['approved','rejected'].includes(shoe.publicationState)).map(shoe=>shoe.publicationState==='approved'?`Admin approved ${shoe.name}. It is now live in Shop.`:`Admin requested changes to ${shoe.name}. ${shoe.reviewNote||'Open the product to see review details.'}`)
+   if(changed.length){reviewNotices.value=notices.slice(0,5);emit('changed')}
+   products.value=results[0].shoes;orders.value=results[1].reservations
+   if(editing.value){const updated=products.value.find(shoe=>shoe.id===editing.value.id);if(updated){editing.value.publicationState=updated.publicationState;editing.value.reviewNote=updated.reviewNote}}
+  }else {products.value=[];orders.value=[];reviewNotices.value=[];editing.value=null;scanning.value=false;uploading.value=false}
   if(!quiet)error.value=''
  }catch(cause){error.value=cause.message;if(cause.status===401)emit('signedOut')}
- finally{loading.value=false}
+ finally{loading.value=false;refreshing=false}
+}
+async function changeProductVisibility(shoe,action){
+ if(busy.value)return
+ busy.value=true;error.value=''
+ try{
+  const result=await api('products/visibility.php',{method:'POST',body:{id:shoe.id,action}})
+  products.value=products.value.map(item=>item.id===shoe.id?result.shoe:item)
+  productAction.value=null;reviewNotices.value=[]
+  message.value=action==='archive'?'Product removed. Restore it from Removed products. Existing pickup orders are unchanged.':action==='restore'?'Product restored as a private draft. Submit it for admin review to publish again.':'Product unpublished. It remains in My products as a private draft.'
+  emit('changed');await refresh()
+ }catch(cause){error.value=cause.message}finally{busy.value=false}
 }
 async function create(source) {
  busy.value=true;error.value=''
@@ -70,13 +90,15 @@ async function updateOrder(order,status) {
 }
 function navigate(item){tab.value=item;editing.value=null;scanning.value=false;uploading.value=false;leaving.value=null}
 function saved(shoe){editing.value=shoe;refresh();emit('changed')}
-onMounted(async()=>{await refresh();timer=setInterval(()=>refresh(true),30000)})
-onBeforeUnmount(()=>{closed=true;clearInterval(timer)})
+function poll(){if(!document.hidden&&!busy.value)void refresh(true)}
+onMounted(async()=>{await refresh();if(closed)return;timer=setInterval(poll,15000);document.addEventListener('visibilitychange',poll)})
+onBeforeUnmount(()=>{closed=true;clearInterval(timer);document.removeEventListener('visibilitychange',poll)})
 </script>
 <template>
  <main class="seller seller-portal">
   <header><div><p class="portal-title">Seller Studio</p><h1>{{profile?.storeName || 'Your store'}}</h1></div><div class="actions"><a href="#shop">Shop</a><Button variant="outline" :disabled="loading||busy" @click="refresh()">Refresh</Button></div></header>
   <p v-if="loading" role="status">Loading Seller Studio…</p><p v-if="error" class="error" role="alert">{{error}}</p><p v-if="message" class="success" role="status">{{message}}</p>
+  <section v-if="reviewNotices.length" class="success" role="status" aria-live="polite"><div class="actions"><strong>Admin review updates</strong><Button type="button" variant="ghost" @click="reviewNotices=[]">Dismiss</Button></div><p v-for="notice in reviewNotices" :key="notice">{{notice}}</p></section>
   <div v-if="profile" class="seller-layout" :class="{'without-navigation':profile.status!=='approved'}">
    <nav v-if="profile.status==='approved'" class="seller-navigation" aria-label="Seller sections"><Button variant="outline" v-for="item in ['products','templates','orders','settings']" :key="item" :aria-current="tab===item" :disabled="busy||loading" @click="tab!==item&&(editing||scanning||uploading?leaving=item:navigate(item))">{{item==='products'?'My products':item==='templates'?'Shared templates':item==='orders'?'Pickup orders':'Store settings'}}</Button></nav>
    <div class="seller-workspace">
@@ -90,10 +112,14 @@ onBeforeUnmount(()=>{closed=true;clearInterval(timer)})
      <SellerProductEditor v-else-if="editing" :key="editing.id" :shoe="editing" @saved="saved" @close="editing=null;refresh()" />
      <template v-else>
       <div class="workspace-heading"><div><h2>My products</h2><p class="muted">Original shoes, prepared for customer customization.</p></div><div class="actions"><Button variant="default" class="primary" :disabled="busy" @click="scanning=true">Generate from photos</Button><Button variant="outline" :disabled="busy" @click="uploading=!uploading">Upload GLB</Button><Button variant="outline" :disabled="busy" @click="create('template')">Use KickCraft template</Button></div></div>
-      <p class="muted creation-help">Create a 3D draft from photos; compare every angle because unseen details may differ. The template starts from KickCraft’s existing eight-part design.</p>
+      <p class="muted creation-help">Create a 3D draft from 1–4 photos; compare every angle because unseen details may differ. The template starts from KickCraft’s existing eight-part design.</p>
       <form v-if="uploading" class="panel stack upload-form" @submit.prevent="upload"><h2>Upload an original shoe</h2><p>GLB must contain 2–16 independently named material regions, at most 50,000 triangles, with embedded resources. Single-material models need photo scanning and part painting.</p><label>GLB model (up to 20 MB)<input type="file" accept=".glb,model/gltf-binary" required @change="glb=$event.target.files[0]"></label><label>Matching PNG thumbnail (up to 10 MB)<input type="file" accept="image/png" required @change="thumbnail=$event.target.files[0]"></label><Button variant="default" class="primary" :disabled="busy">{{busy?'Uploading…':'Upload product draft'}}</Button></form>
-      <p v-if="!products.length&&!loading" class="panel empty-products">No products yet. Scan your shoe, upload a compatible GLB, or start with the original template.</p>
-      <div class="product-list"><article v-for="shoe in products" :key="shoe.id" class="panel stack"><ShoeThumbnail :src="shoe.glbPath" :image="shoe.thumbnailPath" :alt="shoe.name" /><p class="tag">{{shoe.publicationState}} · {{shoe.parts.length}} custom parts</p><h2>{{shoe.name}}</h2><p>₱{{Number(shoe.price).toLocaleString()}} · {{shoe.stock}} pairs</p><p v-if="shoe.reviewNote" class="notice">{{shoe.reviewNote}}</p><Button variant="outline" @click="editing=shoe">Edit product</Button></article></div>
+      <div class="actions mb-4" role="group" aria-label="Product visibility"><Button variant="outline" :aria-pressed="productView==='active'" @click="productView='active'">Active products</Button><Button variant="outline" :aria-pressed="productView==='archived'" @click="productView='archived'">Removed products</Button></div>
+      <p v-if="!visibleProducts.length&&!loading" class="panel empty-products">{{productView==='archived'?'No removed products.':'No products yet. Generate from photos, upload a compatible GLB, or use a template.'}}</p>
+      <div class="product-list"><article v-for="shoe in visibleProducts" :key="shoe.id" class="panel stack seller-product-card"><ShoeThumbnail :src="shoe.glbPath" :image="shoe.thumbnailPath" :alt="shoe.name" /><p class="tag">{{shoe.deletedAt?'Removed — hidden from Shop':productLabels[shoe.publicationState] || shoe.publicationState}} · {{shoe.parts.length}} custom parts</p><h2>{{shoe.name}}</h2><p>₱{{Number(shoe.price).toLocaleString()}} · {{shoe.stock}} pairs</p><p v-if="shoe.reviewNote" class="notice">{{shoe.reviewNote}}</p>
+       <footer class="seller-product-actions"><Button v-if="shoe.deletedAt" variant="outline" :disabled="busy||loading" @click="changeProductVisibility(shoe,'restore')">Restore draft</Button>
+       <template v-else><Button variant="outline" :disabled="busy||loading" @click="editing=shoe">{{shoe.publicationState==='approved'?'Edit approved shoe':'Edit product'}}</Button><div class="seller-product-secondary"><Button v-if="['approved','pending'].includes(shoe.publicationState)" variant="outline" :disabled="busy||loading" @click="productAction={shoe,action:'unpublish'}">Unpublish</Button><Button variant="outline" class="seller-product-remove text-destructive" :disabled="busy||loading" @click="productAction={shoe,action:'archive'}">Remove</Button></div></template></footer>
+      </article></div>
      </template>
     </section>
     <SharedTemplateLibrary v-else-if="tab==='templates'" @created="tab='products';saved($event)" />
@@ -116,6 +142,7 @@ onBeforeUnmount(()=>{closed=true;clearInterval(timer)})
    </form>
    </div>
   </div>
+  <ConfirmModal :show="!!productAction" :title="productAction?.action==='archive'?'Remove product?':'Unpublish product?'" :message="productAction?.action==='archive'?`Remove ${productAction?.shoe.name} from your active products and Shop? You can restore it later. Existing pickup orders stay unchanged.`:`Hide ${productAction?.shoe.name} from Shop and cancel any pending review? It remains a private draft. Publishing again requires admin approval.`" :confirm-text="productAction?.action==='archive'?'Remove product':'Unpublish'" cancel-text="Keep product" @confirm="changeProductVisibility(productAction.shoe,productAction.action)" @cancel="!busy&&(productAction=null)" />
   <ConfirmModal :show="!!leaving" title="Leave product workspace?" message="Unsaved product or painting changes will be lost. Saved drafts and captures stay available." confirm-text="Leave workspace" cancel-text="Keep editing" @confirm="navigate(leaving)" @cancel="leaving=null" />
   <ConfirmModal :show="!!completing" title="Complete pickup?" message="Confirm the customer collected this shoe and paid in store." confirm-text="Complete pickup" cancel-text="Keep ready" @confirm="updateOrder(completing,'completed');completing=null" @cancel="completing=null" />
  </main>

@@ -112,11 +112,11 @@ try {
         }
         if (!is_string($color['value'] ?? null)) { $db->rollBack(); jsonError('Customization contains an invalid color',400); }
         $value = strtolower(trim($color['value']));
-        if (!isset($allowedColors[$value])) {
+        if (!preg_match('/^#[0-9a-f]{6}$/D', $value)) {
             $db->rollBack();
-            jsonError('Customization contains an unsupported color', 400);
+            jsonError('Customization contains an invalid color', 400);
         }
-        $validatedColors[$partId] = ['name' => $allowedColors[$value], 'value' => $value];
+        $validatedColors[$partId] = ['name' => $allowedColors[$value] ?? ('Custom ' . strtoupper($value)), 'value' => $value];
     }
     $partColorsJson = json_encode($validatedColors, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
     if ($partColorsJson === false || strlen($partColorsJson) > 8192) {

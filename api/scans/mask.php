@@ -2,7 +2,7 @@
 require_once __DIR__.'/common.php';
 scanRequest('POST',function(int $owner) {
     $id=scanId($_POST['id'] ?? null); $path=scanUploadFile('file');
-    $db=getDb(); $db->beginTransaction(); $job=scanJob($db,$id,$owner,true);
+    $db=getDb(); $db->beginTransaction(); $job=scanJob($db,$id,$owner,true);tripoCaptureEngine($job['engine']);
     if ($job['state']!=='uploading') scanFail('Masks can only change before reconstruction',409);
     $index=null;
     foreach ($job['images'] as $key=>$image) if ($image['id']===($_POST['image'] ?? '')) { $index=$key; break; }

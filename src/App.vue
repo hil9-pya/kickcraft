@@ -2,16 +2,16 @@
 import { Button } from './components/ui/button'
 import { Input } from './components/ui/input'
 import { Textarea } from './components/ui/textarea'
-import { computed, defineAsyncComponent, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import ConfirmModal from './components/ConfirmModal.vue'
 import KickCraftCalendar from './components/KickCraftCalendar.vue'
 import StudioSections from './components/StudioSections.vue'
 import { api } from './api.js'
+import {frameLatest} from './color-input.js'
 import {publicCatalog,palettePresets} from './seller.js'
 import { adminShoeToCatalogCard } from './admin.js'
 import {
   CATALOG,
-  CATEGORIES,
   CHARMS,
   SHOES,
   buildPartColorway,
@@ -327,13 +327,12 @@ const charmModels = computed(() => charmOptions.value
   .map(charm => ({ ...charm, src: charmSource(charm, selectedShoe.value) })))
 
 const searchQuery = ref('')
-const activeCategory = ref('all')
 const catalogSource = ref('all')
 
 const dynamicCatalog = computed(() => publicCatalog(adminShoes.value.map(adminShoeToCatalogCard),catalogLoaded.value,CATALOG.filter(card=>card.categories.includes('kickcraft'))))
 
 const filteredCatalog = computed(() => {
-  return filterCatalog(dynamicCatalog.value, searchQuery.value, activeCategory.value, catalogSource.value)
+  return filterCatalog(dynamicCatalog.value, searchQuery.value, 'all', catalogSource.value)
 })
 const displayCatalog = computed(() => prioritizeLiveCatalog(filteredCatalog.value))
 const liveCatalogCount = computed(() => displayCatalog.value.filter(card => card.status === 'live').length)
@@ -341,7 +340,6 @@ const liveCatalogCount = computed(() => displayCatalog.value.filter(card => card
 function clearFilters() {
   catalogSource.value = 'all'
   searchQuery.value = ''
-  activeCategory.value = 'all'
 }
 
 async function handleModelLoad() {
@@ -386,6 +384,15 @@ function chooseColor(color) {
   partColors.value = { ...partColors.value, [selectedPartId.value]: color }
 }
 
+const customColorInput=frameLatest(chooseCustomColor)
+onBeforeUnmount(()=>customColorInput.cancel())
+
+function chooseCustomColor(value) {
+  if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value)) return
+  const hex = value.toLowerCase()
+  chooseColor(shoeColors.value.find(color => color.value.toLowerCase() === hex) || { name: 'Custom ' + hex.toUpperCase(), value: hex })
+}
+
 function highlightSelectedPart(part = selectedPart.value) {
   if (!modelReady.value) return
   for (const candidate of selectedParts.value) {
@@ -395,6 +402,7 @@ function highlightSelectedPart(part = selectedPart.value) {
 }
 
 function selectPart(part) {
+  customColorInput.flush()
   selectedPartId.value = part.id
   highlightSelectedPart(part)
 }
@@ -883,6 +891,7 @@ async function handleLoginSubmit() {
 }
 
 function resetStudioState() {
+  customColorInput.cancel()
   partColors.value = {}
   selectedCharmId.value = 'none'
   selectedPartId.value = selectedParts.value[0]?.id || 'upper'
@@ -905,7 +914,6 @@ function goToStudio(shoeId) {
 
 function goToShop() {
   catalogSource.value='all'
-  activeCategory.value='all'
   selectedShoeId.value = SHOES[0].id
   resetStudioState()
   notFoundPath.value = ''
@@ -1049,13 +1057,13 @@ function scrollToTop() {
       </section>
 
       <!-- Search & Filters Toolbar -->
-      <div id="shop-catalog" class="mb-6 space-y-3 border-b border-border pb-4">
-        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div class="flex flex-wrap gap-2" role="group" aria-label="Shoe source">
+      <div id="shop-catalog" class="mb-5 border-b border-border pb-4">
+        <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[auto_minmax(14rem,1fr)_auto]">
+          <div class="col-span-2 flex flex-wrap gap-2 lg:col-span-1" role="group" aria-label="Shoe source">
             <Button variant="outline" v-for="source in [{id:'all',label:'All shoes'},{id:'kickcraft',label:'KickCraft originals'},{id:'seller',label:'Seller designs'}]" :key="source.id" type="button" :aria-pressed="catalogSource===source.id" :class="catalogSource===source.id?'bg-foreground text-white hover:bg-foreground/90 hover:text-white':''" @click="catalogSource=source.id">{{source.label}}</Button>
           </div>
           <!-- Search input -->
-          <div class="relative w-full sm:max-w-md">
+          <div class="relative min-w-0 w-full lg:ml-auto lg:max-w-xl">
             <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-[#6a6e6a]">
               <svg class="size-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fill-rule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.452 4.391l3.328 3.329a.75.75 0 11-1.06 1.06l-3.329-3.328A7 7 0 012 9z" clip-rule="evenodd" />
@@ -1082,25 +1090,12 @@ function scrollToTop() {
           </div>
 
           <!-- Results counter -->
-          <div class="text-xs font-semibold text-[#6a6e6a]">
+          <div class="whitespace-nowrap text-xs font-semibold text-[#6a6e6a]" role="status" aria-live="polite">
             Showing <span class="font-bold text-[#202220]">{{ filteredCatalog.length }}</span> {{ filteredCatalog.length === 1 ? 'shoe' : 'shoes' }}
           </div>
         </div>
 
-        <!-- Category pills -->
-        <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Shoe categories">
-          <Button variant="ghost"
-            v-for="cat in CATEGORIES.filter(cat=>!['kickcraft','marketplace'].includes(cat.id))"
-            :key="cat.id"
-            type="button"
-            class="px-3.5 py-1.5 text-xs font-bold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-            :class="activeCategory === cat.id ? 'bg-[#292b2d] text-white' : 'bg-[#fcfdfb] text-[#5f635f] border border-input hover:border-[#292b2d]'"
-            :aria-pressed="activeCategory === cat.id"
-            @click="activeCategory = cat.id"
-          >
-            {{ cat.id==='all'?'All types':cat.label }}
-          </Button>
-        </div>
+
       </div>
 
       <!-- Catalog loading state -->
@@ -1126,7 +1121,7 @@ function scrollToTop() {
           </svg>
         </div>
         <h3 class="font-display text-lg font-bold text-[#202220]">No styles match your search or filter.</h3>
-        <p class="mt-1 max-w-sm text-xs text-[#6a6e6a]">Try adjusting your search terms or selecting a different category to explore available styles.</p>
+        <p class="mt-1 max-w-sm text-xs text-[#6a6e6a]">Try another search or choose a different shoe source.</p>
         <Button variant="outline"
           type="button"
           class="mt-5 border border-[#292b2d] bg-[#292b2d] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#404345] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
@@ -1411,6 +1406,13 @@ function scrollToTop() {
               <div class="mb-3 flex items-center justify-between gap-4">
                 <legend class="font-display text-base font-bold">Choose color</legend>
                 <span class="text-xs font-semibold text-[#696d69]">{{ selectedColor?.name || 'Neutral' }}</span>
+              </div>
+              <div class="mb-3 flex items-center justify-between gap-3">
+                <label class="flex items-center gap-3 text-sm font-semibold">
+                  <input type="color" aria-label="Custom shoe color" :value="selectedColor?.value || '#ffffff'" @input="customColorInput($event.target.value)" @change="customColorInput.flush()" class="h-10 w-14 cursor-pointer rounded border border-input bg-white p-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring">
+                  Pick any color
+                </label>
+                <output class="text-xs font-semibold text-muted-foreground">{{ (selectedColor?.value || '#ffffff').toUpperCase() }}</output>
               </div>
               <div class="grid grid-cols-3 gap-2">
                 <Button variant="outline"

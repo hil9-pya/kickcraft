@@ -1,14 +1,12 @@
 <?php
 require_once __DIR__.'/common.php';
 scanRequest('POST', function(int $owner) {
-    $engine=scanJson()['engine'] ?? 'meshroom';
-    if (!in_array($engine,['meshroom','realityscan','tripo'],true)) scanFail('Unknown scan engine',400);
-    if ($engine==='realityscan' && !is_file((string)configValue('REALITYSCAN_EXE'))) scanFail('Local RealityScan is not configured',503);
-    if($engine==='tripo' && !tripoConfigured())scanFail('AI provider is not configured on the local worker',503);
+    $engine=tripoCaptureEngine(scanJson()['engine'] ?? 'tripo');
+    if(!tripoConfigured())scanFail('AI provider is not configured on the local worker',503);
     $db = getDb();
     $db->beginTransaction();
     $db->prepare('SELECT id FROM users WHERE id = ? FOR UPDATE')->execute([$owner]);
-    $count = $db->prepare("SELECT COUNT(*) FROM scan_jobs WHERE owner_id = ? AND state IN ('uploading','queued','processing','ready')");
+    $count = $db->prepare("SELECT COUNT(*) FROM scan_jobs WHERE owner_id = ? AND engine='tripo' AND state IN ('uploading','queued','processing','ready')");
     $count->execute([$owner]);
     if ($count->fetchColumn() >= 10) scanFail('Finish existing scans before creating more', 429);
     $hex = bin2hex(random_bytes(16));

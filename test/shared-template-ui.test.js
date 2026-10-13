@@ -8,12 +8,13 @@ import {parse} from '@vue/compiler-sfc'
 import {compile} from '@vue/compiler-dom'
 import * as Vue from 'vue'
 import {renderToString} from '@vue/server-renderer'
+import {productLabels} from '../src/seller.js'
 const server=await createServer({configFile:false,cacheDir:'node_modules/.vite-template-tests',plugins:[vue()],resolve:{alias:{'@':path.resolve('src')}},server:{middlewareMode:true,hmr:false},appType:'custom'})
 after(()=>server.close())
 const shared={}
 for(const name of ['Button','Input','Textarea'])shared[name]=(await server.ssrLoadModule('/src/components/ui/'+name.toLowerCase()+'/'+name+'.vue')).default
 shared.Slider=(await server.ssrLoadModule('/src/components/ui/slider/Slider.vue')).default
-async function renderScreen(render,values){const app=Vue.createSSRApp({render,setup:()=>values});for(const [name,component]of Object.entries(shared))app.component(name,component);for(const name of ['PhotoScanner','SellerProductEditor','SharedTemplateLibrary','ConfirmModal'])app.component(name,{render:()=>null});return (await renderToString(app)).replace(/<!--.*?-->/gs,'')}
+async function renderScreen(render,values){const app=Vue.createSSRApp({render,setup:()=>({reviewNotices:[],productLabels,visibleProducts:values.products||[],productView:'active',productAction:null,previewHex:'#ffffff',paletteIndex:0,painting:null,...values})});for(const [name,component]of Object.entries(shared))app.component(name,component);for(const name of ['PhotoScanner','SellerProductEditor','SharedTemplateLibrary','ConfirmModal','RecentColors','ScanRegionEditor'])app.component(name,{render:()=>null});return (await renderToString(app)).replace(/<!--.*?-->/gs,'')}
 const {descriptor}=parse(readFileSync(new URL('../src/components/SellerModeration.vue',import.meta.url),'utf8'))
 const render=new Function('Vue',compile(descriptor.template.content,{prefixIdentifiers:true,isCustomElement:tag=>tag==='model-viewer'}).code)(Vue)
 const shoe={id:'shared-check',name:'Shared original shoe',description:'Original fixture',glbPath:'/models/check.glb',storeName:'Creator Studio',parts:[{id:'upper',label:'Upper',material:'UpperMaterial'},{id:'midsole',label:'Midsole',material:'MidsoleMaterial'}],publicationState:'pending',sourceScanId:'capture'}
@@ -73,12 +74,19 @@ test('seller navigation stays separate from workspace and approval gates stay in
 })
 
 test('painting keeps pending fills and the two-part requirement ahead of finalization',async()=>{
- const values={fullscreen:false,error:'',ready:true,busy:false,saving:false,mode:'fill',fills:[{faces:[0,1]}],fillCount:2,fillTolerance:40,region:'upper',radius:16,cursor:null,brushActive:false,counts:{upper:2,midsole:4},partCount:2,PARTS:[{id:'upper',label:'Upper'},{id:'midsole',label:'Midsole'}],swatches:['#e87558','#abb9c2'],charm:null,testColor:'#ffffff',cropMin:-100,cropMax:100,cropAxis:'y',toggleFullscreen(){},undo(){},keydown(){},clearPart(){},applyFill(){},crop(){},finish(){}}
+ const values={lockedParts:[],unassignedOnly:false,canUndo:true,canRedo:false,toggleLock(){},setUnassignedOnly(){},redo(){},fullscreen:false,error:'',ready:true,busy:false,saving:false,mode:'fill',fills:[{faces:[0,1]}],fillCount:2,fillTolerance:40,region:'upper',radius:16,cursor:null,brushActive:false,counts:{upper:2,midsole:4},partCount:2,PARTS:[{id:'upper',label:'Upper'},{id:'midsole',label:'Midsole'}],swatches:['#e87558','#abb9c2'],charm:null,testColor:'#ffffff',cropMin:-100,cropMax:100,cropAxis:'y',toggleFullscreen(){},undo(){},keydown(){},clearPart(){},applyFill(){},crop(){},finish(){}}
  const pending=await renderFile('ScanRegionEditor.vue',values)
  assert.match(pending,/<button[^>]*\sdisabled(?=[\s=>])[^>]*>Use these parts<\/button>/)
  assert.match(pending,/<button\b(?![^>]*\sdisabled(?=[\s=>]))[^>]*>Apply all fills<\/button>/)
  assert.match(pending,/<input[^>]*type="radio"[^>]*\sdisabled(?=[\s=>])/)
- const ready=await renderFile('ScanRegionEditor.vue',{...values,fills:[],fillCount:0})
+ const ready=await renderFile('ScanRegionEditor.vue',{...values,fills:[],fillCount:0,canUndo:false})
+ assert.match(ready,/aria-label="Lock Upper"/)
+ assert.match(ready,/Paint unassigned faces only/)
+ assert.match(ready,/<button[^>]*\sdisabled(?=[\s=>])[^>]*>Undo selection \/ stroke \/ crop<\/button>/)
+ assert.match(ready,/<button[^>]*\sdisabled(?=[\s=>])[^>]*>Redo stroke \/ crop<\/button>/)
+ const locked=await renderFile('ScanRegionEditor.vue',{...values,fills:[],lockedParts:['upper']})
+ assert.match(locked,/aria-label="Unlock Upper"[^>]*aria-pressed="true"/)
+ assert.match(locked,/<button[^>]*\sdisabled(?=[\s=>])[^>]*>Clear selected part<\/button>/)
  assert.match(ready,/<button\b(?![^>]*\sdisabled(?=[\s=>]))[^>]*>Use these parts<\/button>/)
  for(const changes of [{partCount:1},{saving:true},{busy:true}]){
   const html=await renderFile('ScanRegionEditor.vue',{...values,fills:[],...changes})
@@ -89,7 +97,7 @@ test('painting keeps pending fills and the two-part requirement ahead of finaliz
 test('seller section clicks preserve active work until leaving is confirmed',async()=>{
  const {descriptor}=parse(readFileSync(new URL('../src/components/SellerDashboard.vue',import.meta.url),'utf8'))
  const render=new Function('Vue',compile(descriptor.template.content,{prefixIdentifiers:true}).code)(Vue)
- const values=Vue.reactive({profile:{status:'approved',storeName:'Fixture',tutorialStep:5},user:{id:99},tab:'products',loading:false,busy:false,error:'',message:'',products:[],editing:{id:'draft'},scanning:false,uploading:false,guide:null,store:{},completing:null,leaving:null,saved(){},refresh(){},navigate(item){this.tab=item;this.editing=null}})
+ const values=Vue.reactive({reviewNotices:[],productLabels,visibleProducts:[],productView:'active',productAction:null,profile:{status:'approved',storeName:'Fixture',tutorialStep:5},user:{id:99},tab:'products',loading:false,busy:false,error:'',message:'',products:[],editing:{id:'draft'},scanning:false,uploading:false,guide:null,store:{},completing:null,leaving:null,saved(){},refresh(){},navigate(item){this.tab=item;this.editing=null}})
  const clicks={}
  const app=Vue.createSSRApp({render,setup:()=>values})
  app.component('Button',{setup(_,{attrs,slots}){return()=>{const children=slots.default?.();const label=children?.map(v=>v.children).join('');clicks[label]=attrs.onClick;return Vue.h('button',attrs,children)}}})
@@ -117,4 +125,21 @@ test('mask settings and saving stay disabled while preparing or saving the photo
   assert.match(locked,/<fieldset\sdisabled/)
   assert.match(locked,/<span[^>]*role="slider"[^>]*data-disabled/)
  }
+})
+
+
+test('approved seller products retain edit controls and show live status and review notices',async()=>{
+ const product={...shoe,publicationState:'approved',thumbnailPath:'/images/check.png',price:1234,stock:2}
+ const html=await renderFile('SellerDashboard.vue',{profile:{status:'approved',storeName:'Fixture',tutorialStep:5},user:{id:99},tab:'products',loading:false,busy:false,error:'',message:'',reviewNotices:['Admin approved Shared original shoe. It is now live in Shop.'],products:[product],orders:[],editing:null,scanning:false,uploading:false,guide:null,store:{},completing:null,leaving:null,refresh(){},create(){}})
+ assert.match(html,/Approved — live in Shop/);assert.match(html,/Edit approved shoe/);assert.match(html,/Admin review updates/)
+ assert.doesNotMatch(html,/<button[^>]*\sdisabled(?=[\s=>])[^>]*>Edit approved shoe/)
+})
+
+test('seller product cards offer unpublish/remove and archived cards offer restore',async()=>{
+ const base={profile:{status:'approved',storeName:'Fixture',tutorialStep:5},user:{id:99},tab:'products',loading:false,busy:false,error:'',message:'',products:[],orders:[],editing:null,scanning:false,uploading:false,guide:null,store:{},completing:null,leaving:null,refresh(){},create(){}}
+ const product={...shoe,publicationState:'approved',thumbnailPath:'/images/check.png',price:1234,stock:2,deletedAt:null}
+ const active=await renderFile('SellerDashboard.vue',{...base,products:[product],visibleProducts:[product],productView:'active'})
+ assert.match(active,/>Unpublish<\/button>/);assert.match(active,/>Remove<\/button>/)
+ const archived=await renderFile('SellerDashboard.vue',{...base,products:[{...product,deletedAt:'2026-10-14'}],visibleProducts:[{...product,deletedAt:'2026-10-14'}],productView:'archived'})
+ assert.match(archived,/>Restore draft<\/button>/);assert.doesNotMatch(archived,/>Unpublish<\/button>/)
 })

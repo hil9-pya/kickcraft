@@ -11,7 +11,7 @@ function declaration(name){
  return app.slice(start,end+2)
 }
 function screen({pathname='/',hash='',search='',saved=null,user=null}={}){
- const refs={view:{value:'studio'},catalogSource:{value:'all'},activeCategory:{value:'fashion'},searchQuery:{value:'stale search'},notFoundPath:{value:'old'},currentUser:{value:user}}
+ const refs={view:{value:'studio'},catalogSource:{value:'all'},searchQuery:{value:'stale search'},notFoundPath:{value:'old'},currentUser:{value:user}}
  const redirects=[]
  const window={location:{pathname,hash,search},history:{state:{existing:true},replaceState(state,title,url){redirects.push(url)}}}
  const code=['redirectMarketplace','getInitialView','resolveCurrentRoute','clearFilters'].map(declaration).join('\n')+'\nreturn {getInitialView,resolveCurrentRoute,clearFilters}'
@@ -29,7 +29,6 @@ test('legacy marketplace hash and path links open seller designs in canonical Sh
   const initial=screen({pathname,hash})
   assert.equal(initial.getInitialView(),'shop')
   assert.equal(initial.catalogSource.value,'seller')
-  assert.equal(initial.activeCategory.value,'all')
   assert.equal(initial.searchQuery.value,'')
   assert.deepEqual(initial.redirects,[expected])
   const navigation=screen({pathname,hash})
@@ -55,7 +54,6 @@ test('clearing filters restores all sources and route authorization remains inta
  state.resolveCurrentRoute()
  state.clearFilters()
  assert.equal(state.catalogSource.value,'all')
- assert.equal(state.activeCategory.value,'all')
  assert.equal(state.searchQuery.value,'')
  for(const [user,expected]of [[null,'login'],[{role:'seller'},'not-found'],[{role:'owner'},'admin']]){
   const admin=screen({hash:'#admin',user})

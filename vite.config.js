@@ -1,9 +1,11 @@
-import { defineConfig } from 'vite'
+import { defineConfig, loadEnv } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), 'KICKCRAFT_')
+  return {
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   plugins: [
     vue({
@@ -16,11 +18,14 @@ export default defineConfig({
     tailwindcss(),
   ],
   server: {
+    port: Number(env.KICKCRAFT_DEV_PORT || 5173),
+    strictPort: true,
     proxy: {
       '/api': {
-        target: process.env.KICKCRAFT_API_TARGET || 'http://localhost/kickcraft',
+        target: env.KICKCRAFT_API_TARGET || 'http://localhost/kickcraft',
         changeOrigin: true,
       },
     },
   },
+  }
 })

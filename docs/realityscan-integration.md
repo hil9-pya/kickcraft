@@ -1,3 +1,5 @@
+> Historical integration record. Website video/local reconstruction is retired; RealityScan is retained only for optional Tripo photo background removal. See README for the active flow.
+
 # RealityScan comparison and integration
 
 Approved scope: optional native video import and AI masks through the existing PHP worker. Vue -> PHP -> MySQL stays unchanged. Meshroom remains default. No new processing dependencies. The same native AI can also mask saved photo captures through the **Generate AI masks for unreviewed photos** action; it does not switch the reconstruction engine.

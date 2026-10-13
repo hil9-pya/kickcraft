@@ -1,4 +1,5 @@
 import test from 'node:test'
+import {readFileSync} from 'node:fs'
 import assert from 'node:assert/strict'
 import {BufferGeometry,Float32BufferAttribute,Mesh,MeshStandardMaterial,Vector3} from 'three'
 import {createRegionState,paintFaces,undoStroke,buildRegionGroups,cropFaces} from '../src/scan-regions.js'
@@ -137,4 +138,139 @@ test('middle drag rotates camera in paint/fill tools; left drag stays available 
   }
   setRegionControls(controls,'rotate');const before=camera.position.clone();drag(0);assert.ok(before.distanceTo(camera.position)>0.1)
  }finally{controls.dispose()}
+})
+
+test('saved scan regions reopen with existing assignments, texture and transforms',async()=>{
+ const {Group,Texture}=await import('three')
+ const {restoreRegionMesh}=await import('../src/scan-regions.js')
+ const original=fixture(),state=createRegionState(original)
+ paintFaces(state,[0],'upper');paintFaces(state,[1],'outsole')
+ const {geometry,parts}=buildRegionGroups(state,true),texture=new Texture()
+ const materials=[new MeshStandardMaterial({map:texture}),...parts.map(part=>{const material=new MeshStandardMaterial({map:texture});material.name=part.material;return material})]
+ const group=new Group();group.position.x=2;group.add(new Mesh(geometry,materials))
+ const reopened=restoreRegionMesh(group,parts)
+ assert.deepEqual(reopened.state.assignments,['upper','outsole'])
+ assert.equal(reopened.mesh.material.map,texture)
+ assert.equal(reopened.state.geometry.getAttribute('position').getX(0),2)
+ paintFaces(reopened.state,[0],'laces');assert.deepEqual(buildRegionGroups(reopened.state,true).parts.map(p=>p.id),['laces','outsole'])
+ assert.deepEqual(state.assignments,['upper','outsole'],'saved source stays unchanged')
+})
+
+
+test('locked parts survive repaint, erase, clear and crop; unassigned-only protects labels',()=>{
+ const state=createRegionState(fixture())
+ paintFaces(state,[0],'upper')
+ state.lockedParts=new Set(['upper'])
+ paintFaces(state,[0,1],'outsole')
+ assert.deepEqual(state.assignments,['upper','outsole'])
+ paintFaces(state,[0],null);cropFaces(state,[0])
+ assert.equal(state.assignments[0],'upper')
+ state.lockedParts.clear();state.unassignedOnly=true
+ paintFaces(state,[0,1],'laces');paintFaces(state,[0],null)
+ assert.deepEqual(state.assignments,['upper','outsole'])
+ state.unassignedOnly=false;paintFaces(state,[0],null)
+ state.unassignedOnly=true;paintFaces(state,[0,1],'laces')
+ assert.deepEqual(state.assignments,['laces','outsole'])
+ state.lockedParts.add('laces');paintFaces(state,[1],'laces')
+ assert.equal(state.assignments[1],'outsole','cannot add faces to locked destination')
+})
+
+test('redo restores stroke and crop; no-op preserves redo and new edit clears it',async()=>{
+ const {redoStroke}=await import('../src/scan-regions.js')
+ assert.equal(typeof redoStroke,'function')
+ const state=createRegionState(fixture())
+ paintFaces(state,[0],'upper');cropFaces(state,[1])
+ undoStroke(state);undoStroke(state)
+ assert.equal(redoStroke(state),true);assert.deepEqual(state.assignments,['upper',null])
+ paintFaces(state,[0],'upper')
+ assert.equal(redoStroke(state),true);assert.deepEqual(state.assignments,['upper','removed'])
+ assert.equal(redoStroke(state),false)
+ undoStroke(state);paintFaces(state,[1],'outsole')
+ assert.equal(redoStroke(state),false)
+ undoStroke(state);assert.equal(redoStroke(state),true)
+ assert.deepEqual(state.assignments,['upper','outsole'])
+})
+
+test('brush interpolation covers fast pointer movement with overlapping small stamps',async()=>{
+ const {brushStrokePoints}=await import('../src/scan-regions.js')
+ assert.equal(typeof brushStrokePoints,'function')
+ const end={clientX:100,clientY:40},start={clientX:0,clientY:0}
+ const points=brushStrokePoints(start,end,2)
+ assert.deepEqual(points.at(-1),end)
+ let previous=start
+ for(const point of points){assert.ok(Math.hypot(point.clientX-previous.clientX,point.clientY-previous.clientY)<=1.001);previous=point}
+ assert.deepEqual(brushStrokePoints(null,end,2),[end])
+ assert.deepEqual(brushStrokePoints(end,end,2),[end])
+})
+
+
+test('editor shortcuts preserve text inputs, tool state and native button Space actions',()=>{
+ const source=readFileSync(new URL('../src/components/ScanRegionEditor.vue',import.meta.url),'utf8')
+ const fn=source.slice(source.indexOf('function keydown(event)'),source.indexOf('\nfunction undo()'))
+ let undos=0,redos=0,strokes=0
+ const canvas={closest:()=>null,getBoundingClientRect:()=>({left:0,top:0,width:200,height:100})}
+ const values={ready:{value:true},busy:{value:false},props:{saving:false},mode:{value:'rotate'},radius:{value:16},cursor:{value:null},host:{value:canvas},renderer:{domElement:canvas},painting:false,lastBrush:null,pending:new Set(),region:{value:'upper'},setMode(value){values.mode.value=value},undo(){undos++},redo(){redos++},up(){},stroke(){strokes++},pick(){},suggestFill(){}}
+ const keydown=new Function(...Object.keys(values),'return '+fn)(...Object.values(values))
+ function press(key,extra={}){let prevented=false;keydown({key,target:canvas,preventDefault(){prevented=true},...extra});return prevented}
+ press('z',{ctrlKey:true});press('Z',{metaKey:true,shiftKey:true})
+ assert.equal(undos,1);assert.equal(redos,1)
+ press('b');assert.equal(values.mode.value,'paint')
+ press('e');assert.equal(values.mode.value,'erase')
+ for(let i=0;i<30;i++)press('[')
+ assert.equal(values.radius.value,2)
+ for(let i=0;i<30;i++)press(']')
+ assert.equal(values.radius.value,40)
+ assert.equal(press('b',{target:{closest:()=>({})}}),false,'text fields keep their keys')
+ assert.equal(press(' ',{target:{closest:()=>null}}),false,'buttons retain native Space activation')
+ assert.equal(strokes,0)
+ assert.equal(press(' '),true);assert.equal(strokes,1)
+ values.busy.value=true;press('z',{ctrlKey:true});assert.equal(undos,1)
+})
+
+
+test('small brush avoids checking every face of a dense model per stamp',async()=>{
+ const {PlaneGeometry}=await import('three')
+ const {surfaceBrushFaces}=await import('../src/scan-regions.js')
+ const state=createRegionState(new Mesh(new PlaneGeometry(2,2,158,158),new MeshStandardMaterial()))
+ const point=new Vector3(0,0,0),eye=new Vector3(0,0,3)
+ surfaceBrushFaces(state,point,0.01,eye)
+ let checks=0
+ for(const face of state.brushSurface.triangles){const distance=face.center.distanceToSquared.bind(face.center);face.center.distanceToSquared=other=>{checks++;return distance(other)}}
+ assert.ok(surfaceBrushFaces(state,point,0.01,eye).length>0)
+ assert.ok(checks<state.assignments.length/20,'tiny brush must inspect a local patch, not the whole 50,000-face scan')
+})
+
+
+test('editor canvas prevents middle-mouse autoscroll without blocking other mouse buttons',async()=>{
+ const {compile}=await import('@vue/compiler-dom'),Vue=await import('vue')
+ const source=readFileSync(new URL('../src/components/ScanRegionEditor.vue',import.meta.url),'utf8')
+ const tag=source.match(/<div ref="host"[^>]*>/)[0]
+ const render=new Function('Vue',compile(tag+'</div>',{prefixIdentifiers:true}).code)(Vue)
+ const canvas=render({brushActive:false,mode:'rotate',ready:true,cursor:null},[])
+ for(const type of ['mousedown','auxclick']){
+  const handler=canvas.props[type==='mousedown'?'onMousedown':'onAuxclick']
+  assert.equal(typeof handler,'function',type+' must suppress browser middle-button default')
+  for(const button of [0,1,2]){
+   const event=new Event(type,{cancelable:true});Object.assign(event,{button})
+   handler(event)
+   assert.equal(event.defaultPrevented,button===1,type+' button '+button)
+  }
+ }
+})
+
+
+test('editor notifications stay inside canvas without adding fullscreen layout rows',async()=>{
+ const {parse}=await import('@vue/compiler-sfc'),{baseParse}=await import('@vue/compiler-dom')
+ const source=readFileSync(new URL('../src/components/ScanRegionEditor.vue',import.meta.url),'utf8')
+ const {descriptor}=parse(source),ast=baseParse(descriptor.template.content,{isVoidTag:tag=>['input','img','br'].includes(tag)})
+ let alertParent
+ function visit(node,parent){
+  if(node.type===1 && node.props.some(prop=>prop.name==='role' && prop.value?.content==='alert'))alertParent=parent
+  for(const child of node.children||[])visit(child,node)
+ }
+ visit(ast)
+ assert.ok(alertParent?.props.some(prop=>prop.name==='ref' && prop.value?.content==='host'),'notification must belong to canvas, not outer fullscreen grid')
+ const css=descriptor.styles.map(style=>style.content).join('\n')
+ assert.match(css,/\.scan-error\s*\{[^}]*position:\s*absolute/,'notification must not change canvas dimensions')
+ assert.match(css,/\.scan-error\s*\{[^}]*pointer-events:\s*none/,'notification must not intercept painting or camera input')
 })

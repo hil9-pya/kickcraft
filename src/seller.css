@@ -121,3 +121,10 @@
 .seller-portal .order-controls textarea { min-height: 76px; resize: vertical; }
 .seller-portal .order-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 @media(max-width:1200px) { .seller-portal .order-information { grid-template-columns: repeat(2,minmax(0,1fr)); } .seller-portal .order-controls { grid-column: 1/-1; } }
+
+/* Card actions share a baseline even when product details wrap. */
+.seller-portal .product-list .seller-product-card { display: flex; flex-direction: column; }
+.seller-portal .seller-product-actions { display: grid; gap: 12px; margin-top: auto; padding-top: 4px; }
+.seller-portal .seller-product-secondary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.seller-portal .seller-product-actions button { width: 100%; min-height: 40px; }
+.seller-portal .seller-product-remove { grid-column: 2; }

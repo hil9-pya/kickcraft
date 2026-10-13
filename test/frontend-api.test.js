@@ -17,11 +17,11 @@ test('Vite proxy keeps the original default and permits isolated scan developmen
   const previous = process.env.KICKCRAFT_API_TARGET
   try {
     delete process.env.KICKCRAFT_API_TARGET
-    const defaults = (await import('../vite.config.js?scan-default')).default
+    const defaults = (await import('../vite.config.js?scan-default')).default({mode:'test'})
     assert.equal(defaults.server.proxy['/api'].target, 'http://localhost/kickcraft')
     assert.equal(defaults.server.proxy['/api'].changeOrigin, true)
     process.env.KICKCRAFT_API_TARGET = 'http://localhost/kickcraft-photo-scan'
-    const isolated = (await import('../vite.config.js?scan-isolated')).default
+    const isolated = (await import('../vite.config.js?scan-isolated')).default({mode:'test'})
     assert.equal(isolated.server.proxy['/api'].target, 'http://localhost/kickcraft-photo-scan')
   } finally {
     if (previous === undefined) delete process.env.KICKCRAFT_API_TARGET

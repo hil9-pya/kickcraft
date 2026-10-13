@@ -6,19 +6,31 @@ import * as THREE from 'three'
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js'
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js'
 import {PARTS} from '../customization.js'
-import {setRegionControls,createRegionState,surfaceBrushFaces,sampleFaceColors,smartFillFaces,paintFaces,cropFaces,undoStroke,exportScanRegions,buildRegionGroups,neutralDetailTexture} from '../scan-regions.js'
-const props=defineProps({previewUrl:{type:String,required:true},saving:{type:Boolean,default:false}})
+import {captureShoeThumbnail} from '../scan-thumbnail.js'
+import RecentColors from './RecentColors.vue'
+import {rememberColor} from '../color-history.js'
+import {frameLatest} from '../color-input.js'
+import {setRegionControls,createRegionState,restoreRegionMesh,surfaceBrushFaces,sampleFaceColors,smartFillFaces,paintFaces,cropFaces,undoStroke,redoStroke,canPaintFace,brushStrokePoints,exportScanRegions,buildRegionGroups,neutralDetailTexture} from '../scan-regions.js'
+const props=defineProps({previewUrl:{type:String,required:true},saving:{type:Boolean,default:false},parts:{type:Array,default:()=>[]},charmPoint:{type:Array,default:null}})
 const emit=defineEmits(['complete'])
 const editor=ref(null),fullscreen=ref(false),fills=ref([])
 const host=ref(null),error=ref(''),ready=ref(false),busy=ref(false)
-const mode=ref('rotate'),region=ref('upper'),radius=ref(16),revision=ref(0),charm=ref(null),testColor=ref('#ffffff')
+const mode=ref('rotate'),region=ref('upper'),radius=ref(16),revision=ref(0),charm=ref(props.charmPoint?[...props.charmPoint]:null),testColor=ref('#ffffff')
 const cursor=ref(null),fillTolerance=ref(40)
-let previewMesh,neutralMap,textureColors,paintPointer=null
+let previewMesh,previewParts=[],neutralMap,neutralPreparing,textureColors,paintPointer=null,lastBrush=null
 const previewColors={}
 const cropMin=ref(-100),cropMax=ref(100),cropAxis=ref('y')
 let renderer,scene,camera,controls,mesh,overlay,state,frame,observer,disposed=false,painting=false
 const pending=new Set(),raycaster=new THREE.Raycaster(),point=new THREE.Vector2()
 const swatches=['#e87558','#e9c460','#809c75','#b99bd0','#7fbed0','#cc8cad','#abb9c2','#b7a176']
+const lockedParts=ref([]),unassignedOnly=ref(false)
+const canUndo=computed(()=>{revision.value;return fills.value.length>0 || painting || !!state?.undoStack.length})
+const canRedo=computed(()=>{revision.value;return !painting && !fills.value.length && !!state?.redoStack.length})
+function toggleLock(part) {
+ up();state.lockedParts.has(part)?state.lockedParts.delete(part):state.lockedParts.add(part)
+ lockedParts.value=[...state.lockedParts];refresh()
+}
+function setUnassignedOnly() {up();state.unassignedOnly=unassignedOnly.value}
 const counts=computed(()=>{revision.value;return Object.fromEntries(PARTS.map(part=>[part.id,state?.assignments.filter(id=>id===part.id).length || 0]))})
 const fillCount=computed(()=>{revision.value;return pending.size})
 const brushActive=computed(()=>['paint','erase'].includes(mode.value) && !busy.value && !props.saving)
@@ -62,8 +74,14 @@ function brush(event) {
   const distance=hit.point.distanceTo(camera.position)
   const worldRadius=2*distance*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*Number(radius.value)/height
   const center=mesh.worldToLocal(hit.point.clone()),eye=mesh.worldToLocal(camera.position.clone())
-  pending.add(hit.faceIndex)
-  for(const id of surfaceBrushFaces(state,center,worldRadius,eye))pending.add(id)
+  const target=mode.value==='erase'?null:region.value
+  for(const id of [hit.faceIndex,...surfaceBrushFaces(state,center,worldRadius,eye)])if(canPaintFace(state,id,target))pending.add(id)
+ }
+ return !!hit
+}
+function stroke(event) {
+ for(const sample of brushStrokePoints(lastBrush,event,Number(radius.value))) {
+  lastBrush=brush(sample)?sample:null
  }
  refresh()
 }
@@ -124,22 +142,30 @@ function down(event) {
   return
  }
  renderer.domElement.setPointerCapture(event.pointerId)
- painting=true;paintPointer=event.pointerId;pending.clear();brush(event)
+ painting=true;paintPointer=event.pointerId;lastBrush=null;pending.clear();stroke(event)
 }
-function move(event) {pointer(event);if(painting && event.pointerId===paintPointer && (event.buttons&1)) brush(event)}
+function move(event) {pointer(event);if(painting && event.pointerId===paintPointer && (event.buttons&1)) stroke(event)}
 function up(event) {
  if(!painting || (event && (event.pointerId!==paintPointer || (event.type==='pointerup' && event.button!==0)))) return
- painting=false;paintFaces(state,[...pending],mode.value==='erase'?null:region.value)
+ if(event?.type==='pointerup')stroke(event)
+ painting=false;lastBrush=null;paintPointer=null;paintFaces(state,[...pending],mode.value==='erase'?null:region.value)
  pending.clear();refresh()
 }
 function setMode(value) {
  if(fills.value.length){error.value='Apply or clear pending fills before changing tools or parts.';return}
+ if(value!=='preview'){previewColorInput.cancel();if(previewMesh){scene.remove(previewMesh);previewMesh.geometry.dispose();previewMesh.material.forEach(mat=>mat.dispose());previewMesh=null}}
  up();pending.clear();mode.value=value
  if(controls)setRegionControls(controls,value)
  refresh()
 }
 function keydown(event) {
- if(!ready.value || !['paint','erase','fill'].includes(mode.value) || busy.value || props.saving)return
+ if(!ready.value || busy.value || props.saving || event.target.closest('input,textarea,select,[contenteditable="true"],[role="slider"]'))return
+ const key=event.key.toLowerCase()
+ if((event.ctrlKey || event.metaKey) && key==='z') {event.preventDefault();event.shiftKey?redo():undo();return}
+ if(event.ctrlKey || event.metaKey || event.altKey)return
+ if(key==='b' || key==='e'){event.preventDefault();setMode(key==='b'?'paint':'erase');return}
+ if(key==='[' || key===']'){event.preventDefault();up();radius.value=Math.max(2,Math.min(40,Number(radius.value)+(key==='['?-2:2)));return}
+ if(event.target!==host.value || !['paint','erase','fill'].includes(mode.value))return
  const arrows={ArrowLeft:[-8,0],ArrowRight:[8,0],ArrowUp:[0,-8],ArrowDown:[0,8]}
  if(!arrows[event.key] && event.key!==' ')return
  event.preventDefault()
@@ -149,9 +175,10 @@ function keydown(event) {
  }
  const clientX=rect.left+at.x,clientY=rect.top+at.y
  if(mode.value==='fill'){const hit=pick(clientX,clientY);if(hit)suggestFill(hit.faceIndex)}
- else {painting=true;pending.clear();brush({clientX,clientY});up()}
+ else {painting=true;lastBrush=null;pending.clear();stroke({clientX,clientY});up()}
 }
-function undo() {if(fills.value.length){removeFill(fills.value.length-1);return}if(state){up();undoStroke(state);setMode(mode.value==='preview'?'rotate':mode.value)}}
+function undo() {if(!ready.value || busy.value || props.saving)return;if(fills.value.length){removeFill(fills.value.length-1);return}if(state){up();undoStroke(state);setMode(mode.value==='preview'?'rotate':mode.value)}}
+function redo() {if(!ready.value || busy.value || props.saving || fills.value.length)return;up();redoStroke(state);setMode(mode.value==='preview'?'rotate':mode.value)}
 function rotate(axis) {
  if(!mesh)return
  if(fills.value.length){error.value='Apply or clear pending fills before changing model orientation.';return}
@@ -175,25 +202,33 @@ function crop() {
  if(ids.length===state.assignments.length){error.value='Crop would remove the entire scan.';return}
  cropFaces(state,ids);cropMin.value=-100;cropMax.value=100;setMode('rotate')
 }
-async function previewColor(reset=false) {
+const previewColorInput=frameLatest(({part,color})=>{void previewColor(false,part,color)})
+function reuseColor(color){testColor.value=color;previewColorInput.cancel();void previewColor(false,region.value,color)}
+async function previewColor(reset=false,part=region.value,color=testColor.value) {
  if(!state || !mesh || busy.value || fills.value.length)return
  error.value=''
  try {
-  if(reset)delete previewColors[region.value]
-  else previewColors[region.value]=testColor.value
+  if(reset)delete previewColors[part]
+  else previewColors[part]=color
   const original=mesh.material[0]
   if(!neutralMap){
-   const blob=await neutralDetailTexture(original.map),url=URL.createObjectURL(blob)
-   try{neutralMap=await new THREE.TextureLoader().loadAsync(url);neutralMap.flipY=false;neutralMap.colorSpace=THREE.SRGBColorSpace}finally{URL.revokeObjectURL(url)}
+   if(!neutralPreparing)neutralPreparing=(async()=>{
+    const blob=await neutralDetailTexture(original.map),url=URL.createObjectURL(blob)
+    try{const texture=await new THREE.TextureLoader().loadAsync(url);texture.flipY=false;texture.colorSpace=THREE.SRGBColorSpace;return texture}finally{URL.revokeObjectURL(url)}
+   })()
+   try{neutralMap=await neutralPreparing}catch(cause){neutralPreparing=null;throw cause}
   }
-  if(previewMesh){scene.remove(previewMesh);previewMesh.geometry.dispose();previewMesh.material.forEach(mat=>mat.dispose())}
-  const {geometry,parts}=buildRegionGroups(state)
-  const materials=[original.clone(),...parts.map(part=>{
-   const mat=original.clone()
-   if(previewColors[part.id]){mat.map=neutralMap;mat.color.set(previewColors[part.id])}
-   return mat
-  })]
-  previewMesh=new THREE.Mesh(geometry,materials);scene.add(previewMesh);setMode('preview')
+  if(disposed){neutralMap.dispose();neutralMap=null;return}
+  if(!previewMesh){
+   const {geometry,parts}=buildRegionGroups(state);previewParts=parts
+   previewMesh=new THREE.Mesh(geometry,[original.clone(),...parts.map(()=>original.clone())]);scene.add(previewMesh)
+  }
+  previewParts.forEach((item,index)=>{
+   const material=previewMesh.material[index+1],hex=previewColors[item.id],map=hex?neutralMap:original.map
+   if(material.map!==map){material.map=map;material.needsUpdate=true}
+   if(hex)material.color.set(hex);else material.color.copy(original.color)
+  })
+  if(mode.value!=='preview')setMode('preview')
  }catch(cause){error.value=cause.message}
 }
 async function finish() {
@@ -202,10 +237,9 @@ async function finish() {
  up();busy.value=true;error.value=''
  try {
   const payload=await exportScanRegions(mesh,state)
-  mesh.visible=true;overlay.visible=false;if(previewMesh)previewMesh.visible=false
-  renderer.render(scene,camera)
-  payload.thumbnail=await new Promise((resolve,reject)=>renderer.domElement.toBlob(blob=>blob?resolve(blob):reject(new Error('Could not capture the shoe thumbnail.')),'image/png'))
-  refresh()
+  const {geometry}=buildRegionGroups(state)
+  try {payload.thumbnail=await captureShoeThumbnail(new THREE.Mesh(geometry,mesh.material[0]))}
+  finally {geometry.dispose()}
   const point=charm.value ? mesh.localToWorld(new THREE.Vector3(...charm.value)).toArray() : null
   emit('complete',{payload,charmPoint:point})
  } catch(cause){error.value=cause.message} finally {busy.value=false;refresh()}
@@ -221,21 +255,26 @@ onMounted(async()=>{
   controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;setRegionControls(controls,mode.value)
   const loaded=await new GLTFLoader().loadAsync(props.previewUrl)
   if(disposed){loaded.scene.traverse(o=>{o.geometry?.dispose()});return}
-  const meshes=[];loaded.scene.traverse(o=>{if(o.isMesh)meshes.push(o)})
-  if(meshes.length!==1 || Array.isArray(meshes[0].material)) throw new Error('Prepared scan must contain one textured surface. Check local conversion.')
-  mesh=meshes[0];mesh.updateWorldMatrix(true,false)
-  mesh.geometry.applyMatrix4(mesh.matrixWorld);mesh.matrix.identity();mesh.position.set(0,0,0);mesh.rotation.set(0,0,0);mesh.scale.set(1,1,1)
-  scene.add(mesh);state=createRegionState(mesh);mesh.geometry.dispose();mesh.geometry=state.geometry.clone();mesh.material=[mesh.material]
+  if(props.parts.length){const restored=restoreRegionMesh(loaded.scene,props.parts);mesh=restored.mesh;state=restored.state}
+  else {
+   const meshes=[];loaded.scene.traverse(o=>{if(o.isMesh)meshes.push(o)})
+   if(meshes.length!==1 || Array.isArray(meshes[0].material))throw new Error('Prepared scan must contain one textured surface. Check local conversion.')
+   mesh=meshes[0];mesh.updateWorldMatrix(true,false)
+   mesh.geometry.applyMatrix4(mesh.matrixWorld);mesh.matrix.identity();mesh.position.set(0,0,0);mesh.rotation.set(0,0,0);mesh.scale.set(1,1,1)
+   state=createRegionState(mesh)
+  }
+  scene.add(mesh);mesh.geometry.dispose();mesh.geometry=state.geometry.clone();mesh.material=[mesh.material]
   overlay=new THREE.Mesh(mesh.geometry.clone(),[new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,opacity:0.55,polygonOffset:true,polygonOffsetFactor:-1,depthWrite:false})]);scene.add(overlay)
   const box=new THREE.Box3().setFromObject(mesh),center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3()).length()
   camera.position.copy(center).add(new THREE.Vector3(size,size*0.65,size));controls.target.copy(center)
   observer=new ResizeObserver(()=>{if(!host.value)return;renderer.setSize(host.value.clientWidth,host.value.clientHeight);camera.aspect=host.value.clientWidth/host.value.clientHeight;camera.updateProjectionMatrix()});observer.observe(host.value)
-  renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',up);renderer.domElement.addEventListener('pointercancel',up)
+  renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',up);renderer.domElement.addEventListener('pointercancel',up);renderer.domElement.addEventListener('lostpointercapture',up)
   const animate=()=>{frame=requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)};animate()
   ready.value=true;refresh()
  } catch(cause){error.value=cause.message}
 })
 onBeforeUnmount(()=>{
+ previewColorInput.cancel()
  document.removeEventListener('fullscreenchange',fullscreenChanged)
  if(fullscreen.value)document.exitFullscreen().catch(()=>{})
  disposed=true;cancelAnimationFrame(frame);observer?.disconnect();controls?.dispose()
@@ -244,32 +283,35 @@ onBeforeUnmount(()=>{
 })
 </script>
 <template>
- <div ref="editor" class="region-editor">
+ <div ref="editor" class="region-editor" @keydown="keydown">
   <div class="editor-heading"><div><h3>Edit shoe parts</h3><p>Select a part, then mark the shoe with Smart fill or Paint.</p></div><Button variant="outline" type="button" @click="toggleFullscreen">{{fullscreen?'Exit fullscreen':'Fullscreen editor'}}</Button></div>
-  <p v-if="error" role="alert" class="scan-error">{{error}}</p>
   <div class="scan-toolbar" role="group" aria-label="Painting tools">
    <Button variant="outline" v-for="tool in ['rotate','fill','paint','erase','charm']" :key="tool" type="button" :aria-pressed="mode===tool" :disabled="!ready || busy || saving || fills.length>0" @click="setMode(tool)">{{tool==='charm'?'Place charm':tool==='fill'?'Smart fill':tool[0].toUpperCase()+tool.slice(1)}}</Button>
-   <Button variant="ghost" type="button" :disabled="!ready || busy || saving" @click="undo">Undo selection / stroke / crop</Button>
+   <Button variant="ghost" type="button" :disabled="!ready || busy || saving || !canUndo" @click="undo">Undo selection / stroke / crop</Button>
+   <Button variant="ghost" type="button" :disabled="!ready || busy || saving || !canRedo" @click="redo">Redo stroke / crop</Button>
   </div>
   <div class="region-layout">
    <div class="canvas-column">
-    <div ref="host" class="scan-canvas" :class="{'brush-active':brushActive,'fill-active':mode==='fill'}" :aria-busy="!ready" tabindex="0" aria-label="Interactive shoe region editor; arrow keys move brush or selection, Space selects" @keydown="keydown" @pointerleave="cursor=null">
+    <div ref="host" class="scan-canvas" @mousedown.middle.prevent @auxclick.middle.prevent :class="{'brush-active':brushActive,'fill-active':mode==='fill'}" :aria-busy="!ready" tabindex="0" aria-label="Interactive shoe region editor; arrow keys move brush or selection, Space selects" @pointerleave="cursor=null">
      <span v-if="cursor && brushActive" class="brush-cursor" :class="{'erase-cursor':mode==='erase'}" :style="{left:cursor.x+'px',top:cursor.y+'px',width:Number(radius)*2+'px',height:Number(radius)*2+'px',borderColor:mode==='erase'?'#fff':swatches[PARTS.findIndex(p=>p.id===region)]}" aria-hidden="true"></span>
      <span v-if="cursor && mode==='fill'" class="fill-cursor" :style="{left:cursor.x+'px',top:cursor.y+'px'}" aria-hidden="true">+</span>
+     <p v-if="error" role="alert" class="scan-error">{{error}}</p>
      <span v-if="!ready&&!error" class="canvas-status" role="status">Loading shoe…</span>
     </div>
-    <p class="canvas-help">Middle drag to rotate · Scroll to zoom · Right drag to pan. Focus canvas, use arrow keys, then Space to paint or select.</p>
+    <p class="canvas-help">Middle drag to rotate · Scroll to zoom · Right drag to pan. Focus canvas, use arrow keys, then Space to paint or select. B: paint · E: erase · [ / ]: brush size · Ctrl/Cmd+Z: undo · Ctrl/Cmd+Shift+Z: redo.</p>
    </div>
    <aside class="region-inspector" aria-label="Part and tool settings">
     <div class="inspector-section">
      <div class="section-heading"><h4>Shoe parts</h4><span>{{partCount}} / {{PARTS.length}} marked</span></div>
      <div class="part-list">
-      <label v-for="(part,index) in PARTS" :key="part.id" :class="{selected:region===part.id}">
+      <div v-for="(part,index) in PARTS" :key="part.id" class="part-row"><label :class="{selected:region===part.id}">
        <input v-model="region" type="radio" name="scan-part" :value="part.id" @change="setMode(mode==='fill'?'fill':'paint')" :disabled="!ready || busy || saving || fills.length>0">
        <i class="part-swatch" :style="{background:swatches[index]}" aria-hidden="true"></i>{{part.label}}<span>{{counts[part.id]}} faces</span>
-      </label>
+      </label><Button variant="ghost" size="sm" type="button" :aria-label="(lockedParts.includes(part.id)?'Unlock ':'Lock ')+part.label" :aria-pressed="lockedParts.includes(part.id)" :disabled="!ready || busy || saving || fills.length>0" @click="toggleLock(part.id)">{{lockedParts.includes(part.id)?'Unlock':'Lock'}}</Button></div>
      </div>
-     <Button variant="ghost" size="sm" type="button" :disabled="!counts[region] || busy || saving || fills.length>0" @click="clearPart">Clear selected part</Button>
+     <label class="unassigned-option"><input v-model="unassignedOnly" type="checkbox" :disabled="!ready || busy || saving || fills.length>0" @change="setUnassignedOnly"> Paint unassigned faces only</label>
+     <p>Locks protect parts from painting, erasing, clearing and cropping. Undo and redo restore earlier edits.</p>
+     <Button variant="ghost" size="sm" type="button" :disabled="!counts[region] || busy || saving || fills.length>0 || lockedParts.includes(region) || unassignedOnly" @click="clearPart">Clear selected part</Button>
     </div>
     <div v-if="mode==='fill'" class="inspector-section fill-tools">
      <div class="section-heading"><label id="fill-tolerance-label">Fill tolerance</label><output>{{fillTolerance}}</output></div>
@@ -281,11 +323,12 @@ onBeforeUnmount(()=>{
     </div>
     <div v-if="mode==='paint'||mode==='erase'" class="inspector-section">
      <div class="section-heading"><label id="brush-radius-label">Brush radius</label><output>{{radius}} px</output></div>
-     <Slider aria-labelledby="brush-radius-label" :model-value="[Number(radius)]" :min="6" :max="40" :disabled="!ready || busy || saving" @update:model-value="radius=$event[0]" />
+     <Slider aria-labelledby="brush-radius-label" :model-value="[Number(radius)]" :min="2" :max="40" :disabled="!ready || busy || saving" @update:model-value="radius=$event[0]" />
     </div>
     <div v-if="mode==='charm'" class="inspector-section"><p>Click the shoe where charms should attach.</p><p role="status">{{charm?'Charm position selected.':'No attachment point selected.'}}</p><Button variant="outline" type="button" :disabled="busy||saving" @click="charm=null">Disable charms</Button></div>
     <div class="inspector-section">
-     <label class="test-color">Test {{PARTS.find(part=>part.id===region)?.label}} color<input v-model="testColor" type="color" :disabled="!ready || busy || saving || fills.length>0 || !counts[region]" @input="previewColor()"></label>
+     <label class="test-color">Test {{PARTS.find(part=>part.id===region)?.label}} color<input v-model="testColor" type="color" :disabled="!ready || busy || saving || fills.length>0 || !counts[region]" @input="previewColorInput({part:region,color:testColor})" @change="previewColorInput.flush();rememberColor(testColor)"></label>
+     <RecentColors :disabled="!ready || busy || saving || fills.length>0 || !counts[region]" @select="reuseColor" />
      <Button variant="outline" size="sm" type="button" :disabled="!ready || busy || saving || fills.length>0 || !counts[region]" @click="previewColor(true)">Restore selected part</Button>
      <p>Unselected faces keep their photographed appearance.</p>
     </div>
@@ -330,6 +373,9 @@ onBeforeUnmount(()=>{
 .inspector-section:last-child { border-bottom:0; }
 .section-heading h4 { font-size:14px; font-weight:600; }
 .section-heading span,.section-heading output { font-size:12px; color:var(--muted-foreground); white-space:nowrap; }
+.part-row { display:flex; align-items:center; gap:4px; }
+.part-row label { flex:1; min-width:0; }
+.unassigned-option { display:flex; align-items:center; gap:8px; font-size:13px; }
 .part-list { display:grid; gap:2px; }
 .part-list label { display:flex; align-items:center; gap:8px; padding:7px 6px; border-radius:4px; font-size:13px; font-weight:400; cursor:pointer; }
 .part-list label.selected { background:var(--muted); font-weight:600; }
@@ -345,7 +391,7 @@ input[type=color] { width:36px; height:30px; padding:2px; border:1px solid var(-
 .crop-settings { display:grid; gap:12px; margin-top:16px; }
 .crop-settings select { border:1px solid var(--input); border-radius:6px; padding:6px; background:var(--card); }
 .region-savebar { padding-top:12px; border-top:1px solid var(--border); }
-.scan-error { color:var(--destructive); background:#fff0eb; border-radius:6px; padding:12px; font-size:14px; }
+.scan-error { position:absolute; left:12px; right:12px; bottom:12px; z-index:3; margin:0; pointer-events:none; color:var(--destructive); background:#fff0eb; border-radius:6px; padding:12px; font-size:14px; }
 .region-editor:fullscreen { background:var(--card); padding:24px; overflow:auto; color:var(--foreground); align-content:start; }
 .region-editor:fullscreen .scan-canvas,.region-editor:fullscreen .region-inspector { height:calc(100dvh - 235px); max-height:none; min-height:360px; }
 @media(max-width:900px) { .region-layout { grid-template-columns:minmax(0,1fr); } .region-inspector { max-height:none; } .scan-toolbar button:last-child { margin-left:0; } .region-savebar { flex-wrap:wrap; } }

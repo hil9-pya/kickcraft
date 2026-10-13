@@ -59,3 +59,5 @@ export function palettePresets(palette) {
  if(!palette.length)return []
  return ['Studio palette','Alternate panels','Sole contrast'].map((name,offset)=>({name,colors:Array.from({length:Math.min(3,palette.length)},(_,i)=>palette[(i+offset)%palette.length])}))
 }
+
+export const productLabels={draft:'Private draft',pending:'Awaiting admin review',approved:'Approved — live in Shop',rejected:'Changes requested by admin'}

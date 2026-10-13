@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__.'/../sellers/common.php';
-function productRow(string $id,?int $seller=null,bool $lock=false): array {
- $sql='SELECT s.*,sp.store_name AS seller_store_name,sp.pickup_address,sp.contact AS seller_contact FROM shoes s LEFT JOIN seller_profiles sp ON sp.user_id=s.seller_user_id WHERE s.id=? AND s.deleted_at IS NULL AND s.permanently_deleted=0';$params=[$id];
+function productRow(string $id,?int $seller=null,bool $lock=false,bool $includeArchived=false): array {
+ $sql='SELECT s.*,sp.store_name AS seller_store_name,sp.pickup_address,sp.contact AS seller_contact FROM shoes s LEFT JOIN seller_profiles sp ON sp.user_id=s.seller_user_id WHERE s.id=? AND s.permanently_deleted=0'.($includeArchived?'':' AND s.deleted_at IS NULL');$params=[$id];
  if($seller!==null){$sql.=' AND s.seller_user_id=?';$params[]=$seller;}
  $stmt=getDb()->prepare($sql.($lock?' FOR UPDATE':''));$stmt->execute($params);$row=$stmt->fetch();if(!$row)scanFail('Product not found',404);return $row;
 }
