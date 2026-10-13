@@ -1808,24 +1808,9 @@ function scrollToTop() {
 
     <!-- ── Footer ───────────────────────────────────────────── -->
     <footer v-if="['shop','marketplace','track'].includes(view)" class="public-footer border-t border-border bg-card">
-      <div class="kc-page flex flex-wrap items-center justify-between gap-4 px-5 py-5 lg:px-8">
-        <template v-if="view==='track'">
-          <p class="text-xs text-muted-foreground">© 2026 KickCraft</p>
-          <Button variant="ghost" size="sm" type="button" @click="openFeedbackModal">Feedback</Button>
-        </template>
-        <template v-else>
-          <div>
-            <p class="font-display font-bold">KickCraft</p>
-            <p class="mt-1 text-xs text-muted-foreground">Original shoes. Customize in 3D. Collect in store.</p>
-          </div>
-          <nav class="flex flex-wrap items-center gap-5 text-sm" aria-label="Footer navigation">
-            <a href="#shop" class="hover:underline">Shop</a>
-            <a href="#marketplace" class="hover:underline">Marketplace</a>
-            <Button variant="link" type="button" class="h-auto p-0 font-normal text-foreground" @click="goToTrackReservation">Track reservation</Button>
-            <Button variant="ghost" size="sm" type="button" @click="openFeedbackModal">Feedback</Button>
-          </nav>
-          <p class="text-xs text-muted-foreground">© 2026 KickCraft</p>
-        </template>
+      <div class="kc-page flex items-center justify-between gap-4 px-5 py-5 lg:px-8">
+        <p class="text-xs text-muted-foreground">© 2026 KickCraft</p>
+        <Button variant="ghost" size="sm" type="button" @click="openFeedbackModal">Feedback</Button>
       </div>
     </footer>
 

@@ -21,3 +21,7 @@ Scope: App.vue template, style.css, existing UI/footer tests, README and this le
 - Removed the obsolete test requiring placeholder contact numbers. Retained feedback behavior checks and added rendered footer/tracking regressions.
 - Self-review only: user prohibited subagents. No dependencies, backend handlers, database records or model assets changed.
 - Full suite: 280 tests pass. Production build passes; existing main chunk warning remains (~1.30 MB, 378 KB gzip). Mobile polish and 3D code splitting remain outside scope.
+
+## Footer correction
+
+User requested removal of the duplicate navbar. Shop, Marketplace and Tracking now share one small copyright/feedback row. Removed footer links, marketing copy and conditional variants. Main header remains the navigation. Existing rendered checks require no footer nav/links and only one feedback action.

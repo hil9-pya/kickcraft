@@ -84,7 +84,8 @@ test('public footer only appears where it helps and never advertises unverified 
  for(const view of ['shop','marketplace']){
   const html=await fragment(footer,{view,...actions})
   assert.match(html,/KickCraft/)
-  assert.match(html,/href="#marketplace"/)
+  assert.doesNotMatch(html,/<nav\b|<a\b/)
+  assert.equal((html.match(/<button\b/g)||[]).length,1)
   assert.match(html,/>Feedback<\/button>/)
   assert.doesNotMatch(html,/tel:|mailto:|Flagship|10:00 AM|kickcraft\.local/)
  }
