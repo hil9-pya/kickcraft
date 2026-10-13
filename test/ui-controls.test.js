@@ -44,3 +44,24 @@ test('studio section choices expose the selected section without changing design
   assert.match(buttons.find(([,attrs])=>attrs.includes('aria-pressed="true"'))[2],new RegExp(selected==='parts'?'Parts &amp; colors':selected==='charms'?'Charms':'Size'))
  }
 })
+
+
+test('shared slider names its interactive thumb and preserves range and disabled state',async()=>{
+ const Slider=await component('slider/Slider.vue')
+ const html=await renderToString(createSSRApp({render:()=>h(Slider,{modelValue:[16],min:6,max:40,disabled:true,'aria-label':'Brush radius'})}))
+ const thumb=html.match(/<span[^>]*role="slider"[^>]*>/)?.[0]
+ assert.ok(thumb,'interactive slider thumb')
+ assert.match(thumb,/aria-label="Brush radius"/)
+ assert.match(thumb,/aria-valuemin="6"/)
+ assert.match(thumb,/aria-valuemax="40"/)
+ assert.match(thumb,/data-disabled/)
+})
+
+test('region editor blocks painting and finalization until the model loads',async()=>{
+ const Editor=(await server.ssrLoadModule('/src/components/ScanRegionEditor.vue')).default
+ const html=(await renderToString(createSSRApp({render:()=>h(Editor,{previewUrl:'/models/fixture.glb'})}))).replace(/<!--.*?-->/gs,'')
+ for(const text of ['Paint','Smart fill','Use these parts']){
+  assert.match(html,new RegExp('<button[^>]*\\sdisabled(?=[\\s=>])[^>]*>'+text+'</button>'))
+ }
+ assert.match(html,/aria-busy="true"/)
+})

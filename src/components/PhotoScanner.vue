@@ -149,7 +149,7 @@ onMounted(async()=>{
 onBeforeUnmount(()=>{closed=true;clearTimeout(timer);clearFiles()})
 </script>
 <template>
- <section class="photo-scanner" aria-labelledby="scan-title">
+ <section class="photo-scanner" :class="{'painting-stage':job?.state==='ready'&&accepted}" aria-labelledby="scan-title">
   <div class="scan-header"><h3 id="scan-title">Scan a shoe from photos or video</h3><div class="scan-actions"><Button variant="outline" v-if="job" type="button" :disabled="busy" @click="chooseAnotherCapture">Choose another capture</Button><Button variant="outline" type="button" :disabled="busy" @click="emit('cancel')">Back to shoe details</Button></div></div>
   <p v-if="error" role="alert" class="scan-error">{{error}}</p>
   <p v-if="job?.alignmentMinPercent===65" class="scan-error" role="status">Experimental reconstruction: 65% alignment threshold, at least 30 aligned views. Lower alignment may produce incomplete geometry, holes, or missing shoe surfaces. Compare all photos before accepting; model validation and admin approval still apply.</p>
@@ -239,5 +239,7 @@ onBeforeUnmount(()=>{closed=true;clearTimeout(timer);clearFiles()})
  </section>
 </template>
 <style scoped>
+.photo-scanner.painting-stage{--painting-height:clamp(300px,calc(100dvh - 540px),600px);padding:0;border:0}.painting-stage .scan-header h3{font-size:16px}
+
 .scan-engine{display:flex;flex-wrap:wrap;gap:12px}.scan-engine legend{font-weight:700;margin-bottom:8px}.scan-engine label{display:flex;gap:8px;align-items:center}.scan-comparison{display:grid;grid-template-columns:1fr 1fr;gap:16px}.scan-comparison figure{display:grid;align-content:center}.scan-comparison img{max-height:400px;width:100%;object-fit:contain}.likeness-checks{display:grid;gap:8px}.likeness-checks legend{font-weight:700;margin-bottom:8px}.likeness-checks label{display:flex;align-items:start;gap:8px}.likeness-checks input{margin-top:4px}.photo-scanner{padding:20px;border:1px solid #ccc;background:white;display:grid;grid-auto-rows:max-content;align-content:start;gap:16px;color:#202220}.scan-header{display:flex;justify-content:space-between;align-items:center;gap:12px}.scan-header h3{font-weight:700;font-size:20px}.scan-actions{display:flex;flex-wrap:wrap;gap:12px}ol{list-style:decimal;padding-left:22px;line-height:1.6}.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:12px;max-height:260px;overflow:auto}.photo-grid img{width:100%;height:85px;object-fit:cover}.photo-grid button:not([data-slot]){padding:4px;font-size:12px;width:100%}button:not([data-slot]),.file-button:not([data-slot]){display:inline-block;border:1px solid #777;padding:10px 14px;background:white;cursor:pointer}button:not([data-slot]):disabled{opacity:.45;cursor:not-allowed}button:not([data-slot]):focus-visible,.file-button:focus-within{outline:2px solid #b94d27;outline-offset:2px}.file-button input{display:block;max-width:220px;font-size:12px;margin-top:6px}.scan-error{padding:12px;background:#fff0eb;color:#a92d17}.likeness-preview{width:100%;height:400px;background:#f4f5f3}@media(max-width:600px){.scan-comparison{grid-template-columns:1fr}.photo-scanner{padding:12px}.scan-header{align-items:start;flex-direction:column}.likeness-preview{height:300px}}
 </style>

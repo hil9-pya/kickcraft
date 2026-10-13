@@ -1,5 +1,6 @@
 <script setup>
 import { Button } from './ui/button'
+import { Slider } from './ui/slider'
 import {ref,onMounted,onBeforeUnmount,computed} from 'vue'
 import * as THREE from 'three'
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js'
@@ -244,53 +245,108 @@ onBeforeUnmount(()=>{
 </script>
 <template>
  <div ref="editor" class="region-editor">
-  <div class="editor-heading"><strong>Edit shoe parts</strong><Button variant="outline" type="button" @click="toggleFullscreen">{{fullscreen?'Exit fullscreen':'Fullscreen editor'}}</Button></div>
-  <p>Choose a part, click several areas with Smart fill, then apply together. Hold middle mouse to rotate in any tool; wheel zooms, right mouse pans. Unselected faces keep their photographed appearance.</p>
+  <div class="editor-heading"><div><h3>Edit shoe parts</h3><p>Select a part, then mark the shoe with Smart fill or Paint.</p></div><Button variant="outline" type="button" @click="toggleFullscreen">{{fullscreen?'Exit fullscreen':'Fullscreen editor'}}</Button></div>
   <p v-if="error" role="alert" class="scan-error">{{error}}</p>
+  <div class="scan-toolbar" role="group" aria-label="Painting tools">
+   <Button variant="outline" v-for="tool in ['rotate','fill','paint','erase','charm']" :key="tool" type="button" :aria-pressed="mode===tool" :disabled="!ready || busy || saving || fills.length>0" @click="setMode(tool)">{{tool==='charm'?'Place charm':tool==='fill'?'Smart fill':tool[0].toUpperCase()+tool.slice(1)}}</Button>
+   <Button variant="ghost" type="button" :disabled="!ready || busy || saving" @click="undo">Undo selection / stroke / crop</Button>
+  </div>
   <div class="region-layout">
-   <div>
+   <div class="canvas-column">
     <div ref="host" class="scan-canvas" :class="{'brush-active':brushActive,'fill-active':mode==='fill'}" :aria-busy="!ready" tabindex="0" aria-label="Interactive shoe region editor; arrow keys move brush or selection, Space selects" @keydown="keydown" @pointerleave="cursor=null">
      <span v-if="cursor && brushActive" class="brush-cursor" :class="{'erase-cursor':mode==='erase'}" :style="{left:cursor.x+'px',top:cursor.y+'px',width:Number(radius)*2+'px',height:Number(radius)*2+'px',borderColor:mode==='erase'?'#fff':swatches[PARTS.findIndex(p=>p.id===region)]}" aria-hidden="true"></span>
      <span v-if="cursor && mode==='fill'" class="fill-cursor" :style="{left:cursor.x+'px',top:cursor.y+'px'}" aria-hidden="true">+</span>
+     <span v-if="!ready&&!error" class="canvas-status" role="status">Loading shoe…</span>
     </div>
-    <div class="scan-toolbar">
-     <Button variant="outline" v-for="tool in ['rotate','fill','paint','erase','charm']" :key="tool" type="button" :aria-pressed="mode===tool" :disabled="!ready || busy || saving" @click="setMode(tool)">{{tool==='charm'?'Place charm':tool==='fill'?'Smart fill':tool[0].toUpperCase()+tool.slice(1)}}</Button>
-     <Button variant="outline" type="button" :disabled="!ready || busy || saving" @click="undo">Undo selection / stroke / crop</Button>
+    <p class="canvas-help">Middle drag to rotate · Scroll to zoom · Right drag to pan. Focus canvas, use arrow keys, then Space to paint or select.</p>
+   </div>
+   <aside class="region-inspector" aria-label="Part and tool settings">
+    <div class="inspector-section">
+     <div class="section-heading"><h4>Shoe parts</h4><span>{{partCount}} / {{PARTS.length}} marked</span></div>
+     <div class="part-list">
+      <label v-for="(part,index) in PARTS" :key="part.id" :class="{selected:region===part.id}">
+       <input v-model="region" type="radio" name="scan-part" :value="part.id" @change="setMode(mode==='fill'?'fill':'paint')" :disabled="!ready || busy || saving || fills.length>0">
+       <i class="part-swatch" :style="{background:swatches[index]}" aria-hidden="true"></i>{{part.label}}<span>{{counts[part.id]}} faces</span>
+      </label>
+     </div>
+     <Button variant="ghost" size="sm" type="button" :disabled="!counts[region] || busy || saving || fills.length>0" @click="clearPart">Clear selected part</Button>
     </div>
-    <div v-if="mode==='fill'" class="fill-tools">
-     <label>Fill tolerance <input v-model="fillTolerance" type="range" min="10" max="120" :disabled="busy || saving" @input="suggestFill()">{{fillTolerance}}</label>
+    <div v-if="mode==='fill'" class="inspector-section fill-tools">
+     <div class="section-heading"><label id="fill-tolerance-label">Fill tolerance</label><output>{{fillTolerance}}</output></div>
+     <Slider aria-labelledby="fill-tolerance-label" :model-value="[Number(fillTolerance)]" :min="10" :max="120" :disabled="!ready || busy || saving" @update:model-value="fillTolerance=$event[0];suggestFill()" />
      <p role="status">{{fills.length?fills.length+' pending fills, '+fillCount+' unique faces. Review edges before applying.':'Click several shoe areas to collect fills for this part.'}} Already labeled parts stay protected.</p>
-     <div class="scan-toolbar"><Button variant="outline" type="button" :disabled="!fillCount || busy || saving" @click="applyFill">Apply all fills</Button><Button variant="outline" type="button" :disabled="!fills.length || busy || saving" @click="clearFill();error=''">Clear pending fills</Button></div>
-     <ol v-if="fills.length" class="fill-list"><li v-for="(fill,index) in fills" :key="index">Fill {{index+1}}: {{fill.faces.length}} faces <Button variant="outline" type="button" :disabled="busy || saving" :aria-label="'Remove fill '+(index+1)" @click="removeFill(index)">Remove</Button></li></ol>
-     <p>Lower tolerance keeps selection tighter. Same-colored parts may merge; correct with Paint / Erase. Arrow keys move selection; Space selects.</p>
+     <div class="inspector-actions"><Button type="button" :disabled="!fillCount || busy || saving" @click="applyFill">Apply all fills</Button><Button variant="outline" type="button" :disabled="!fills.length || busy || saving" @click="clearFill();error=''">Clear pending fills</Button></div>
+     <ol v-if="fills.length" class="fill-list"><li v-for="(fill,index) in fills" :key="index"><span>Fill {{index+1}} · {{fill.faces.length}} faces</span><Button variant="ghost" size="sm" type="button" :disabled="busy || saving" :aria-label="'Remove fill '+(index+1)" @click="removeFill(index)">Remove</Button></li></ol>
+     <p>Lower tolerance selects tighter areas. Correct similar-colored parts with Paint / Erase.</p>
     </div>
-    <label>Brush size <input v-model="radius" type="range" min="6" max="40" :disabled="busy || saving"></label>
-    <p v-if="mode==='charm'">Click the shoe where charms should attach. <Button variant="outline" type="button" @click="charm=null">Disable charms</Button></p>
-    <p v-if="charm">Charm position selected.</p>
-    <div class="scan-toolbar">
-     <label>Test {{PARTS.find(part=>part.id===region)?.label}} color <input v-model="testColor" type="color" :disabled="!ready || busy || !counts[region]" @input="previewColor()"></label>
-     <Button variant="outline" type="button" :disabled="!ready || busy || saving" @click="previewColor(true)">Restore selected part</Button>
+    <div v-if="mode==='paint'||mode==='erase'" class="inspector-section">
+     <div class="section-heading"><label id="brush-radius-label">Brush radius</label><output>{{radius}} px</output></div>
+     <Slider aria-labelledby="brush-radius-label" :model-value="[Number(radius)]" :min="6" :max="40" :disabled="!ready || busy || saving" @update:model-value="radius=$event[0]" />
     </div>
-    <details>
+    <div v-if="mode==='charm'" class="inspector-section"><p>Click the shoe where charms should attach.</p><p role="status">{{charm?'Charm position selected.':'No attachment point selected.'}}</p><Button variant="outline" type="button" :disabled="busy||saving" @click="charm=null">Disable charms</Button></div>
+    <div class="inspector-section">
+     <label class="test-color">Test {{PARTS.find(part=>part.id===region)?.label}} color<input v-model="testColor" type="color" :disabled="!ready || busy || saving || fills.length>0 || !counts[region]" @input="previewColor()"></label>
+     <Button variant="outline" size="sm" type="button" :disabled="!ready || busy || saving || fills.length>0 || !counts[region]" @click="previewColor(true)">Restore selected part</Button>
+     <p>Unselected faces keep their photographed appearance.</p>
+    </div>
+    <details class="inspector-section">
      <summary>Orient or crop surroundings</summary>
-     <div class="scan-toolbar"><Button variant="outline" v-for="axis in ['x','y','z']" type="button" :key="axis" @click="rotate(axis)" :disabled="!ready || busy || saving">Rotate {{axis.toUpperCase()}} 90°</Button></div>
-     <label>Crop axis <select v-model="cropAxis"><option>x</option><option>y</option><option>z</option></select></label>
-     <label>Keep from <input v-model="cropMin" type="range" min="-100" max="99">{{cropMin}}</label>
-     <label>Keep to <input v-model="cropMax" type="range" min="-99" max="100">{{cropMax}}</label>
-     <Button variant="outline" type="button" :disabled="!ready || busy || saving" @click="crop">Crop outside range</Button>
+     <div class="crop-settings">
+      <div class="inspector-actions"><Button variant="outline" size="sm" v-for="axis in ['x','y','z']" type="button" :key="axis" @click="rotate(axis)" :disabled="!ready || busy || saving || fills.length>0">Rotate {{axis.toUpperCase()}} 90°</Button></div>
+      <label>Crop axis<select v-model="cropAxis" :disabled="!ready||busy||saving||fills.length>0"><option>x</option><option>y</option><option>z</option></select></label>
+      <div class="section-heading"><label id="crop-start-label">Keep from</label><output>{{cropMin}}</output></div>
+      <Slider aria-labelledby="crop-start-label" :model-value="[Number(cropMin)]" :min="-100" :max="99" :disabled="!ready||busy||saving||fills.length>0" @update:model-value="cropMin=$event[0]" />
+      <div class="section-heading"><label id="crop-end-label">Keep to</label><output>{{cropMax}}</output></div>
+      <Slider aria-labelledby="crop-end-label" :model-value="[Number(cropMax)]" :min="-99" :max="100" :disabled="!ready||busy||saving||fills.length>0" @update:model-value="cropMax=$event[0]" />
+      <Button variant="outline" type="button" :disabled="!ready || busy || saving || fills.length>0" @click="crop">Crop outside range</Button>
+     </div>
     </details>
-   </div>
-   <div class="part-list">
-    <label v-for="(part,index) in PARTS" :key="part.id" :style="{'border-left-color':swatches[index]}">
-     <input v-model="region" type="radio" name="scan-part" :value="part.id" @change="setMode(mode==='fill'?'fill':'paint')" :disabled="busy || saving || fills.length>0">{{part.label}} <span>{{counts[part.id]}} faces</span>
-    </label>
-    <Button variant="outline" type="button" :disabled="!counts[region] || busy || saving || fills.length>0" @click="clearPart">Clear selected part</Button>
-    <p>{{partCount}} customizable parts. At least two required.</p>
-    <Button variant="outline" type="button" :disabled="!ready || busy || saving || fills.length>0 || partCount<2" @click="finish">{{busy?'Preparing model…':'Use these parts'}}</Button>
-   </div>
+   </aside>
   </div>
+  <div class="region-savebar"><p>{{partCount}} customizable parts. At least two required.<span v-if="fills.length"> Apply or clear pending fills before saving.</span></p><Button type="button" :disabled="!ready || busy || saving || fills.length>0 || partCount<2" @click="finish">{{busy?'Preparing model…':saving?'Saving model…':'Use these parts'}}</Button></div>
  </div>
 </template>
 <style scoped>
-.region-editor{display:grid;gap:16px}.editor-heading{display:flex;align-items:center;justify-content:space-between;gap:16px}.region-editor:fullscreen{display:block;background:white;padding:24px;overflow:auto;color:#202220}.region-editor:fullscreen .scan-canvas{height:65dvh;min-height:360px}.region-editor:fullscreen .region-layout{margin-top:16px}.fill-list{display:flex;flex-wrap:wrap;gap:8px;padding:0;list-style:none}.fill-list li{border:1px solid #ccc;padding:4px 8px}.fill-list button:not([data-slot]){margin-left:8px}.region-layout{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:20px}.scan-canvas{position:relative;height:440px;width:100%;overflow:hidden;border:1px solid #ccc;touch-action:none}.scan-canvas :deep(canvas){display:block}.scan-canvas.brush-active :deep(canvas){cursor:none}.scan-canvas.fill-active :deep(canvas){cursor:crosshair}.brush-cursor{position:absolute;z-index:2;pointer-events:none;box-sizing:border-box;border:2px solid;border-radius:50%;box-shadow:0 0 0 1px #202220,inset 0 0 0 1px #fff;transform:translate(-50%,-50%)}.erase-cursor{border-style:dashed}.fill-cursor{position:absolute;z-index:2;pointer-events:none;transform:translate(-50%,-50%);color:#fff;text-shadow:1px 1px #202220,-1px -1px #202220;font:24px monospace}.scan-canvas:focus-visible{outline:2px solid #b94d27;outline-offset:2px}.fill-tools p{font-size:14px}.scan-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}button:not([data-slot]),select{border:1px solid #8c918a;padding:8px 12px;background:white;color:#202220}button[aria-pressed=true]{background:#202220;color:white}button:not([data-slot]):disabled{opacity:.45;cursor:not-allowed}button:not([data-slot]):focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #b94d27;outline-offset:2px}.part-list{display:grid;align-content:start;gap:8px}.part-list label{border-left:5px solid;padding:8px;display:flex;gap:8px;align-items:center;background:#f4f5f3}.part-list span{font-size:12px;margin-left:auto}label{display:flex;gap:8px;align-items:center;margin:6px 0}.scan-error{color:#a92d17;background:#fff0eb;padding:12px}details{margin-top:16px}summary{cursor:pointer}@media(max-width:760px){.region-layout{grid-template-columns:1fr}.scan-canvas{position:relative;height:340px}.part-list{grid-template-columns:1fr 1fr}.part-list>p,.part-list>button:not([data-slot]){grid-column:1/-1}}
+.region-editor { --primary:#292b2d; --primary-foreground:#fff; display:grid; gap:16px; min-width:0; }
+.editor-heading,.section-heading,.region-savebar { display:flex; align-items:center; justify-content:space-between; gap:16px; }
+.editor-heading h3 { font-size:18px; font-weight:600; }
+.editor-heading p,.canvas-help,.region-savebar p,.region-inspector p { color:var(--muted-foreground); font-size:13px; line-height:1.5; }
+.region-layout { display:grid; grid-template-columns:minmax(0,1fr) 300px; gap:20px; align-items:start; }
+.canvas-column { min-width:0; display:grid; gap:8px; }
+.scan-canvas { position:relative; height:var(--painting-height,clamp(280px,calc(100dvh - 470px),620px)); width:100%; overflow:hidden; border:1px solid var(--border); border-radius:6px; touch-action:none; background:#f4f5f3; }
+.scan-canvas :deep(canvas) { display:block; }
+.scan-canvas.brush-active :deep(canvas) { cursor:none; }
+.scan-canvas.fill-active :deep(canvas) { cursor:crosshair; }
+.canvas-status { position:absolute; inset:0; display:grid; place-items:center; pointer-events:none; font-size:14px; }
+.brush-cursor { position:absolute; z-index:2; pointer-events:none; box-sizing:border-box; border:2px solid; border-radius:50%; box-shadow:0 0 0 1px #202220,inset 0 0 0 1px #fff; transform:translate(-50%,-50%); }
+.erase-cursor { border-style:dashed; }
+.fill-cursor { position:absolute; z-index:2; pointer-events:none; transform:translate(-50%,-50%); color:#fff; text-shadow:1px 1px #202220,-1px -1px #202220; font:24px monospace; }
+.scan-canvas:focus-visible { outline:2px solid var(--ring); outline-offset:2px; }
+.scan-toolbar,.inspector-actions { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.scan-toolbar button[aria-pressed=true] { background:var(--primary); border-color:var(--primary); color:var(--primary-foreground); }
+.scan-toolbar button:last-child { margin-left:auto; }
+.region-inspector { border:1px solid var(--border); border-radius:6px; max-height:var(--painting-height,clamp(280px,calc(100dvh - 470px),620px)); overflow:auto; }
+.inspector-section { padding:14px; display:grid; gap:12px; border-bottom:1px solid var(--border); }
+.inspector-section:last-child { border-bottom:0; }
+.section-heading h4 { font-size:14px; font-weight:600; }
+.section-heading span,.section-heading output { font-size:12px; color:var(--muted-foreground); white-space:nowrap; }
+.part-list { display:grid; gap:2px; }
+.part-list label { display:flex; align-items:center; gap:8px; padding:7px 6px; border-radius:4px; font-size:13px; font-weight:400; cursor:pointer; }
+.part-list label.selected { background:var(--muted); font-weight:600; }
+.part-list label:has(input:disabled) { cursor:default; }
+.part-list input { accent-color:var(--primary); }
+.part-swatch { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
+.part-list span { font-size:11px; font-weight:400; color:var(--muted-foreground); margin-left:auto; }
+.test-color { display:flex; align-items:center; justify-content:space-between; }
+input[type=color] { width:36px; height:30px; padding:2px; border:1px solid var(--input); border-radius:4px; }
+.fill-list { max-height:132px; overflow:auto; list-style:none; padding:0; display:grid; gap:4px; font-size:12px; }
+.fill-list li { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+.region-inspector summary { cursor:pointer; font-size:13px; font-weight:600; }
+.crop-settings { display:grid; gap:12px; margin-top:16px; }
+.crop-settings select { border:1px solid var(--input); border-radius:6px; padding:6px; background:var(--card); }
+.region-savebar { padding-top:12px; border-top:1px solid var(--border); }
+.scan-error { color:var(--destructive); background:#fff0eb; border-radius:6px; padding:12px; font-size:14px; }
+.region-editor:fullscreen { background:var(--card); padding:24px; overflow:auto; color:var(--foreground); align-content:start; }
+.region-editor:fullscreen .scan-canvas,.region-editor:fullscreen .region-inspector { height:calc(100dvh - 235px); max-height:none; min-height:360px; }
+@media(max-width:900px) { .region-layout { grid-template-columns:minmax(0,1fr); } .region-inspector { max-height:none; } .scan-toolbar button:last-child { margin-left:0; } .region-savebar { flex-wrap:wrap; } }
 </style>
