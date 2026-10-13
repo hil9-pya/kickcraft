@@ -7,7 +7,6 @@ import ConfirmModal from './components/ConfirmModal.vue'
 import KickCraftCalendar from './components/KickCraftCalendar.vue'
 import StudioSections from './components/StudioSections.vue'
 import ShoeThumbnail from './components/ShoeThumbnail.vue'
-import SwayingCharms from './components/SwayingCharms.vue'
 import { api } from './api.js'
 import {checkoutRequestId,forgetCheckoutRequest} from './checkout-request.js'
 import {frameLatest} from './color-input.js'
@@ -18,6 +17,7 @@ import {
   CHARMS,
   SHOES,
   buildPartColorway,
+  charmScale,
   charmSource,
   availableCharms,
   filterCatalog,
@@ -1273,7 +1273,13 @@ function scrollToTop() {
             @load="handleModelLoad"
             @error="handleModelError"
           >
-            <SwayingCharms :viewer="modelViewer" :charms="charmModels" :selected="selectedCharmId" :offset="selectedShoe.charmOffset" :scale="selectedShoe.charmScale" />
+            <extra-model
+              v-for="charm in charmModels"
+              :key="charm.id"
+              :src="charm.src"
+              :offset="selectedShoe.charmOffset"
+              :scale="charmScale(charm.id, selectedCharmId, selectedShoe.charmScale)"
+            />
           </model-viewer>
 
           <div v-if="!modelReady && !modelError" class="pointer-events-none absolute inset-0 animate-pulse bg-[#e3e6e2]" role="status" aria-label="Loading customizable shoe">

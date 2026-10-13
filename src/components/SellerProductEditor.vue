@@ -7,15 +7,13 @@ import {api} from '../api.js'
 import {validateProduct,productLabels} from '../seller.js'
 import RecentColors from './RecentColors.vue'
 import ScanRegionEditor from './ScanRegionEditor.vue'
-import SwayingCharms from './SwayingCharms.vue'
 import {rememberColor} from '../color-history.js'
 import {frameLatest} from '../color-input.js'
-import {prepareScanMaterials,setMaterialColor,availableCharms,charmSource} from '../customization.js'
+import {prepareScanMaterials,setMaterialColor,availableCharms,charmSource,charmScale} from '../customization.js'
 const props=defineProps({shoe:{type:Object,required:true}})
 const emit=defineEmits(['saved','close'])
 const form=reactive(JSON.parse(JSON.stringify(props.shoe))),viewer=ref(null),activePart=ref(form.parts[0]?.id),error=ref(''),message=ref(''),busy=ref(false),ready=ref(false)
 const charms=computed(()=>availableCharms(form)),charmId=ref('none')
-const charmModels=computed(()=>charms.value.filter(charm=>charm.src).map(charm=>({...charm,src:charmSource(charm,form)})))
 const templateName=ref(form.name==='Untitled shoe'?'':form.name),templateDescription=ref(form.description),allowReuse=ref(false),sharing=ref(false),shared=ref(null)
 const painting=ref(null)
 const canPaint=computed(()=>!!form.sourceScanId||!form.parts.length||form.parts.every(part=>part.recolorTexturePath&&part.material.startsWith('KCScan_')))
@@ -98,7 +96,7 @@ onBeforeUnmount(()=>{previewInput.cancel();paletteInput.cancel();if(highlighted)
   <Button v-if="canPaint" variant="outline" type="button" :disabled="busy||sharing||!ready" @click="openPainting">{{form.parts.length?'Edit painted parts':'Paint customizable parts'}}</Button>
   <div class="editor-grid">
    <div class="product-preview stack">
-    <model-viewer ref="viewer" :src="form.glbPath" camera-controls alt="Product customization preview" @load="loaded" @error="error='Could not load this 3D model.'"><SwayingCharms :viewer="viewer" :charms="charmModels" :selected="charmId" :offset="form.charmOffset" :scale="form.charmScale" /></model-viewer>
+    <model-viewer ref="viewer" :src="form.glbPath" camera-controls alt="Product customization preview" @load="loaded" @error="error='Could not load this 3D model.'"><extra-model v-for="charm in charms.filter(c=>c.src)" :key="charm.id" :src="charmSource(charm,form)" :offset="form.charmOffset" :scale="charmScale(charm.id,charmId,form.charmScale)" /></model-viewer>
     <div v-if="form.parts.length" class="preview-controls stack"><h3>Test customizable parts</h3><label>Part<select :value="activePart" @change="selectPart($event.target.value)"><option v-for="part in form.parts" :key="part.id" :value="part.id">{{part.label}}</option></select></label><div class="actions"><Button variant="outline" v-for="color in form.colors" :key="color.value+color.name" :disabled="!ready" @click="reusePreview(color.value)"><span :style="{background:color.value,display:'inline-block',width:'14px',height:'14px',border:'1px solid #bbb'}"></span> {{color.name}}</Button><Button variant="outline" :disabled="!ready" @click="reset">Original texture</Button></div><label>Custom preview color<input type="color" v-model="previewHex" aria-label="Seller preview color" :disabled="!ready" @input="previewInput(previewHex)" @change="previewInput.flush();rememberColor(previewHex)"></label><RecentColors :disabled="!ready" @select="reusePreview" /><label v-if="form.charmsEnabled">Preview charm<select v-model="charmId"><option v-for="charm in charms" :key="charm.id" :value="charm.id">{{charm.label}}</option></select></label><small>Choose a part, then a color. This tests independent recoloring; it does not change the photographed base texture.</small></div>
    </div>
    <form id="product-details-form" class="panel stack product-details" @submit.prevent="save(false)"><h3>Listing details</h3>
