@@ -87,6 +87,49 @@ function scanCanStart(string $state, int $count): void {
     if ($state !== 'uploading') scanFail('This scan has already started', 409);
     if ($count < 30 || $count > 120) scanFail('Submit 30–120 overlapping photos');
 }
+function scanRetryMinimum(array $body): int {
+    if (array_key_exists('experimental',$body) && !is_bool($body['experimental'])) scanFail('Experimental retry must be an explicit boolean',400);
+    return ($body['experimental'] ?? false) ? 65 : 80;
+}
+function scanRetryable(array $job): bool {
+    if(($job['engine']??'meshroom')==='tripo')return tripoCanResume($job);
+    return $job['state']==='failed' && $job['stage']==='Reconstruction failed' && ($job['operation'] ?? 'reconstruct')==='reconstruct';
+}
+function scanRequireAlignment(array $coverage,int $minimum=80): array {
+    if (!in_array($minimum,[65,80],true)) scanFail('Unsupported alignment threshold');
+    ['aligned'=>$aligned,'total'=>$total]=$coverage;
+    if ($total<1 || $aligned<0 || $aligned>$total) scanFail('Invalid camera alignment report');
+    if ($aligned<30 || $aligned*100<$total*$minimum) scanFail("Only $aligned of $total photos aligned. Recapture sharp overlapping views from all sides; at least 30 and $minimum% must align.");
+    return $coverage;
+}
+function scanReadNativeAlignment(string $path,int $total): array {
+    $report=is_file($path)?trim(file_get_contents($path)):'';
+    if (!preg_match('/^(\d+),(\d+)$/D',$report,$match) || (int)$match[2]!==$total || (int)$match[1]>$total) scanFail('RealityScan produced no valid camera alignment report');
+    return ['aligned'=>(int)$match[1],'total'=>$total];
+}
+function scanReadCameraAlignment(string $path,int $total): array {
+    if (!is_file($path)) scanFail('Camera alignment report is unavailable');
+    $cameras=json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR);
+    if (!is_array($cameras) || count($cameras['views'] ?? [])!==$total) scanFail('Camera alignment report does not match saved photos');
+    $poses=array_fill_keys(array_column($cameras['poses'] ?? [],'poseId'),true);
+    $intrinsics=array_fill_keys(array_column($cameras['intrinsics'] ?? [],'intrinsicId'),true);
+    $aligned=[];
+    foreach ($cameras['views'] ?? [] as $view) if (isset($view['viewId'],$poses[$view['poseId'] ?? ''],$intrinsics[$view['intrinsicId'] ?? ''])) $aligned[$view['viewId']]=true;
+    return ['aligned'=>count($aligned),'total'=>$total];
+}
+function scanFailedAlignment(array $job): ?array {
+    if(($job['engine']??'meshroom')==='tripo')return null;
+    if (!scanRetryable($job)) return null;
+    try {
+        $dir=scanJobDir($job['id']);$total=count($job['images']);
+        if (($job['engine'] ?? 'meshroom')==='realityscan') return scanReadNativeAlignment($dir.'/coverage.csv',$total);
+        $reports=glob($dir.'/cache/MeshroomCache/StructureFromMotion/*/cameras.sfm');
+        return count($reports)===1 ? scanReadCameraAlignment($reports[0],$total) : null;
+    } catch (Throwable $e) {return null;}
+}
+function scanExperimentalEligible(?array $coverage): bool {
+    return $coverage && $coverage['aligned']>=30 && $coverage['aligned']*100>=$coverage['total']*65 && $coverage['aligned']*100<$coverage['total']*80;
+}
 function scanJob(PDO $db, string $id, int $owner, bool $lock = false): array {
     $stmt = $db->prepare('SELECT * FROM scan_jobs WHERE id = ? AND owner_id = ?' . ($lock ? ' FOR UPDATE' : ''));
     $stmt->execute([scanId($id), $owner]);
@@ -97,11 +140,18 @@ function scanJob(PDO $db, string $id, int $owner, bool $lock = false): array {
 }
 function scanPublic(array $job): array {
     $id = $job['id'];
-    $public = ['id'=>$id, 'state'=>$job['state'], 'stage'=>$job['stage'], 'error'=>$job['error_message'],
+    $public = ['operation'=>$job['operation']??'reconstruct','engine'=>$job['engine'] ?? 'meshroom','id'=>$id, 'state'=>$job['state'], 'stage'=>$job['stage'], 'error'=>$job['error_message'],
         'imageCount'=>count($job['images']), 'createdAt'=>$job['created_at'], 'updatedAt'=>$job['updated_at'],
         'previewUrl'=>in_array($job['state'], ['ready','finalized'], true) ? '/api/scans/asset.php?id='.$id.'&preview=1' : null,
         'maskCount'=>count(array_filter($job['images'],fn($image)=>!empty($image['maskFile']) && !empty($image['maskReviewed']))),
-        'images'=>array_map(fn($image)=>array_merge(array_intersect_key($image, array_flip(['id','name','width','height','bytes','orientation','maskReviewed','cameraMetadata'])), ['previewUrl'=>'/api/scans/asset.php?id='.$id.'&image='.$image['id'], 'maskUrl'=>empty($image['maskFile']) ? null : '/api/scans/asset.php?id='.$id.'&mask='.$image['id'].'&v='.$image['maskHash']]), $job['images'])];
+        'images'=>array_map(fn($image)=>array_merge(array_intersect_key($image, array_flip(['id','name','width','height','bytes','orientation','maskReviewed','cameraMetadata','view'])), ['previewUrl'=>'/api/scans/asset.php?id='.$id.'&image='.$image['id'], 'maskUrl'=>empty($image['maskFile']) ? null : '/api/scans/asset.php?id='.$id.'&mask='.$image['id'].'&v='.$image['maskHash']]), $job['images'])];
+    $public['alignmentMinPercent']=(int)($job['alignment_min_percent'] ?? 80);
+    $public['canRetry']=scanRetryable($job) && $public['imageCount']>=30 && $public['imageCount']<=120 && $public['maskCount']===$public['imageCount'];
+    if(($job['engine']??'meshroom')==='tripo'){$public['canRetry']=tripoCanResume($job);$public['generationCredits']=TRIPO_SCAN_CREDITS;try{$public['tripoTaskSaved']=isset(tripoRecord(scanJobDir($id).'/tripo-task.json')['task_id']);$public['tripoUseMasks']=tripoRecord(scanJobDir($id).'/tripo-options.json')['useMasks']??null;}catch(Throwable $e){$public['tripoTaskSaved']=false;}}
+    $public['alignment']=scanFailedAlignment($job);
+    $public['canExperimentalRetry']=$public['canRetry'] && scanExperimentalEligible($public['alignment']);
+    $video=json_decode($job['input_video'] ?? 'null',true);
+    if ($video) $public['video']=array_intersect_key($video,array_flip(['key','name','received','total','width','height','duration']));
     if ($job['state']==='finalized') $public['draft']=json_decode($job['finalized_payload'],true)['draft'] ?? null;
     return $public;
 }
@@ -229,3 +279,9 @@ function scanSurfaceQuality(array $info): array {
  if(($info['triangles']??0)<1000)scanFail('Too little shoe surface reconstructed. Use original camera photos, sharper overlap, fixed zoom and complete masks, then recapture.');
  return $info;
 }
+
+function scanUnreviewedImages(array $images): array {
+    return array_values(array_filter($images,fn($image)=>empty($image['maskReviewed'])));
+}
+
+require_once __DIR__.'/tripo-common.php';

@@ -69,9 +69,9 @@ export async function encodeMaskPng(mask,width,height) {
 export function displayMask(mask,width,height,orientation=1) {
  return rawMask(mask,width,height,orientation===6?8:orientation===8?6:orientation)
 }
-export async function readPhotoPixels(image) {
+export async function readPhotoPixels(image,maxSize=1600) {
  const photo=new Image();photo.src=image.previewUrl;await photo.decode()
- const canvas=document.createElement('canvas'),ratio=Math.min(1,1600/Math.max(photo.naturalWidth,photo.naturalHeight))
+ const canvas=document.createElement('canvas'),ratio=Math.min(1,maxSize/Math.max(photo.naturalWidth,photo.naturalHeight))
  canvas.width=Math.max(1,Math.round(photo.naturalWidth*ratio));canvas.height=Math.max(1,Math.round(photo.naturalHeight*ratio))
  const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(photo,0,0,canvas.width,canvas.height)
  return {canvas,pixels:context.getImageData(0,0,canvas.width,canvas.height).data}
@@ -87,4 +87,19 @@ export async function createPhotoMask(image,background,tolerance) {
  const coverage=maskCoverage(mask)
  if(coverage===0 || coverage===1)throw new Error('Choose a contrasting background color or brush the mask by hand.')
  return photoMaskPng(mask,canvas.width,canvas.height,image)
+}
+
+export async function readSavedMask(image,width,height) {
+ const saved=new Image();saved.src=image.maskUrl;await saved.decode()
+ const raw=document.createElement('canvas'),swapped=(image.orientation || 1)>=5
+ raw.width=swapped?height:width;raw.height=swapped?width:height
+ const context=raw.getContext('2d',{willReadFrequently:true})
+ context.imageSmoothingEnabled=false;context.drawImage(saved,0,0,raw.width,raw.height)
+ const data=context.getImageData(0,0,raw.width,raw.height).data,values=new Uint8Array(raw.width*raw.height)
+ for(let i=0;i<values.length;i++)values[i]=data[i*4]>=128?255:0
+ return displayMask(values,raw.width,raw.height,image.orientation || 1)
+}
+export async function savedPhotoMaskPng(image) {
+ // Re-encode the original mask, never the smaller review preview.
+ return encodeMaskPng(await readSavedMask({...image,orientation:1},image.width,image.height),image.width,image.height)
 }

@@ -1,0 +1,10 @@
+$Using("RealityScan.Report.ProjectInformationExportFunctionSet")
+$Using("RealityScan.Report.IteratorsFunctionSet")
+$Using("RealityScan.Report.HelperFunctionSet")
+$ExportProjectInfo(
+$IterateComponents(
+$If(actualComponentGUID==componentGUID,
+$(componentCamerasCount),$(imageCount)
+)
+)
+)

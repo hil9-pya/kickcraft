@@ -1,6 +1,8 @@
 <?php
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require_once __DIR__.'/../api/scans/common.php';
+require_once __DIR__.'/realityscan.php';
+require_once __DIR__.'/tripo.php';
 if (session_status()===PHP_SESSION_ACTIVE) session_write_close();
 
 function scanStopProcess($process, int $pid): void {
@@ -61,22 +63,16 @@ function scanMaskedPipeline(string $meshroom,string $dir): string {
     if (file_put_contents($path,json_encode($pipeline,JSON_THROW_ON_ERROR))===false) throw new RuntimeException('Cannot save masked reconstruction pipeline');
     return $path;
 }
-function scanCameraCoverage(string $path,int $total): array {
-    $cameras=json_decode(file_get_contents($path),true,512,JSON_THROW_ON_ERROR);
-    $poses=array_fill_keys(array_column($cameras['poses'] ?? [],'poseId'),true);
-    $intrinsics=array_fill_keys(array_column($cameras['intrinsics'] ?? [],'intrinsicId'),true);
-    $aligned=[];
-    foreach ($cameras['views'] ?? [] as $view) if (isset($poses[$view['poseId'] ?? ''],$intrinsics[$view['intrinsicId'] ?? ''])) $aligned[$view['viewId']]=true;
-    $count=count($aligned);
-    if ($count<30 || $count<$total*.8) scanFail('Only '.$count.' of '.$total.' photos aligned. Recapture sharp overlapping views from all sides; at least 30 and 80% must align.');
-    return ['aligned'=>$count,'total'=>$total];
+function scanCameraCoverage(string $path,int $total,int $minimum=80): array {
+    return scanRequireAlignment(scanReadCameraAlignment($path,$total),$minimum);
 }
-function scanWorkerOnce(PDO $db): bool {
+function scanWorkerOnce(PDO $db,?callable $tripoRequest=null,?callable $tripoDownload=null): bool {
     $lock='kickcraft-scan-'.substr(hash('sha256',(string)configValue('DB_NAME')),0,32);
     $stmt=$db->prepare('SELECT GET_LOCK(?,0)'); $stmt->execute([$lock]);
     if ((int)$stmt->fetchColumn()!==1) return false;
     $job=null;
     try {
+        $db->exec("UPDATE scan_jobs SET state='uploading',operation='reconstruct',stage='AI masking interrupted; existing masks kept',error_message='AI masking stopped responding. Existing photos and masks are unchanged; retry AI or use brushes.' WHERE state='processing' AND operation='mask' AND heartbeat_at<DATE_SUB(NOW(),INTERVAL 5 MINUTE)");
         $db->exec("UPDATE scan_jobs SET state='failed',stage='Processing interrupted',error_message='Worker stopped responding; inspect its local log and create a new scan.' WHERE state='processing' AND heartbeat_at<DATE_SUB(NOW(),INTERVAL 5 MINUTE)");
         $db->beginTransaction();
         $job=$db->query("SELECT * FROM scan_jobs WHERE state='queued' ORDER BY created_at LIMIT 1 FOR UPDATE")->fetch();
@@ -85,9 +81,6 @@ function scanWorkerOnce(PDO $db): bool {
         $db->commit();
         $dir=scanJobDir($job['id']); $started=microtime(true);
         $images=json_decode($job['images'],true,512,JSON_THROW_ON_ERROR);
-        scanCheckMasks($images,$dir.'/masks');
-        scanStageCapture($images,$dir);
-        foreach (['cache','output'] as $folder) if (!is_dir($dir.'/'.$folder)) mkdir($dir.'/'.$folder,0700,true);
         $heartbeat=function() use($db,$job) {
             $stmt=$db->prepare("UPDATE scan_jobs SET heartbeat_at=NOW() WHERE id=? AND state='processing'"); $stmt->execute([$job['id']]);
             if (!$stmt->rowCount()) {
@@ -95,20 +88,36 @@ function scanWorkerOnce(PDO $db): bool {
                 if ($state->fetchColumn()!=='processing') throw new RuntimeException('Scan is no longer processing');
             }
         };
-        $meshroom = (string)configValue('MESHROOM_BATCH');
-        $toolRoot = dirname($meshroom);
-        $environment = getenv();
-        // Meshroom 2025 ignores --cache; TEMP/TMP isolate its actual MeshroomCache folder.
-        $environment['TEMP'] = $environment['TMP'] = $dir.'/cache';
-        $command=[$meshroom,'-i',$dir.'/input-images','-p',scanMaskedPipeline($meshroom,$dir),'-o',$dir.'/output','-s',$dir.'/project.mg','--cache',$dir.'/cache','--paramOverrides','ImageMatching:method=Exhaustive','Texturing:textureSide=2048'];
-        if (PHP_OS_FAMILY==='Windows') {
-            if (str_contains($toolRoot,' ')) throw new RuntimeException('Install Meshroom at a path without spaces, or configure a space-free directory junction.');
+        if (($job['operation'] ?? '')==='mask') {scanNativeMaskPhotos($db,$job,$images,$dir,$heartbeat);return true;}
+        if (($job['engine'] ?? 'meshroom')==='realityscan' && $job['operation']==='prepare') {scanNativePrepare($db,$job,$dir,$heartbeat);return true;}
+        if(($job['engine']??'meshroom')==='tripo') {
+            $job['images']=$images;
+            tripoProcess($job,function(string $stage)use($db,$job,$heartbeat){$db->prepare('UPDATE scan_jobs SET stage=? WHERE id=?')->execute([$stage,$job['id']]);$heartbeat();},$tripoRequest,$tripoDownload);
+            $db->prepare("UPDATE scan_jobs SET state='ready',stage='Tripo model ready. Compare every angle with your actual photographs before marking parts.',output_glb='preview.glb',heartbeat_at=NOW(),completed_at=NOW() WHERE id=? AND state='processing'")->execute([$job['id']]);
+            return true;
         }
-        $command=scanToolCommand($command,$dir,'meshroom');
-        scanProcess($command,$dir.'/worker.log',$heartbeat,3600,$environment);
-        $cameraFiles=glob($dir.'/cache/MeshroomCache/StructureFromMotion/*/cameras.sfm');
-        if (count($cameraFiles)!==1) throw new RuntimeException('Reconstruction did not produce an unambiguous camera alignment report');
-        $coverage=scanCameraCoverage($cameraFiles[0],count($images));
+        scanCheckMasks($images,$dir.'/masks');
+        scanStageCapture($images,$dir);
+        foreach (['cache','output'] as $folder) if (!is_dir($dir.'/'.$folder)) mkdir($dir.'/'.$folder,0700,true);
+        foreach (['output/model.obj','preview.glb'] as $file) if (is_file($dir.'/'.$file) && !unlink($dir.'/'.$file)) scanFail('Cannot clear prior reconstruction output');
+        if (($job['engine'] ?? 'meshroom')==='realityscan') {
+            $coverage=scanNativeReconstruct($db,$job,$dir,$images,$heartbeat);
+        } else {
+            $meshroom = (string)configValue('MESHROOM_BATCH');
+            $toolRoot = dirname($meshroom);
+            $environment = getenv();
+            // Meshroom 2025 ignores --cache; TEMP/TMP isolate its actual MeshroomCache folder.
+            $environment['TEMP'] = $environment['TMP'] = $dir.'/cache';
+            $command=[$meshroom,'-i',$dir.'/input-images','-p',scanMaskedPipeline($meshroom,$dir),'-o',$dir.'/output','-s',$dir.'/project.mg','--cache',$dir.'/cache','--paramOverrides','ImageMatching:method=Exhaustive','Texturing:textureSide=2048'];
+            if (PHP_OS_FAMILY==='Windows') {
+                if (str_contains($toolRoot,' ')) throw new RuntimeException('Install Meshroom at a path without spaces, or configure a space-free directory junction.');
+            }
+            $command=scanToolCommand($command,$dir,'meshroom');
+            scanProcess($command,$dir.'/worker.log',$heartbeat,3600,$environment);
+            $cameraFiles=glob($dir.'/cache/MeshroomCache/StructureFromMotion/*/cameras.sfm');
+            if (count($cameraFiles)!==1) throw new RuntimeException('Reconstruction did not produce an unambiguous camera alignment report');
+            $coverage=scanCameraCoverage($cameraFiles[0],count($images),(int)($job['alignment_min_percent'] ?? 80));
+        }
         $objects=glob($dir.'/output/*.obj');
         if (!$objects) throw new RuntimeException('Reconstruction produced no surface. Check the worker log and capture coverage before trying again.');
         $db->prepare("UPDATE scan_jobs SET stage='Preparing textured 3D preview',heartbeat_at=NOW() WHERE id=?")->execute([$job['id']]);
@@ -123,7 +132,9 @@ function scanWorkerOnce(PDO $db): bool {
         if ($job) {
             error_log('Scan worker '.$job['id'].': '.$e->getMessage());
             $message=$e instanceof PDOException ? 'Database operation failed during reconstruction' : $e->getMessage();
-            $db->prepare("UPDATE scan_jobs SET state='failed',stage='Reconstruction failed',error_message=?,completed_at=NOW() WHERE id=?")->execute([mb_substr($message,0,500),$job['id']]);
+            if (($job['operation'] ?? '')==='mask') {
+                $db->prepare("UPDATE scan_jobs SET state='uploading',operation='reconstruct',stage='AI masking failed; existing photos and masks kept',error_message=?,heartbeat_at=NOW() WHERE id=?")->execute([mb_substr('AI background removal failed. Existing masks kept. '.$message,0,500),$job['id']]);
+            } else $db->prepare("UPDATE scan_jobs SET state='failed',stage='Reconstruction failed',error_message=?,completed_at=NOW() WHERE id=?")->execute([mb_substr($message,0,500),$job['id']]);
         } else throw $e;
         return true;
     } finally { $db->prepare('SELECT RELEASE_LOCK(?)')->execute([$lock]); }

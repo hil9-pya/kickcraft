@@ -1,8 +1,8 @@
 <script setup>
 import {ref,watch,onBeforeUnmount} from 'vue'
-import {createForegroundMask,paintMask,displayMask,maskCoverage,readPhotoPixels,photoMaskPng} from '../scan-masks.js'
-const props=defineProps({image:{type:Object,required:true},saving:Boolean})
-const emit=defineEmits(['save','batch','close'])
+import {createForegroundMask,paintMask,readSavedMask,maskCoverage,readPhotoPixels,photoMaskPng} from '../scan-masks.js'
+const props=defineProps({image:{type:Object,required:true},saving:Boolean,aiAvailable:Boolean})
+const emit=defineEmits(['save','batch','close','ai'])
 const background=defineModel('background',{default:'#20dc1e'}),tolerance=defineModel('tolerance',{default:80})
 const surface=ref(null),mode=ref('pick'),radius=ref(24),error=ref(''),loading=ref(true),coverage=ref(1),canUndo=ref(false)
 let source,pixels,mask,history=[],painting=false,last=null,generation=0,frame,keyboardPoint=null
@@ -60,21 +60,13 @@ async function save(){
  catch(cause){error.value=cause.message}finally{loading.value=false}
 }
 watch(()=>[props.image.id,props.image.maskUrl],async()=>{
- const token=++generation;loading.value=true;error.value='';history=[];keyboardPoint=null;up()
+ const token=++generation;loading.value=true;error.value='';history=[];keyboardPoint=null;mode.value=props.image.maskUrl?'keep':'pick';up()
  try{
   const loaded=await readPhotoPixels(props.image)
   if(token!==generation)return
   source=loaded.canvas;pixels=loaded.pixels;mask=createForegroundMask(pixels,source.width,source.height,rgb(),Number(tolerance.value))
-  if(props.image.maskUrl){
-   const saved=new Image();saved.src=props.image.maskUrl;await saved.decode()
-   if(token!==generation)return
-   const raw=document.createElement('canvas'),swapped=(props.image.orientation || 1)>=5
-   raw.width=swapped?source.height:source.width;raw.height=swapped?source.width:source.height
-   const context=raw.getContext('2d',{willReadFrequently:true});context.imageSmoothingEnabled=false;context.drawImage(saved,0,0,raw.width,raw.height)
-   const data=context.getImageData(0,0,raw.width,raw.height).data,values=new Uint8Array(raw.width*raw.height)
-   for(let i=0;i<values.length;i++)values[i]=data[i*4]>=128?255:0
-   mask=displayMask(values,raw.width,raw.height,props.image.orientation || 1)
-  }
+  if(props.image.maskUrl)mask=await readSavedMask(props.image,source.width,source.height)
+  if(token!==generation)return
   if(surface.value){surface.value.width=source.width;surface.value.height=source.height;draw()}
  }catch(cause){if(token===generation)error.value=cause.message}finally{if(token===generation)loading.value=false}
 },{immediate:true,flush:'post'})
@@ -87,11 +79,12 @@ onBeforeUnmount(()=>{generation++;cancelAnimationFrame(frame)})
   <p v-if="error" role="alert" class="mask-error">{{error}}</p>
   <p v-if="loading" role="status">Preparing mask…</p>
   <fieldset :disabled="saving || loading || !!error">
+   <div v-if="aiAvailable" class="mask-tools"><button type="button" @click="emit('ai')">Generate AI masks for unreviewed photos</button><p>Use AI for mixed backgrounds or similar shoe and background colors. Reviewed masks stay unchanged.</p></div>
    <div class="mask-tools">
     <button type="button" :aria-pressed="mode==='pick'" @click="mode='pick'">Pick background</button>
     <label>Background color<input v-model="background" type="color"></label>
     <label>Color tolerance<input v-model="tolerance" type="range" min="10" max="220"><output>{{tolerance}}</output></label>
-    <button type="button" @click="regenerate">Remove this background</button>
+    <button type="button" @click="regenerate">Remove by color</button>
     <button type="button" :aria-pressed="mode==='keep'" @click="mode='keep'">Keep shoe brush</button>
     <button type="button" :aria-pressed="mode==='remove'" @click="mode='remove'">Remove background brush</button>
     <label>Brush size<input v-model="radius" type="range" min="4" max="80"></label>
@@ -101,10 +94,10 @@ onBeforeUnmount(()=>{generation++;cancelAnimationFrame(frame)})
    <p>Keyboard: focus photo, use arrow keys to move, then Space to paint or pick background.</p>
    <p>{{Math.round(coverage*100)}}% of photo kept. Check shoe edges carefully before saving.</p>
    <div class="mask-tools">
-    <button type="button" :disabled="coverage<=0 || coverage>=1" @click="save">Save reviewed mask &amp; next</button>
-    <button type="button" @click="emit('batch',{background:rgb(),tolerance:Number(tolerance)})">Generate masks for remaining photos</button>
+    <button type="button" :disabled="coverage<=0 || coverage>=1" @click="save">Save reviewed mask</button>
+    <button type="button" @click="emit('batch',{background:rgb(),tolerance:Number(tolerance)})">Generate color masks for remaining photos</button>
    </div>
-   <p>Batch generation saves drafts. Review every photo before reconstruction. Color removal works best with a contrasting, plain background.</p>
+   <p>Batch generation saves drafts. Review drafts together in the mask grid before reconstruction. Color removal works best with a contrasting, plain background.</p>
   </fieldset>
  </section>
 </template>

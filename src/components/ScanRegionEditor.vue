@@ -4,18 +4,21 @@ import * as THREE from 'three'
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js'
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js'
 import {PARTS} from '../customization.js'
-import {createRegionState,paintFaces,cropFaces,undoStroke,exportScanRegions,buildRegionGroups,neutralDetailTexture} from '../scan-regions.js'
+import {createRegionState,surfaceBrushFaces,sampleFaceColors,smartFillFaces,paintFaces,cropFaces,undoStroke,exportScanRegions,buildRegionGroups,neutralDetailTexture} from '../scan-regions.js'
 const props=defineProps({previewUrl:{type:String,required:true},saving:{type:Boolean,default:false}})
 const emit=defineEmits(['complete'])
 const host=ref(null),error=ref(''),ready=ref(false),busy=ref(false)
 const mode=ref('rotate'),region=ref('upper'),radius=ref(16),revision=ref(0),charm=ref(null),testColor=ref('#ffffff')
-let previewMesh,neutralMap
+const cursor=ref(null),fillTolerance=ref(40)
+let previewMesh,neutralMap,textureColors,fillSeed=null
 const previewColors={}
 const cropMin=ref(-100),cropMax=ref(100),cropAxis=ref('y')
 let renderer,scene,camera,controls,mesh,overlay,state,frame,observer,disposed=false,painting=false
 const pending=new Set(),raycaster=new THREE.Raycaster(),point=new THREE.Vector2()
 const swatches=['#e87558','#e9c460','#809c75','#b99bd0','#7fbed0','#cc8cad','#abb9c2','#b7a176']
 const counts=computed(()=>{revision.value;return Object.fromEntries(PARTS.map(part=>[part.id,state?.assignments.filter(id=>id===part.id).length || 0]))})
+const fillCount=computed(()=>{revision.value;return pending.size})
+const brushActive=computed(()=>['paint','erase'].includes(mode.value) && !busy.value && !props.saving)
 const partCount=computed(()=>Object.values(counts.value).filter(Boolean).length)
 function refresh() {
  if(!mesh || !state) return
@@ -40,7 +43,7 @@ function refresh() {
  }
  mesh.visible=mode.value!=='preview'
  if(previewMesh)previewMesh.visible=mode.value==='preview'
- overlay.visible=['paint','erase'].includes(mode.value)
+ overlay.visible=['paint','erase','fill'].includes(mode.value)
  revision.value++
 }
 function pick(clientX,clientY) {
@@ -50,30 +53,77 @@ function pick(clientX,clientY) {
  return raycaster.intersectObject(mesh,false).find(hit=>state.assignments[hit.faceIndex]!=='removed')
 }
 function brush(event) {
- const r=Number(radius.value)
- for(let x=-r;x<=r;x+=Math.max(4,r/3)) for(let y=-r;y<=r;y+=Math.max(4,r/3)) if(x*x+y*y<=r*r) {
-  const hit=pick(event.clientX+x,event.clientY+y)
-  if(hit) pending.add(hit.faceIndex)
+ const hit=pick(event.clientX,event.clientY)
+ if(hit) {
+  const height=renderer.domElement.getBoundingClientRect().height
+  const distance=hit.point.distanceTo(camera.position)
+  const worldRadius=2*distance*Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*Number(radius.value)/height
+  const center=mesh.worldToLocal(hit.point.clone()),eye=mesh.worldToLocal(camera.position.clone())
+  pending.add(hit.faceIndex)
+  for(const id of surfaceBrushFaces(state,center,worldRadius,eye))pending.add(id)
  }
  refresh()
 }
+function suggestFill(seed=fillSeed) {
+ if(seed===null || !ready.value || busy.value || props.saving)return
+ error.value='';fillSeed=seed;pending.clear()
+ try {
+  if(!textureColors) {
+   const texture=mesh.material[0].map
+   if(!texture?.image)throw new Error('Smart fill needs the original photographed texture. Use Paint instead.')
+   const canvas=document.createElement('canvas');canvas.width=texture.image.width;canvas.height=texture.image.height
+   const context=canvas.getContext('2d',{willReadFrequently:true});context.drawImage(texture.image,0,0)
+   textureColors=sampleFaceColors(state,texture,context.getImageData(0,0,canvas.width,canvas.height))
+  }
+  const eye=mesh.worldToLocal(camera.position.clone())
+  for(const id of smartFillFaces(state,seed,textureColors,Number(fillTolerance.value),eye,region.value))pending.add(id)
+ }catch(cause){error.value=cause.message}
+ refresh()
+}
+function clearFill() {pending.clear();fillSeed=null;refresh()}
+function applyFill() {
+ if(busy.value || props.saving || !pending.size)return
+ paintFaces(state,[...pending],region.value);clearFill()
+}
+function pointer(event) {
+ const rect=renderer.domElement.getBoundingClientRect()
+ cursor.value={x:event.clientX-rect.left,y:event.clientY-rect.top}
+}
 function down(event) {
  if(!ready.value || ['rotate','preview'].includes(mode.value) || busy.value || props.saving || event.button!==0) return
- renderer.domElement.setPointerCapture(event.pointerId)
+ pointer(event)
+ if(mode.value==='fill') {
+  const hit=pick(event.clientX,event.clientY);if(hit)suggestFill(hit.faceIndex)
+  return
+ }
  if(mode.value==='charm') {
   const hit=pick(event.clientX,event.clientY)
   if(hit) charm.value=mesh.worldToLocal(hit.point.clone()).toArray()
   return
  }
+ renderer.domElement.setPointerCapture(event.pointerId)
  painting=true;pending.clear();brush(event)
 }
-function move(event) {if(painting) brush(event)}
+function move(event) {pointer(event);if(painting) brush(event)}
 function up() {
  if(!painting) return
  painting=false;paintFaces(state,[...pending],mode.value==='erase'?null:region.value)
  pending.clear();refresh()
 }
-function setMode(value) {up();mode.value=value;if(controls) controls.enabled=['rotate','preview'].includes(value);refresh()}
+function setMode(value) {up();pending.clear();fillSeed=null;mode.value=value;if(controls) controls.enabled=['rotate','preview'].includes(value);refresh()}
+function keydown(event) {
+ if(!ready.value || !['paint','erase','fill'].includes(mode.value) || busy.value || props.saving)return
+ const arrows={ArrowLeft:[-8,0],ArrowRight:[8,0],ArrowUp:[0,-8],ArrowDown:[0,8]}
+ if(!arrows[event.key] && event.key!==' ')return
+ event.preventDefault()
+ const rect=renderer.domElement.getBoundingClientRect(),at=cursor.value || {x:rect.width/2,y:rect.height/2}
+ if(arrows[event.key]) {
+  const [dx,dy]=arrows[event.key];cursor.value={x:Math.max(0,Math.min(rect.width,at.x+dx)),y:Math.max(0,Math.min(rect.height,at.y+dy))};return
+ }
+ const clientX=rect.left+at.x,clientY=rect.top+at.y
+ if(mode.value==='fill'){const hit=pick(clientX,clientY);if(hit)suggestFill(hit.faceIndex)}
+ else {painting=true;pending.clear();brush({clientX,clientY});up()}
+}
 function undo() {if(state){undoStroke(state);setMode('rotate')}}
 function rotate(axis) {
  if(!mesh)return
@@ -119,6 +169,7 @@ async function previewColor(reset=false) {
 }
 async function finish() {
  if(busy.value || props.saving)return
+ if(mode.value==='fill' && pending.size){error.value='Apply or cancel the suggested fill before saving.';return}
  up();busy.value=true;error.value=''
  try {
   const payload=await exportScanRegions(mesh,state)
@@ -162,14 +213,23 @@ onBeforeUnmount(()=>{
 </script>
 <template>
  <div class="region-editor">
-  <p>Choose a part, paint its visible surface, then rotate to paint the other side. Unpainted faces keep their photographed appearance.</p>
+  <p>Choose a part, then use Smart fill to suggest its visible surface. Apply the suggestion or correct with Paint / Erase. Rotate to select the other side. Unselected faces keep their photographed appearance.</p>
   <p v-if="error" role="alert" class="scan-error">{{error}}</p>
   <div class="region-layout">
    <div>
-    <div ref="host" class="scan-canvas" :aria-busy="!ready" aria-label="Interactive shoe region editor"></div>
+    <div ref="host" class="scan-canvas" :class="{'brush-active':brushActive,'fill-active':mode==='fill'}" :aria-busy="!ready" tabindex="0" aria-label="Interactive shoe region editor; arrow keys move brush or selection, Space selects" @keydown="keydown" @pointerleave="cursor=null">
+     <span v-if="cursor && brushActive" class="brush-cursor" :class="{'erase-cursor':mode==='erase'}" :style="{left:cursor.x+'px',top:cursor.y+'px',width:Number(radius)*2+'px',height:Number(radius)*2+'px',borderColor:mode==='erase'?'#fff':swatches[PARTS.findIndex(p=>p.id===region)]}" aria-hidden="true"></span>
+     <span v-if="cursor && mode==='fill'" class="fill-cursor" :style="{left:cursor.x+'px',top:cursor.y+'px'}" aria-hidden="true">+</span>
+    </div>
     <div class="scan-toolbar">
-     <button v-for="tool in ['rotate','paint','erase','charm']" :key="tool" type="button" :aria-pressed="mode===tool" :disabled="!ready || busy" @click="setMode(tool)">{{tool==='charm'?'Place charm':tool[0].toUpperCase()+tool.slice(1)}}</button>
-     <button type="button" :disabled="!ready || busy" @click="undo">Undo stroke / crop</button>
+     <button v-for="tool in ['rotate','fill','paint','erase','charm']" :key="tool" type="button" :aria-pressed="mode===tool" :disabled="!ready || busy" @click="setMode(tool)">{{tool==='charm'?'Place charm':tool==='fill'?'Smart fill':tool[0].toUpperCase()+tool.slice(1)}}</button>
+     <button type="button" :disabled="!ready || busy" @click="undo">Undo selection / stroke / crop</button>
+    </div>
+    <div v-if="mode==='fill'" class="fill-tools">
+     <label>Fill tolerance <input v-model="fillTolerance" type="range" min="10" max="120" :disabled="busy || saving" @input="suggestFill()">{{fillTolerance}}</label>
+     <p role="status">{{fillSeed===null?'Click the shoe to suggest a region.':fillCount+' faces suggested. Review edges before applying.'}} Already labeled parts stay protected.</p>
+     <div class="scan-toolbar"><button type="button" :disabled="!fillCount || busy || saving" @click="applyFill">Apply fill</button><button type="button" :disabled="fillSeed===null || busy || saving" @click="clearFill();error=''">Cancel fill</button></div>
+     <p>Lower tolerance keeps selection tighter. Same-colored parts may merge; correct with Paint / Erase. Arrow keys move selection; Space selects.</p>
     </div>
     <label>Brush size <input v-model="radius" type="range" min="6" max="40" :disabled="busy"></label>
     <p v-if="mode==='charm'">Click the shoe where charms should attach. <button type="button" @click="charm=null">Disable charms</button></p>
@@ -189,7 +249,7 @@ onBeforeUnmount(()=>{
    </div>
    <div class="part-list">
     <label v-for="(part,index) in PARTS" :key="part.id" :style="{'border-left-color':swatches[index]}">
-     <input v-model="region" type="radio" name="scan-part" :value="part.id" @change="setMode('paint')" :disabled="busy">{{part.label}} <span>{{counts[part.id]}} faces</span>
+     <input v-model="region" type="radio" name="scan-part" :value="part.id" @change="setMode(mode==='fill'?'fill':'paint')" :disabled="busy">{{part.label}} <span>{{counts[part.id]}} faces</span>
     </label>
     <p>{{partCount}} customizable parts. At least two required.</p>
     <button type="button" :disabled="!ready || busy || partCount<2" @click="finish">{{busy?'Preparing model…':'Use these parts'}}</button>
@@ -198,6 +258,6 @@ onBeforeUnmount(()=>{
  </div>
 </template>
 <style scoped>
-.region-editor{display:grid;gap:16px}.region-layout{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:20px}.scan-canvas{height:440px;width:100%;overflow:hidden;border:1px solid #ccc;touch-action:none}.scan-canvas :deep(canvas){display:block}.scan-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}button,select{border:1px solid #8c918a;padding:8px 12px;background:white;color:#202220}button[aria-pressed=true]{background:#202220;color:white}button:disabled{opacity:.45;cursor:not-allowed}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #b94d27;outline-offset:2px}.part-list{display:grid;align-content:start;gap:8px}.part-list label{border-left:5px solid;padding:8px;display:flex;gap:8px;align-items:center;background:#f4f5f3}.part-list span{font-size:12px;margin-left:auto}label{display:flex;gap:8px;align-items:center;margin:6px 0}.scan-error{color:#a92d17;background:#fff0eb;padding:12px}details{margin-top:16px}summary{cursor:pointer}@media(max-width:760px){.region-layout{grid-template-columns:1fr}.scan-canvas{height:340px}.part-list{grid-template-columns:1fr 1fr}.part-list>p,.part-list>button{grid-column:1/-1}}
+.region-editor{display:grid;gap:16px}.region-layout{display:grid;grid-template-columns:minmax(0,1fr) 230px;gap:20px}.scan-canvas{position:relative;height:440px;width:100%;overflow:hidden;border:1px solid #ccc;touch-action:none}.scan-canvas :deep(canvas){display:block}.scan-canvas.brush-active :deep(canvas){cursor:none}.scan-canvas.fill-active :deep(canvas){cursor:crosshair}.brush-cursor{position:absolute;z-index:2;pointer-events:none;box-sizing:border-box;border:2px solid;border-radius:50%;box-shadow:0 0 0 1px #202220,inset 0 0 0 1px #fff;transform:translate(-50%,-50%)}.erase-cursor{border-style:dashed}.fill-cursor{position:absolute;z-index:2;pointer-events:none;transform:translate(-50%,-50%);color:#fff;text-shadow:1px 1px #202220,-1px -1px #202220;font:24px monospace}.scan-canvas:focus-visible{outline:2px solid #b94d27;outline-offset:2px}.fill-tools p{font-size:14px}.scan-toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}button,select{border:1px solid #8c918a;padding:8px 12px;background:white;color:#202220}button[aria-pressed=true]{background:#202220;color:white}button:disabled{opacity:.45;cursor:not-allowed}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #b94d27;outline-offset:2px}.part-list{display:grid;align-content:start;gap:8px}.part-list label{border-left:5px solid;padding:8px;display:flex;gap:8px;align-items:center;background:#f4f5f3}.part-list span{font-size:12px;margin-left:auto}label{display:flex;gap:8px;align-items:center;margin:6px 0}.scan-error{color:#a92d17;background:#fff0eb;padding:12px}details{margin-top:16px}summary{cursor:pointer}@media(max-width:760px){.region-layout{grid-template-columns:1fr}.scan-canvas{position:relative;height:340px}.part-list{grid-template-columns:1fr 1fr}.part-list>p,.part-list>button{grid-column:1/-1}}
 </style>
 

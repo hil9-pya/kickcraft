@@ -46,3 +46,42 @@ test('saving a photo mask sends owner job, photo identity, and lossless PNG',asy
  try{assert.equal((await saveScanMask('job-one','photo-one',new Blob(['mask'],{type:'image/png'}))).maskCount,1)}
  finally{globalThis.fetch=savedFetch}
 })
+
+test('native video uploads bounded chunks and preserves resume identity',async()=>{
+ const {uploadScanVideo}=await import('../src/scan-capture.js')
+ const savedFetch=globalThis.fetch,file=new File([new Uint8Array(9*1024*1024)],'original.mp4',{type:'video/mp4',lastModified:123})
+ let saved={id:'native-one',engine:'realityscan',state:'uploading'},chunks=[],created=0
+ globalThis.fetch=async(url,options)=>{
+  if(url.endsWith('create.php')){assert.equal(JSON.parse(options.body).engine,'realityscan');created++;return Response.json({job:saved})}
+  if(url.includes('status.php'))return Response.json({job:saved})
+  const body=options.body,offset=Number(body.get('offset')),bytes=body.get('file').size
+  assert.ok(bytes<=8*1024*1024);assert.equal(Number(body.get('total')),file.size);chunks.push(offset)
+  saved={...saved,video:{key:body.get('key'),received:offset+bytes,total:file.size},state:offset+bytes===file.size?'queued':'uploading'}
+  return Response.json({job:saved})
+ }
+ try{
+  assert.equal((await uploadScanVideo(file,()=>{})).state,'queued');assert.deepEqual(chunks,[0,8*1024*1024]);assert.equal(created,1)
+  assert.equal((await uploadScanVideo(file,()=>{},saved.id)).state,'queued');assert.equal(chunks.length,2)
+  await assert.rejects(uploadScanVideo(new File(['different'],'other.mp4',{type:'video/mp4'}),()=>{},saved.id),/same video/)
+ }finally{globalThis.fetch=savedFetch}
+})
+
+test('native upload recovers a lost final response by observing the queued job',async()=>{
+ const {uploadScanVideo}=await import('../src/scan-capture.js'),savedFetch=globalThis.fetch
+ const file=new File(['small video'],'capture.mp4',{type:'video/mp4'})
+ let job={id:'lost-final',engine:'realityscan',state:'uploading'}
+ globalThis.fetch=async(url,options)=>{
+  if(url.endsWith('create.php') || url.includes('status.php'))return Response.json({job})
+  job={...job,state:'queued',video:{key:options.body.get('key'),received:file.size,total:file.size}}
+  throw new Error('Response lost')
+ }
+ try{assert.equal((await uploadScanVideo(file,()=>{})).state,'queued')}finally{globalThis.fetch=savedFetch}
+})
+
+
+test('reconstruction client keeps default mode and sends explicit experimental retry',async()=>{
+ const {startScan}=await import('../src/scan-capture.js'),savedFetch=globalThis.fetch
+ const modes=[]
+ globalThis.fetch=async(url,options)=>{assert.equal(url,'/api/scans/start.php');const body=JSON.parse(options.body);assert.equal(body.id,'saved-scan');modes.push(body.experimental);return Response.json({job:{id:'saved-scan'}})}
+ try {await startScan('saved-scan');await startScan('saved-scan',true);assert.deepEqual(modes,[false,true])}finally{globalThis.fetch=savedFetch}
+})

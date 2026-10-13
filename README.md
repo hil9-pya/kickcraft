@@ -84,7 +84,7 @@ npm run build   # Verifies production client bundle compilation
 
 ## Admin photo scanning (local photogrammetry)
 
-The admin shoe editor now has **Scan from photos**. It uploads 30–120 JPG/PNG views of one stationary original shoe, guides background removal on every photo, reconstructs a textured surface with local Meshroom, then lets the owner paint independently recolorable regions. At least two regions are required. Unpainted faces keep the photographed appearance. Replacement colors use a neutral detail texture; Reset restores the original texture. Scanned shoes use the existing catalog and guest pickup reservations.
+The admin shoe editor now has **Scan from photos**. It uploads 30–120 JPG/PNG views of one stationary original shoe, guides background removal on every photo, reconstructs a textured surface with local Meshroom, then lets the owner paint independently recolorable regions. **Smart fill** suggests connected visible faces using original texture colors and surface edges. Choose a part, click the shoe, adjust Fill tolerance, then Apply fill or Cancel fill. Other assigned parts stay protected. Paint / Erase corrects boundaries with a visible size-adjustable brush circle; each applied fill is undoable. Same-colored neighboring parts can merge, so review before saving. This local helper uses no paid AI calls and does not identify semantic shoe parts. At least two regions are required. Unpainted faces keep the photographed appearance. Replacement colors use a neutral detail texture; Reset restores the original texture. Scanned shoes use the existing catalog and guest pickup reservations.
 
 The scanner also accepts video. Open **Scan from photos → Choose video** or **Record video on phone**. The phone control uses the device’s native camera picker; on desktop, transfer a phone recording and choose it. Record three slow passes around a stationary shoe at shoe height, low around the sole, and above, ideally 45–90 seconds, with fixed zoom and good light. Avoid portrait/cinematic effects, digital stabilization and lens switching.
 
@@ -93,6 +93,30 @@ Accepted clips are browser-playable MP4, WebM or MOV, 15–180 seconds, at most 
 The original video stays on the device; only selected JPEGs upload through the existing photo API when saved. There is no new service, migration or dependency. Extracted frames have no camera EXIF and video stabilization/compression can harm reconstruction. Frame checks cannot identify a shoe or guarantee all surfaces were filmed. Video makes capture easier; it does not guarantee a faithful model or automatically separate customizable parts. Likeness review and manual region painting still apply. Native camera recording remains subject to phone/browser support.
 
 Photo scanning is available in both the owner/admin shoe editor and the approved Seller Studio. The seller implementation below is included in this branch.
+
+### Tripo AI generation (optional)
+
+Open **Seller Studio -> Scan from photos -> Tripo AI**, or **Admin -> Add New Shoe -> Scan from photos -> Tripo AI**. If a previous scan is open, **Choose another capture** returns to capture choices without retiring its saved photos, masks, or model. Existing scans remain resumable.
+
+Choose one front/three-quarter photo, optionally left, back, and right photos of the same original shoe. **Save reference photos** locally. Optionally click **Remove backgrounds** to process all unreviewed photos with the existing local RealityScan AI masking worker, using no Tripo credits. Review the red removal overlays, edit incorrect cutouts with Keep/Remove brushes, then save selected good masks. When **Use background-removed photos for generation** is checked, every photo needs a reviewed mask before generation. Uncheck it to send originals instead; saved masks remain intact. Finally check the cloud/cost consent box, then **Generate shoe - 30 credits**. This uses the owner's Tripo API balance, not Studio credits. Current V3 standard textured image/multiview generation is 30 credits ($0.30); no HD geometry, HD textures, paid segmentation, or automatic retries that create new tasks are requested. A future provider price change requires reviewing the displayed estimate and server cost policy.
+
+The local PHP worker uploads metadata-stripped PNG copies (up to 1536 pixels), applying all reviewed masks only when cleaned-photo mode was explicitly selected, to the fixed Tripo V3 API. Originals stay private for comparison. A private paid-request journal is written before generation. The chosen original/cleaned-photo mode is frozen once the task starts. Known task IDs resume without creating another generation; an interrupted submission with no task ID blocks automatic resubmission and asks the owner to inspect Tripo's dashboard. Failed remote tasks need an explicitly new capture/charge. Signed model downloads are restricted to HTTPS Tripo asset hosts, with no redirects or API key forwarding, and must pass existing embedded-texture, static GLB, 20 MB, 50,000 triangle, and minimum-surface checks.
+
+Compare every angle, confirm all likeness checks, define at least two real parts with Smart fill / Paint / Erase, then **Use these parts**. Seller results become drafts. Complete product details and submit for admin review; source-photo comparison remains required for approval. Tripo can invent hidden details, and smart fill does not identify semantic shoe parts reliably. No automatic approval or publication.
+
+Store `TRIPO_API_KEY=...` in a private `tripo.env` **outside the project and web root**, and set `TRIPO_ENV_FILE` in ignored `api/.env` to its absolute path. The key never goes into Vue or a `VITE_*` variable. Enable XAMPP's installed GD extension for the CLI worker only:
+
+```powershell
+& C:/xampp/php/php.exe -d extension=gd -d memory_limit=512M tools/process-scans.php
+```
+
+Restart the idle worker after backend changes. Local provider verification uses injected transport and a synthetic original geometry fixture, spending no credits:
+
+```powershell
+& C:/xampp/php/php.exe -d extension=gd -d memory_limit=512M tools/test-tripo-workflow.php
+```
+
+This command requires the isolated `kickcraft_photo_scan_dev` database and localhost:5174. It checks seller approval, protected photo upload, explicit cost consent, queued processing, task resume, region finalization, private drafts, source comparison, and admin approval. Fixtures are retired afterwards; this test is not proof of photographic fidelity.
 
 ### Isolated worktree setup
 
@@ -106,6 +130,7 @@ $schemaText = Get-Content api/database/setup.sql -Raw
 $tables = [regex]::Matches($schemaText, '(?s)CREATE TABLE IF NOT EXISTS .*?;')
 ($tables.Value -join "`n") | & C:/xampp/mysql/bin/mysql.exe -u root kickcraft_photo_scan_dev
 Get-Content api/database/photo-scanning.sql -Raw | & C:/xampp/mysql/bin/mysql.exe -u root kickcraft_photo_scan_dev
+Get-Content api/database/realityscan.sql -Raw | & C:/xampp/mysql/bin/mysql.exe -u root kickcraft_photo_scan_dev
 Get-Content api/database/sellers.sql -Raw | & C:/xampp/mysql/bin/mysql.exe -u root kickcraft_photo_scan_dev
 ```
 
@@ -149,7 +174,7 @@ Uploads are limited to 10 MB / 24 megapixels per photograph. The scanner's `.hta
 
 Keep the shoe stationary and move the camera around it in three rings: low, middle, and above. Aim for 60–100 sharp overlapping views, fixed zoom, diffuse light, and left/right/front/heel/top coverage. Fill most of the frame with the shoe. Use a contrasting matte backdrop and keep some stationary texture around it for camera matching. A small stationary support lets low camera views see sole edges; remove the support in every mask. This workflow does not support moving shoes/turntables. Plain, shiny, transparent, or moving surfaces can fail. Thin laces, unseen undersides, and holes may not reconstruct faithfully.
 
-After saving photos, open **Remove background** on each view. Pick the background color, adjust tolerance, then use **Keep shoe brush** / **Remove background brush** to correct edges. Red pixels are excluded. Color removal reaches matching areas connected to the image border; enclosed matching shoe details stay intact. Batch generation produces drafts only. Review and save each mask; the API rejects reconstruction until every photo has a reviewed mask. Masks preserve original pixel dimensions and JPEG EXIF orientation without rewriting the source photo. Upload original camera files so focal-length metadata survives; screenshots and edited exports often discard calibration. The interface flags files without focal metadata. Stable capture filenames keep photo/mask pairing deterministic. A modern browser with CompressionStream is required.
+After saving photos, choose **Generate AI masks for unreviewed photos** when the local RealityScan runtime is configured. It selects objects in the whole batch instead of matching one background color, preserves reviewed masks, and leaves the chosen reconstruction engine unchanged. AI outputs stay drafts for batch review; failures keep existing photos and masks. For manual color removal, open **Remove background** on a view. Pick the background color, adjust tolerance, then use **Keep shoe brush** / **Remove background brush** to correct edges. Red pixels are excluded. Color removal reaches matching areas connected to the image border; enclosed matching shoe details stay intact. Batch generation produces drafts only. Review the resulting overlays together in the mask grid (12 per page), select correct masks, and press **Save selected masks**. Only incorrect masks need individual brush edits. Unselected masks remain drafts; the API rejects reconstruction until every photo has a reviewed mask. Masks preserve original pixel dimensions and JPEG EXIF orientation without rewriting the source photo. Upload original camera files so focal-length metadata survives; screenshots and edited exports often discard calibration. The interface flags files without focal metadata. Stable capture filenames keep photo/mask pairing deterministic. A modern browser with CompressionStream is required.
 
 Camera matching keeps stationary background features, while depth estimation and mesh filtering use the masks to exclude background geometry. At least 30 photographs and 80% of submitted views must align; otherwise the worker fails with recapture guidance. Scans below 1,000 triangles are also rejected as insufficient surface. Alignment and triangle count are screening checks, not proof of shoe likeness. Compare the preview beside selectable original photos and check front, both sides, sole, heel, and visible details before opening region painting. No physical-shoe match is claimed automatically. Regions follow painted faces; they are not automatically recognized physical shoe components.
 
@@ -184,7 +209,7 @@ Apply at `http://localhost:5174/#seller-register`, then sign in at `#seller`. Pe
 
 Sellers cannot review themselves, edit another store’s products/orders/scans, set trusted asset paths, publish directly, or use revoked sessions to continue selling. Suspension hides listings immediately. Changing an approved store’s name or pickup address requires another admin review. Existing orders remain available to admin during suspension.
 
-Apply `api/database/photo-scanning.sql`, then `api/database/sellers.sql` to the selected database before starting this branch. Both migrations are additive and rerunnable. On an existing database, back up first; do not reimport baseline demo seeds. Credentials remain in ignored `api/.env`; the original checkout/database are separate from this worktree.
+Apply `api/database/photo-scanning.sql`, then `api/database/sellers.sql` to the selected database before starting this branch. These migrations and `api/database/realityscan.sql` are additive and rerunnable. On an existing database, back up first; do not reimport baseline demo seeds. Credentials remain in ignored `api/.env`; the original checkout/database are separate from this worktree.
 
 ```powershell
 # Full local HTTP/MySQL seller checks, isolated database only:
@@ -196,3 +221,30 @@ Apply `api/database/photo-scanning.sql`, then `api/database/sellers.sql` to the 
 Seller checks exercise real registration, approval, source isolation, GLB validation, publication, concurrent checkout, stale-stock conflicts, cancellation, suspension, pickup completion, and address snapshots. Browser verification also covered mobile registration, independent template recoloring, admin publication, guest checkout/tracking, seller pickup completion, and GLB draft persistence. The fixture records are explicitly labeled verification data.
 
 **Photo-scanning limit:** reconstruction is still experimental. Repeated synthetic captures did not reliably recover the same surface, including a calibrated JPEG run that was correctly rejected for insufficient geometry. A previous masked synthetic run produced a recognizable shoe, but this is not evidence that a beginner’s physical-shoe capture will match. Keep human source comparison and recapture gates; do not promise professor acceptance or publish a distorted scan. Real physical-shoe capture and likeness acceptance remain required validation.
+
+
+### Optional RealityScan video comparison
+
+Meshroom remains the default scanner. RealityScan 2.2 desktop runs on the Windows processing computer through the same PHP worker; customers/sellers use the website, without installing desktop software themselves. This is a local integration, not a browser port or cloud service. Finish RealityScan installation and first launch yourself, then apply `api/database/realityscan.sql` to the selected database and set the ignored `api/.env` entry:
+
+```dotenv
+REALITYSCAN_EXE=C:/Program Files/Epic Games/RealityScan_2.2/RealityScan.exe
+```
+
+Keep `BLENDER_EXE`, private `SCAN_STORAGE`, Apache, MySQL, and the existing worker configured. Restart `tools/process-scans.php` after updating its code. Do not run a comparison and the worker against the same GPU simultaneously; the probe and worker share a database lock.
+
+In admin **Scan from photos** or approved Seller Studio **Scan from photos**, start a new capture and select **Video with AI background masks (comparison)**. Choose an MP4 or browser-playable MOV (15–180 seconds, at least 640 pixels on each side, at most 12 megapixels, up to 300 MB), then press **Upload video and generate AI masks**. H.264 MP4 is the tested codec. The video uploads privately in 8 MB chunks; reselect the same original file to resume after interruption. Native import samples about 60 frames and generates AI masks. Use **Review masks together** to inspect 12 overlays per page, select good masks, and press **Save selected masks** once for the group. Edit only incorrect masks with the brush editor, then start reconstruction after every mask is reviewed. A fresh native project uses those reviewed masks. Alignment must pass the same 30-view / 80% gate before meshing, texturing and browser GLB checks. Shape comparison and manual customization-region painting remain required.
+
+Verified synthetic comparison: native video import and AI export worked. Of 49 views, masks retained at least 98.6% of shoe pixels, but 17 masks retained excessive background; only 6/49 frames aligned. The website produced 61 frames and 61 draft masks; a separate full worker test using corrected synthetic masks aligned only 9/61 and was rejected before meshing. This is a failed reconstruction comparison, so RealityScan is optional and has not replaced Meshroom. Real shoe capture and actual likeness still need testing. No FFmpeg or SAM 2 dependency was added. Raw videos, extracted frames, masks, and projects remain in private `SCAN_STORAGE`; they are not public catalog assets.
+
+`tools/probe-realityscan.php` supports explicit private comparison stages with `--video=ABSOLUTE_PATH --trial=NAME --stage=import|mask|export|align|model --interval=1 --run`; preserve failed trial records and use a new trial name when repeating a stage. It never publishes a shoe. See `docs/realityscan-integration.md` for integration scope and test evidence.
+
+
+### Explicit experimental alignment retry
+
+Apply the additive, rerunnable `api/database/experimental-scan-retry.sql` migration and restart an idle local worker. Normal reconstruction and normal saved-capture retries require at least 30 aligned views and 80% alignment. On a failed reconstruction whose private alignment report confirms at least 30 views and 65% to below 80% alignment, **Experimental retry (65%)** queues the same saved capture with a per-attempt 65% threshold. For example, 41/61 views qualifies; 39/61 or fewer than 30 aligned views does not. No photos need uploading again and reviewed masks are reused with their integrity checks. A normal retry explicitly restores the 80% default.
+
+Lower alignment may produce incomplete geometry, holes, or missing shoe surfaces. Experimental results remain private previews and must pass the existing texture/geometry validation, source-photo comparison, region preparation, and seller listing admin approval. Neither retry accepts, finalizes, nor publishes a model automatically. The local PHP worker still handles processing; Vue communicates through PHP and MySQL.
+
+
+Local retry verification (2026-10-13): the existing physical-shoe capture that previously failed at 41/61 aligned views was explicitly retried at 65%. The rerun aligned 46/61 and reached a private, validated 49,892-triangle / 6,719,364-byte preview. SHA-256 checks confirmed every saved photo and reviewed mask, plus their metadata, remained unchanged. The job stayed `ready`, without finalization or publication. This verifies retry processing and model validation, not photographed-shoe likeness; manual comparison is still pending. Automated checks cover both native and Meshroom alignment boundaries, explicit opt-in, mask integrity, owner/origin authorization, idempotent queuing, and restoring the 80% default.

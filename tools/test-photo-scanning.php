@@ -81,6 +81,30 @@ try {
         $users[]=$db->lastInsertId();$session=login($email,$password);
         $otherCookie=$session;
     }
+    verify(request('scans/create.php',$otherCookie,'{"engine":"unknown"}')['status']===400,'Unknown engine accepted');
+    $native=request('scans/create.php',$otherCookie,'{"engine":"realityscan"}');
+    if ($native['status']===201) {
+        $nativeId=$native['data']['job']['id'];$jobs[]=$nativeId;
+        $box=fn($type,$data)=>pack('N',strlen($data)+8).$type.$data;
+        $tkhd=str_repeat("\0",76).pack('NN',768*65536,768*65536);
+        $mdhd=str_repeat("\0",12).pack('NN',1000,48000).str_repeat("\0",4);
+        $hdlr=str_repeat("\0",8).'vide'.str_repeat("\0",12);
+        $videoBytes=$box('ftyp',"mp42\0\0\0\0mp42isom").$box('moov',$box('trak',$box('tkhd',$tkhd).$box('mdia',$box('mdhd',$mdhd).$box('hdlr',$hdlr)))).$box('mdat',str_repeat("\0",20));
+        $chunk=tempnam(sys_get_temp_dir(),'kc-video-');$temporary[]=$chunk;file_put_contents($chunk,substr($videoBytes,0,32));
+        $payload=['id'=>$nativeId,'key'=>str_repeat('a',64),'name'=>'capture.mp4','offset'=>'0','total'=>(string)strlen($videoBytes),'file'=>new CURLFile($chunk,'application/octet-stream','chunk.bin')];
+        verify(request('scans/video.php','',$payload)['status']===401,'Guest video upload accepted');
+        verify(request('scans/video.php',$cookie,$payload)['status']===404,'Another owner uploaded a video');
+        verify(request('scans/video.php',$otherCookie,$payload,['Origin: https://untrusted.invalid'])['status']===403,'Cross-origin video accepted');
+        $first=request('scans/video.php',$otherCookie,$payload);verify($first['status']===200 && $first['data']['job']['video']['received']===32,'Video chunk did not save');
+        verify(!isset($first['data']['job']['video']['file'],$first['data']['job']['video']['sha256']),'Private video details leaked');
+        verify(request('scans/video.php',$otherCookie,$payload)['data']['job']['video']['received']===32,'Video retry appended duplicate bytes');
+        file_put_contents($chunk,str_repeat('X',32));verify(request('scans/video.php',$otherCookie,$payload)['status']===409,'Changed retry accepted');
+        $payload['offset']='33';verify(request('scans/video.php',$otherCookie,$payload)['status']===409,'Video gap accepted');
+        $payload['offset']='32';file_put_contents($chunk,substr($videoBytes,32));
+        $queued=request('scans/video.php',$otherCookie,$payload);verify($queued['status']===200 && $queued['data']['job']['state']==='queued','Complete video did not queue native preparation');
+        verify(request('scans/upload.php',$otherCookie,['id'=>$nativeId,'file'=>new CURLFile(photo(999),'image/png','photo.png')])['status']===409,'Photo appended to native video scan');
+        echo "Native video API passed: ownership, origin, resumable chunks, conflicting retry, gaps, metadata, private response, preparation queue.\n";
+    } else verify($native['status']===503,'Missing native runtime did not fail clearly');
     for($capture=0;$capture<12;$capture++) {
         $discardId=newJob($otherCookie);
         if($capture%2) $db->prepare("UPDATE scan_jobs SET state='ready' WHERE id=?")->execute([$discardId]);
@@ -113,6 +137,18 @@ try {
     $stmt=$db->prepare('SELECT email FROM users WHERE id=?');$stmt->execute([$users[0]]);$otherCookie=login($stmt->fetchColumn(),$password);
     verify(request('scans/mask.php',$otherCookie,$payload)['status']===404,'Another owner changed a mask');
     verify(request('scans/asset.php?id='.$id.'&mask='.$images[0]['id'],$otherCookie)['status']===404,'Another owner read a mask');
+    if (is_file((string)configValue('REALITYSCAN_EXE'))) {
+        verify(request('scans/ai-masks.php','',json_encode(['id'=>$id]))['status']===401,'Guest AI masking accepted');
+        verify(request('scans/ai-masks.php',$otherCookie,json_encode(['id'=>$id]))['status']===404,'Cross-owner AI masking accepted');
+        verify(request('scans/ai-masks.php',$cookie,json_encode(['id'=>$id]),['Origin: https://untrusted.invalid'])['status']===403,'Cross-origin AI masking accepted');
+        verify(request('scans/mask.php',$cookie,$payload)['data']['job']['maskCount']===1,'Reviewed-mask setup failed');
+        $ai=request('scans/ai-masks.php',$cookie,json_encode(['id'=>$id]));
+        verify($ai['status']===200 && $ai['data']['job']['state']==='queued' && $ai['data']['job']['engine']==='meshroom' && $ai['data']['job']['maskCount']===1,'AI queue replaced engine or reviewed mask');
+        verify(request('scans/ai-masks.php',$cookie,json_encode(['id'=>$id]))['data']['job']['state']==='queued','AI queue retry was not idempotent');
+        verify(request('scans/mask.php',$cookie,$payload)['status']===409,'AI queued masks remained mutable');
+        $db->prepare("UPDATE scan_jobs SET state='uploading',operation='reconstruct' WHERE id=?")->execute([$id]);
+        echo "AI mask API passed: authentication, ownership, origin, preserved review, engine, retry, mutation gate.\n";
+    }
     $payload['reviewed']='0';
     verify(request('scans/mask.php',$cookie,$payload)['data']['job']['maskCount']===0,'Generated mask counted as reviewed');
     verify(request('scans/start.php',$cookie,json_encode(['id'=>$id]))['status']===422,'Unreviewed masks queued');
@@ -121,11 +157,67 @@ try {
         verify(request('scans/mask.php',$cookie,$payload)['status']===200,'Reviewed mask rejected');
     }
     verify(request('scans/status.php?id='.$id,$cookie)['data']['job']['maskCount']===30,'Reviewed mask count is incorrect');
+    verify(request('scans/ai-masks.php',$cookie,json_encode(['id'=>$id]))['status']===422,'AI overwrote already reviewed masks');
     verify(request('scans/start.php',$cookie,json_encode(['id'=>$id]))['data']['job']['state']==='queued','30 photos did not queue');
     verify(request('scans/mask.php',$cookie,$payload)['status']===409,'Queued mask remained mutable');
     verify(request('scans/start.php',$cookie,json_encode(['id'=>$id]))['data']['job']['state']==='queued','Queue retry restarted scan');
     verify(uploads($id,$cookie,30,1)[0]['status']===409,'Queued job accepted upload');
     $db->prepare("UPDATE scan_jobs SET state='failed',stage='Verification fixture completed' WHERE id=?")->execute([$id]);
+    $retryId=newJob($cookie);
+    foreach(uploads($retryId,$cookie,300,61) as $result)verify($result['status']===200,'Retry fixture upload failed');
+    $stmt=$db->prepare('SELECT owner_id FROM scan_jobs WHERE id=?');$stmt->execute([$retryId]);$retryJob=scanJob($db,$retryId,(int)$stmt->fetchColumn());
+    foreach($retryJob['images'] as $image) {
+        verify(request('scans/mask.php',$cookie,['id'=>$retryId,'image'=>$image['id'],'file'=>new CURLFile($mask,'image/png','mask.png'),'reviewed'=>'1'])['status']===200,'Retry fixture mask failed');
+    }
+    $retryOwner=(int)$retryJob['owner_id'];$retryJob=scanJob($db,$retryId,$retryOwner);
+    $originalImages=$retryJob['images'];$originalHashes=[];
+    foreach($originalImages as $image)foreach(['images/'.$image['file'],'masks/'.$image['maskFile']] as $file)$originalHashes[$file]=hash_file('sha256',scanJobDir($retryId).'/'.$file);
+    $failRetry=function() use($db,$retryId){$db->prepare("UPDATE scan_jobs SET state='failed',operation='reconstruct',stage='Reconstruction failed',error_message='Only 41 of 61 photos aligned.' WHERE id=?")->execute([$retryId]);};
+    $retryBody=json_encode(['id'=>$retryId,'experimental'=>true]);
+    verify(request('scans/start.php',$cookie,$retryBody)['status']===422,'Experimental mode accepted on a new capture');
+    $retryEngine=is_file((string)configValue('REALITYSCAN_EXE'))?'realityscan':'meshroom';
+    $db->prepare('UPDATE scan_jobs SET engine=? WHERE id=?')->execute([$retryEngine,$retryId]);$failRetry();
+    verify(request('scans/start.php','',$retryBody)['status']===401,'Guest retry accepted');
+    verify(request('scans/start.php',$otherCookie,$retryBody)['status']===404,'Cross-owner retry accepted');
+    verify(request('scans/start.php',$cookie,$retryBody,['Origin: https://untrusted.invalid'])['status']===403,'Cross-origin retry accepted');
+    verify(request('scans/start.php',$cookie,json_encode(['id'=>$retryId,'experimental'=>65]))['status']===400,'Custom numeric threshold accepted');
+    verify(request('scans/start.php',$cookie,$retryBody)['status']===422,'Missing alignment report accepted');
+    $writeReport=function(string $counts) use($retryId) {
+        [$aligned,$total]=array_map('intval',explode(',',$counts));$dir=scanJobDir($retryId);
+        file_put_contents($dir.'/coverage.csv',$counts);
+        $folder=$dir.'/cache/MeshroomCache/StructureFromMotion/retry-fixture';if(!is_dir($folder))mkdir($folder,0700,true);
+        $cameras=['poses'=>array_map(fn($i)=>['poseId'=>(string)$i],range(0,$aligned-1)),'intrinsics'=>[['intrinsicId'=>'0']],'views'=>array_map(fn($i)=>['viewId'=>(string)$i,'poseId'=>(string)$i,'intrinsicId'=>'0'],range(0,$total-1))];
+        file_put_contents($folder.'/cameras.sfm',json_encode($cameras));
+    };
+    foreach(['41,60','39,61','29,61','49,61'] as $invalid){$writeReport($invalid);verify(request('scans/start.php',$cookie,$retryBody)['status']===422,'Ineligible alignment accepted: '.$invalid);}
+    $writeReport('41,61');
+    $unreviewed=$originalImages;$unreviewed[0]['maskReviewed']=false;
+    $db->prepare('UPDATE scan_jobs SET images=? WHERE id=?')->execute([json_encode($unreviewed),$retryId]);
+    verify(request('scans/start.php',$cookie,$retryBody)['status']===422,'Retry bypassed mask review');
+    $db->prepare('UPDATE scan_jobs SET images=? WHERE id=?')->execute([json_encode($originalImages),$retryId]);
+    $maskPath=scanJobDir($retryId).'/masks/'.$originalImages[0]['maskFile'];$maskBytes=file_get_contents($maskPath);file_put_contents($maskPath,'changed');
+    try {verify(request('scans/start.php',$cookie,$retryBody)['status']===422,'Retry bypassed mask integrity');}finally{file_put_contents($maskPath,$maskBytes);}
+    $status=request('scans/status.php?id='.$retryId,$cookie)['data']['job'];
+    verify($status['canExperimentalRetry'] && $status['alignment']===['aligned'=>41,'total'=>61] && $status['alignmentMinPercent']===80,'Failed scan did not expose trusted retry eligibility');
+    verify(in_array($retryId,array_column(request('scans/list.php',$cookie)['data']['jobs'],'id'),true),'Failed saved capture cannot be recovered');
+    $queued=request('scans/start.php',$cookie,$retryBody);
+    verify($queued['status']===200 && $queued['data']['job']['state']==='queued' && $queued['data']['job']['alignmentMinPercent']===65 && !$queued['data']['job']['previewUrl'],'Experimental retry was not privately queued');
+    verify(request('scans/start.php',$cookie,$retryBody)['data']['job']['state']==='queued','Experimental queue retry not idempotent');
+    verify(request('scans/start.php',$cookie,json_encode(['id'=>$retryId]))['status']===409,'Active threshold changed silently');
+    verify(request('scans/mask.php',$cookie,['id'=>$retryId,'image'=>$originalImages[0]['id'],'file'=>new CURLFile($mask,'image/png','mask.png'),'reviewed'=>'1'])['status']===409,'Retry inputs remained mutable');
+    verify(scanJob($db,$retryId,$retryOwner)['images']===$originalImages,'Retry replaced saved photo/mask metadata');
+    foreach($originalHashes as $file=>$hash)verify(hash_file('sha256',scanJobDir($retryId).'/'.$file)===$hash,'Retry changed saved input bytes');
+    if($retryEngine==='realityscan') {
+        $failRetry();$db->prepare("UPDATE scan_jobs SET engine='meshroom' WHERE id=?")->execute([$retryId]);
+        verify(request('scans/status.php?id='.$retryId,$cookie)['data']['job']['canExperimentalRetry'],'Meshroom saved report was not eligible');
+        $meshroom=request('scans/start.php',$cookie,$retryBody);
+        verify($meshroom['status']===200 && $meshroom['data']['job']['alignmentMinPercent']===65,'Existing Meshroom scanner did not queue experimental retry');
+    }
+    $failRetry();$default=request('scans/start.php',$cookie,json_encode(['id'=>$retryId]));
+    verify($default['status']===200 && $default['data']['job']['alignmentMinPercent']===80,'Normal retry did not restore 80% default');
+    $db->prepare("UPDATE scan_jobs SET state='failed',stage='Capture discarded' WHERE id=?")->execute([$retryId]);
+    verify(request('scans/start.php',$cookie,$retryBody)['status']===409,'Discarded capture resurrected');
+    echo "Experimental retry passed: 41/61 alignment, 65% opt-in, 80% default, minimum views, authentication, ownership, origin, report checks, mask integrity, input reuse, queue idempotence and no automatic acceptance.\n";
     $id=newJob($cookie);
     for($start=0;$start<119;$start+=8)foreach(uploads($id,$cookie,$start,min(8,119-$start)) as $result)verify($result['status']===200,'Limit setup upload failed');
     $results=uploads($id,$cookie,119,4);
