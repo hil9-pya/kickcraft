@@ -134,3 +134,10 @@
 .seller .review-card h2, .seller .review-card p { overflow-wrap: anywhere; }
 .seller .review-card-note { grid-row: 5; }
 .seller .review-card-action { grid-row: 6; align-self: end; }
+
+.seller-portal .glb-upload-layout { display:grid; grid-template-columns:minmax(0,1fr) 240px; gap:24px; align-items:start; }
+.seller-portal .glb-upload-layout fieldset { min-width:0; }
+.seller-portal .glb-upload-preview { min-height:180px; display:grid; gap:8px; align-content:center; text-align:center; background:var(--background); border:1px solid var(--border); padding:12px; }
+.seller-portal .glb-upload-preview img { width:100%; height:160px; object-fit:contain; }
+.seller-portal .glb-upload-preview p { font-size:13px; color:var(--muted-foreground); }
+@media(max-width:760px) { .seller-portal .glb-upload-layout { grid-template-columns:minmax(0,1fr); } }

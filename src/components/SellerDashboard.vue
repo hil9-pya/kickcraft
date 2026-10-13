@@ -4,6 +4,7 @@ import { Input } from './ui/input'
 import { Textarea } from './ui/textarea'
 import {ref,reactive,computed,onMounted,onBeforeUnmount} from 'vue'
 import {api} from '../api.js'
+import {thumbnailFromGlb} from '../glb-thumbnail.js'
 import {validateStore,pickupActions,pickupLabels,productLabels} from '../seller.js'
 import {forgetCompletedScan} from '../scan-capture.js'
 import PhotoScanner from './PhotoScanner.vue'
@@ -16,6 +17,7 @@ const props=defineProps({user:{type:Object,required:true}})
 const emit=defineEmits(['changed','signedOut'])
 const profile=ref(null),products=ref([]),orders=ref([]),tab=ref('products'),editing=ref(null),scanning=ref(false),uploading=ref(false),busy=ref(false),loading=ref(true),error=ref(''),message=ref('')
 const store=reactive({storeName:'',description:'',pickupAddress:'',contact:''}),glb=ref(null),thumbnail=ref(null)
+const autoThumbnail=ref(null),thumbnailUrl=ref(''),thumbnailPreparing=ref(false),uploadSelection=ref(0)
 const completing=ref(null),leaving=ref(null),productAction=ref(null),productView=ref('active')
 const visibleProducts=computed(()=>products.value.filter(shoe=>productView.value==='archived'?!!shoe.deletedAt:!shoe.deletedAt))
 const orderFilter=ref('all'),orderNotes=reactive({})
@@ -64,11 +66,39 @@ async function scanned(draft,scanId) {
  try{const result=await api('products/create.php',{method:'POST',body:{source:'scan',scanId}});editing.value=result.shoe;scanning.value=false;forgetCompletedScan(draft.glbPath,props.user.id);await refresh()}
  catch(cause){error.value=cause.message}finally{busy.value=false}
 }
+function clearUploadThumbnail(){
+ uploadSelection.value++;thumbnailPreparing.value=false;autoThumbnail.value=null
+ if(thumbnailUrl.value)URL.revokeObjectURL(thumbnailUrl.value)
+ thumbnailUrl.value=''
+}
+function showUploadThumbnail(image){
+ if(thumbnailUrl.value)URL.revokeObjectURL(thumbnailUrl.value)
+ thumbnailUrl.value=image?URL.createObjectURL(image):''
+}
+async function chooseGlb(event){
+ clearUploadThumbnail();thumbnail.value=null;glb.value=event.target.files?.[0]||null;error.value=''
+ if(!glb.value)return
+ if(!glb.value.name.toLowerCase().endsWith('.glb')||!glb.value.size||glb.value.size>20*1024*1024){error.value='Choose a GLB model up to 20 MB.';glb.value=null;return}
+ const selection=uploadSelection.value;thumbnailPreparing.value=true
+ try{
+  const image=await thumbnailFromGlb(glb.value)
+  if(closed||selection!==uploadSelection.value)return
+  autoThumbnail.value=image;showUploadThumbnail(image)
+ }catch(cause){if(!closed&&selection===uploadSelection.value)error.value='Automatic thumbnail failed: '+cause.message+' You can choose a custom PNG instead.'}
+ finally{if(selection===uploadSelection.value)thumbnailPreparing.value=false}
+}
+function chooseThumbnail(event){
+ const file=event.target.files?.[0]||null;error.value=''
+ if(file&&(file.type!=='image/png'||file.size>10*1024*1024)){error.value='Choose a PNG thumbnail up to 10 MB.';event.target.value='';thumbnail.value=null;showUploadThumbnail(autoThumbnail.value);return}
+ thumbnail.value=file;showUploadThumbnail(file||autoThumbnail.value)
+}
 async function upload() {
- if(!glb.value||!thumbnail.value){error.value='Choose a GLB and its PNG thumbnail.';return}
- if(glb.value.size>20*1024*1024||thumbnail.value.size>10*1024*1024){error.value='GLB limit: 20 MB. Thumbnail limit: 10 MB.';return}
+ if(busy.value||thumbnailPreparing.value)return
+ const image=thumbnail.value||autoThumbnail.value
+ if(!glb.value||!image){error.value='Choose a GLB and wait for its thumbnail, or choose a custom PNG.';return}
+ if(glb.value.size>20*1024*1024||image.size>10*1024*1024){error.value='GLB limit: 20 MB. Thumbnail limit: 10 MB.';return}
  busy.value=true;error.value=''
- try{const body=new FormData();body.append('file',glb.value);body.append('thumbnail',thumbnail.value);const result=await api('products/upload.php',{method:'POST',body});editing.value=result.shoe;uploading.value=false;glb.value=null;thumbnail.value=null;await refresh()}
+ try{const body=new FormData();body.append('file',glb.value);body.append('thumbnail',image,'thumbnail.png');const result=await api('products/upload.php',{method:'POST',body});editing.value=result.shoe;uploading.value=false;glb.value=null;thumbnail.value=null;clearUploadThumbnail();await refresh()}
  catch(cause){error.value=cause.message}finally{busy.value=false}
 }
 async function saveStore() {
@@ -92,7 +122,7 @@ function navigate(item){tab.value=item;editing.value=null;scanning.value=false;u
 function saved(shoe){editing.value=shoe;refresh();emit('changed')}
 function poll(){if(!document.hidden&&!busy.value)void refresh(true)}
 onMounted(async()=>{await refresh();if(closed)return;timer=setInterval(poll,15000);document.addEventListener('visibilitychange',poll)})
-onBeforeUnmount(()=>{closed=true;clearInterval(timer);document.removeEventListener('visibilitychange',poll)})
+onBeforeUnmount(()=>{closed=true;clearUploadThumbnail();clearInterval(timer);document.removeEventListener('visibilitychange',poll)})
 </script>
 <template>
  <main class="seller seller-portal">
@@ -113,7 +143,18 @@ onBeforeUnmount(()=>{closed=true;clearInterval(timer);document.removeEventListen
      <template v-else>
       <div class="workspace-heading"><div><h2>My products</h2><p class="muted">Original shoes, prepared for customer customization.</p></div><div class="actions"><Button variant="default" class="primary" :disabled="busy" @click="scanning=true">Generate from photos</Button><Button variant="outline" :disabled="busy" @click="uploading=!uploading">Upload GLB</Button><Button variant="outline" :disabled="busy" @click="create('template')">Use KickCraft template</Button></div></div>
       <p class="muted creation-help">Create a 3D draft from 1–4 photos; compare every angle because unseen details may differ. The template starts from KickCraft’s existing eight-part design.</p>
-      <form v-if="uploading" class="panel stack upload-form" @submit.prevent="upload"><h2>Upload an original shoe</h2><p>GLB must contain 2–16 independently named material regions, at most 50,000 triangles, with embedded resources. Single-material models need photo scanning and part painting.</p><label>GLB model (up to 20 MB)<input type="file" accept=".glb,model/gltf-binary" required @change="glb=$event.target.files[0]"></label><label>Matching PNG thumbnail (up to 10 MB)<input type="file" accept="image/png" required @change="thumbnail=$event.target.files[0]"></label><Button variant="default" class="primary" :disabled="busy">{{busy?'Uploading…':'Upload product draft'}}</Button></form>
+      <form v-if="uploading" class="panel stack upload-form" @submit.prevent="upload">
+       <h2>Upload an original shoe</h2><p>GLB must contain 2–16 independently named material regions, at most 50,000 triangles, with embedded resources. Single-material models need photo generation and part painting.</p>
+       <div class="glb-upload-layout">
+        <fieldset class="stack" :disabled="busy||thumbnailPreparing">
+         <label>GLB model (up to 20 MB)<input type="file" accept=".glb,model/gltf-binary" required @change="chooseGlb"></label>
+         <p class="muted">A thumbnail is generated automatically from your model.</p>
+         <label>Custom PNG thumbnail (optional, up to 10 MB)<input :key="uploadSelection" type="file" accept="image/png" @change="chooseThumbnail"></label>
+        </fieldset>
+        <div class="glb-upload-preview"><img v-if="thumbnailUrl" :src="thumbnailUrl" alt="Selected shoe thumbnail preview"><p v-else role="status">{{thumbnailPreparing?'Preparing thumbnail…':'Thumbnail preview appears after selecting a GLB.'}}</p><small v-if="thumbnailUrl">{{thumbnail?'Custom thumbnail':'Automatic thumbnail'}}</small></div>
+       </div>
+       <Button variant="default" class="primary" :disabled="busy||thumbnailPreparing||!glb||(!thumbnail&&!autoThumbnail)">{{thumbnailPreparing?'Preparing thumbnail…':busy?'Uploading…':'Upload product draft'}}</Button>
+      </form>
       <div class="actions mb-4" role="group" aria-label="Product visibility"><Button variant="outline" :aria-pressed="productView==='active'" @click="productView='active'">Active products</Button><Button variant="outline" :aria-pressed="productView==='archived'" @click="productView='archived'">Removed products</Button></div>
       <p v-if="!visibleProducts.length&&!loading" class="panel empty-products">{{productView==='archived'?'No removed products.':'No products yet. Generate from photos, upload a compatible GLB, or use a template.'}}</p>
       <div class="product-list"><article v-for="shoe in visibleProducts" :key="shoe.id" class="panel stack seller-product-card"><ShoeThumbnail :src="shoe.glbPath" :image="shoe.thumbnailPath" :alt="shoe.name" /><p class="tag">{{shoe.deletedAt?'Removed — hidden from Shop':productLabels[shoe.publicationState] || shoe.publicationState}} · {{shoe.parts.length}} custom parts</p><h2>{{shoe.name}}</h2><p>₱{{Number(shoe.price).toLocaleString()}} · {{shoe.stock}} pairs</p><p v-if="shoe.reviewNote" class="notice">{{shoe.reviewNote}}</p>
