@@ -28,7 +28,7 @@ export function validateSeller(form) {
 
 }
 
-export function validateProduct(form) {
+export function validateProduct(form,requireParts=true) {
 
  if(!form.name?.trim() || form.name.trim().length<2 || form.name.length>160 || form.name==='Untitled shoe')return 'Add a product name (2–160 characters).'
 
@@ -40,7 +40,7 @@ export function validateProduct(form) {
 
  if(!Array.isArray(form.sizes) || !form.sizes.length || form.sizes.some(s=>!Number.isInteger(s) || s<5 || s>15))return 'Choose available US sizes (5–15).'
 
- if(!Array.isArray(form.parts) || form.parts.length<2 || form.parts.some(p=>!p.label?.trim() || p.label.length>80))return 'Name at least two customizable parts.'
+ if(!Array.isArray(form.parts) || (requireParts && form.parts.length<2) || form.parts.some(p=>!p.label?.trim() || p.label.length>80))return 'Name at least two customizable parts.'
 
  if(!Array.isArray(form.colors) || !form.colors.length || form.colors.length>32 || form.colors.some(c=>!c.name?.trim() || c.name.length>40 || !/^#[0-9a-f]{6}$/i.test(c.value)))return 'Add valid named palette colors.'
 

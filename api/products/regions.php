@@ -6,10 +6,12 @@ sellerRequest($method,function($user)use($method){
  $input=$method==='GET'?$_GET:$_POST;$db=getDb();
  if($method==='POST')$db->beginTransaction();
  $row=productRow(sellerText($input,'id',1,100),(int)$user['id'],$method==='POST');
- if(!$row['source_scan_id'])scanFail('Repainting is available for photo-generated shoes.');
- scanJob($db,$row['source_scan_id'],(int)$user['id']);
+ if($row['source_scan_id'])scanJob($db,$row['source_scan_id'],(int)$user['id']);
+ $parts=json_decode($row['parts'],true)?:[];$path=dirname(__DIR__,2).'/public'.$row['glb_path'];
+ if(!$parts){if(productMaterialNames($path,true)!==[])scanFail('This upload already has separate material parts.');}
+ else scanGlbInfo($path,true);
  if($method==='GET'){
-  scanGlbInfo(dirname(__DIR__,2).'/public'.$row['glb_path'],true);
+  scanGlbInfo($path,false);
   jsonResponse(['shoe'=>formatShoeRow($row),...scanSavedCharm($row)]);
  }
  if(sellerText($input,'expectedModel',1,500)!==$row['glb_path'])scanFail('Shoe model changed while painting. Reopen the latest saved model.',409);

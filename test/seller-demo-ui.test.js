@@ -9,7 +9,7 @@ import {renderToString} from '@vue/server-renderer'
 import {parse} from '@vue/compiler-sfc'
 import {compile} from '@vue/compiler-dom'
 import {pickupActions,pickupLabels} from '../src/seller.js'
-const server=await createServer({configFile:false,cacheDir:'node_modules/.vite-seller-demo-tests',plugins:[vue({template:{compilerOptions:{isCustomElement:tag=>tag==='model-viewer'}}})],resolve:{alias:{'@':path.resolve('src')}},server:{middlewareMode:true,hmr:false},appType:'custom'})
+const server=await createServer({configFile:false,cacheDir:'node_modules/.vite-seller-demo-tests',plugins:[vue({template:{compilerOptions:{isCustomElement:tag=>['model-viewer','extra-model'].includes(tag)}}})],resolve:{alias:{'@':path.resolve('src')}},server:{middlewareMode:true,hmr:false},appType:'custom'})
 after(()=>server.close())
 const component=async name=>(await server.ssrLoadModule('/src/components/'+name+'.vue')).default
 const render=async (component,props)=>renderToString(Vue.createSSRApp({render:()=>Vue.h(component,props)}))
@@ -89,4 +89,17 @@ test('pickup layout keeps customer, pickup, notes and all valid status actions',
   for(const text of ['Demo buyer','buyer@example.test','2026-10-25','Demo pickup address','KC-DEMO-1','Keep original colors','Star'])assert.ok(html.includes(text),text)
   for(const [target,label]of Object.entries({approved:'Confirm order',ready:'Mark ready',completed:'Complete pickup',cancelled:'Cancel order'}))assert.equal(html.includes('>'+label+'</button>'),pickupActions[status].includes(target),status+' -> '+target)
  }
+})
+
+
+test('single-surface product offers painting and blocks review until parts exist',async()=>{
+ const editor=await component('SellerProductEditor')
+ const shoe={id:'upload',name:'Original shoe',description:'Original upload',glbPath:'/models/uploads/private.glb',price:100,stock:1,sizes:[9],parts:[],colors:[{name:'White',value:'#ffffff'}],publicationState:'draft',charmsEnabled:false}
+ const html=(await render(editor,{shoe})).replace(/<!--.*?-->/gs,'')
+ assert.match(html,/>Paint customizable parts</)
+ assert.match(html,/<button[^>]*\sdisabled(?:\s[^>]*)?>Submit for review</)
+ assert.doesNotMatch(html,/>Test customizable parts</)
+ const painted=(await render(editor,{shoe:{...shoe,parts:[{id:'upper',label:'Upper',material:'KCScan_UpperMaterial',recolorTexturePath:'/neutral.png'},{id:'midsole',label:'Midsole',material:'KCScan_MidsoleMaterial',recolorTexturePath:'/neutral.png'}]}})).replace(/<!--.*?-->/gs,'')
+ assert.match(painted,/>Edit painted parts</)
+ assert.doesNotMatch(painted,/<button[^>]*\sdisabled(?:\s[^>]*)?>Submit for review</)
 })

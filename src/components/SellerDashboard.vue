@@ -144,7 +144,7 @@ onBeforeUnmount(()=>{closed=true;clearUploadThumbnail();clearInterval(timer);doc
       <div class="workspace-heading"><div><h2>My products</h2><p class="muted">Original shoes, prepared for customer customization.</p></div><div class="actions"><Button variant="default" class="primary" :disabled="busy" @click="scanning=true">Generate from photos</Button><Button variant="outline" :disabled="busy" @click="uploading=!uploading">Upload GLB</Button><Button variant="outline" :disabled="busy" @click="create('template')">Use KickCraft template</Button></div></div>
       <p class="muted creation-help">Create a 3D draft from 1–4 photos; compare every angle because unseen details may differ. The template starts from KickCraft’s existing eight-part design.</p>
       <form v-if="uploading" class="panel stack upload-form" @submit.prevent="upload">
-       <h2>Upload an original shoe</h2><p>GLB must contain 2–16 independently named material regions, at most 50,000 triangles, with embedded resources. Single-material models need photo generation and part painting.</p>
+       <h2>Upload an original shoe</h2><p>Upload a static GLB up to 20 MB and 50,000 triangles, with embedded resources, normals and UV coordinates. Single-material shoes need an embedded color texture; paint at least two customizable regions after upload. Models with 2–16 named material regions can use those parts directly.</p>
        <div class="glb-upload-layout">
         <fieldset class="stack" :disabled="busy||thumbnailPreparing">
          <label>GLB model (up to 20 MB)<input type="file" accept=".glb,model/gltf-binary" required @change="chooseGlb"></label>

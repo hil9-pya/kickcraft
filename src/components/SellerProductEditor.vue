@@ -16,6 +16,7 @@ const form=reactive(JSON.parse(JSON.stringify(props.shoe))),viewer=ref(null),act
 const charms=computed(()=>availableCharms(form)),charmId=ref('none')
 const templateName=ref(form.name==='Untitled shoe'?'':form.name),templateDescription=ref(form.description),allowReuse=ref(false),sharing=ref(false),shared=ref(null)
 const painting=ref(null)
+const canPaint=computed(()=>!!form.sourceScanId||!form.parts.length||form.parts.every(part=>part.recolorTexturePath&&part.material.startsWith('KCScan_')))
 const original=new Map();let highlighted=null
 const previewHex=ref('#ffffff'),paletteIndex=ref(0)
 const previewInput=frameLatest(color=>preview(color))
@@ -37,7 +38,7 @@ function reset(){previewInput.cancel();if(!ready.value)return;for(const material
 async function save(submit=false) {
  if(sharing.value)return
  paletteInput.flush();previewInput.flush()
- error.value=validateProduct(form);message.value='';if(error.value)return
+ error.value=validateProduct(form,submit);message.value='';if(error.value)return
  if(submit&&Number(form.stock)<1){error.value='At least one available pair is needed for review.';return}
  busy.value=true
  try {
@@ -66,6 +67,7 @@ async function saveParts({payload,charmPoint,charmSettings}){
   const labels=new Map(form.parts.map(part=>[part.id,part.label]))
   for(const key of ['glbPath','thumbnailPath','charmsEnabled','charmOffset','charmScale','charmDir','publicationState','reviewNote'])form[key]=shoe[key]
   form.parts=shoe.parts.map(part=>({...part,label:labels.get(part.id)||part.label}))
+  if(!form.parts.some(part=>part.id===activePart.value))activePart.value=form.parts[0]?.id
   ready.value=false;painting.value=null;message.value='Revised parts saved as a private draft. Check details and submit for admin review.';emit('saved',shoe)
  }catch(cause){error.value=cause.message}finally{busy.value=false}
 }
@@ -90,11 +92,12 @@ onBeforeUnmount(()=>{previewInput.cancel();paletteInput.cancel();if(highlighted)
    <ScanRegionEditor :preview-url="painting.shoe.glbPath" :parts="painting.shoe.parts" :charm-point="painting.charmPoint" :charm-settings="painting.charmSettings" :saving="busy" @complete="saveParts" />
   </template>
   <template v-else>
-  <Button v-if="form.sourceScanId" variant="outline" type="button" :disabled="busy||sharing||!ready" @click="openPainting">Edit painted parts</Button>
+  <p v-if="!form.parts.length" class="notice">This upload has one surface. Paint at least two separate regions before submitting for review.</p>
+  <Button v-if="canPaint" variant="outline" type="button" :disabled="busy||sharing||!ready" @click="openPainting">{{form.parts.length?'Edit painted parts':'Paint customizable parts'}}</Button>
   <div class="editor-grid">
    <div class="product-preview stack">
     <model-viewer ref="viewer" :src="form.glbPath" camera-controls alt="Product customization preview" @load="loaded" @error="error='Could not load this 3D model.'"><extra-model v-for="charm in charms.filter(c=>c.src)" :key="charm.id" :src="charmSource(charm,form)" :offset="form.charmOffset" :scale="charmScale(charm.id,charmId,form.charmScale)" /></model-viewer>
-    <div class="preview-controls stack"><h3>Test customizable parts</h3><label>Part<select :value="activePart" @change="selectPart($event.target.value)"><option v-for="part in form.parts" :key="part.id" :value="part.id">{{part.label}}</option></select></label><div class="actions"><Button variant="outline" v-for="color in form.colors" :key="color.value+color.name" :disabled="!ready" @click="reusePreview(color.value)"><span :style="{background:color.value,display:'inline-block',width:'14px',height:'14px',border:'1px solid #bbb'}"></span> {{color.name}}</Button><Button variant="outline" :disabled="!ready" @click="reset">Original texture</Button></div><label>Custom preview color<input type="color" v-model="previewHex" aria-label="Seller preview color" :disabled="!ready" @input="previewInput(previewHex)" @change="previewInput.flush();rememberColor(previewHex)"></label><RecentColors :disabled="!ready" @select="reusePreview" /><label v-if="form.charmsEnabled">Preview charm<select v-model="charmId"><option v-for="charm in charms" :key="charm.id" :value="charm.id">{{charm.label}}</option></select></label><small>Choose a part, then a color. This tests independent recoloring; it does not change the photographed base texture.</small></div>
+    <div v-if="form.parts.length" class="preview-controls stack"><h3>Test customizable parts</h3><label>Part<select :value="activePart" @change="selectPart($event.target.value)"><option v-for="part in form.parts" :key="part.id" :value="part.id">{{part.label}}</option></select></label><div class="actions"><Button variant="outline" v-for="color in form.colors" :key="color.value+color.name" :disabled="!ready" @click="reusePreview(color.value)"><span :style="{background:color.value,display:'inline-block',width:'14px',height:'14px',border:'1px solid #bbb'}"></span> {{color.name}}</Button><Button variant="outline" :disabled="!ready" @click="reset">Original texture</Button></div><label>Custom preview color<input type="color" v-model="previewHex" aria-label="Seller preview color" :disabled="!ready" @input="previewInput(previewHex)" @change="previewInput.flush();rememberColor(previewHex)"></label><RecentColors :disabled="!ready" @select="reusePreview" /><label v-if="form.charmsEnabled">Preview charm<select v-model="charmId"><option v-for="charm in charms" :key="charm.id" :value="charm.id">{{charm.label}}</option></select></label><small>Choose a part, then a color. This tests independent recoloring; it does not change the photographed base texture.</small></div>
    </div>
    <form id="product-details-form" class="panel stack product-details" @submit.prevent="save(false)"><h3>Listing details</h3>
     <label>Product name<Input v-model="form.name" required minlength="2" maxlength="160" /></label>
@@ -103,10 +106,10 @@ onBeforeUnmount(()=>{previewInput.cancel();paletteInput.cancel();if(highlighted)
     <fieldset class="stack"><legend>Available US sizes</legend><div class="checks"><label v-for="size in 11" :key="size"><input type="checkbox" :value="size+4" v-model="form.sizes">{{size+4}}</label></div></fieldset>
     <details class="product-options"><summary>Part labels · {{form.parts.length}}</summary><fieldset class="stack"><legend class="sr-only">Part labels</legend><label v-for="part in form.parts" :key="part.id">{{part.material}}<Input v-model="part.label" required maxlength="80" /></label></fieldset></details>
     <details class="product-options"><summary>Customer palette · {{form.colors.length}} colors</summary><fieldset class="stack"><legend class="sr-only">Customer palette</legend><div class="colors" v-for="(color,index) in form.colors" :key="index"><input type="color" :value="color.value" @focus="paletteIndex=index" @input="paletteIndex=index;paletteInput({index,color:$event.target.value})" @change="paletteInput.flush();rememberColor(color.value)" :aria-label="'Color '+(index+1)"><Input v-model="color.name" :aria-label="'Color name '+(index+1)" required maxlength="40" /><Button variant="outline" type="button" :disabled="form.colors.length===1" @click="paletteInput.flush();form.colors.splice(index,1);paletteIndex=0" :aria-label="'Remove color '+(index+1)">Remove</Button></div><p class="muted">Recent colors apply to {{form.colors[paletteIndex]?.name || 'selected color'}}. Select a color field first.</p><RecentColors @select="reusePalette" /><Button variant="outline" type="button" :disabled="form.colors.length>=32" @click="form.colors.push({name:'New color',value:'#245fa8'})">Add color</Button></fieldset></details>
-    <p class="muted">{{form.charmsEnabled?'Charms enabled at the model’s attachment point.':'No verified charm attachment point on this upload. Part recoloring remains available.'}}</p>
+    <p class="muted">{{form.charmsEnabled?'Charms enabled at the model’s attachment point.':form.parts.length?'No verified charm attachment point on this upload. Part recoloring remains available.':'Paint customizable regions to enable part recoloring.'}}</p>
    </form>
   </div>
-  <div class="product-savebar"><p class="muted">Drafts stay private until approved.</p><div class="actions"><Button type="submit" form="product-details-form" variant="outline" :disabled="busy||sharing">{{busy?'Saving…':'Save draft'}}</Button><Button variant="default" type="button" :disabled="busy||sharing" @click="save(true)">Submit for review</Button></div></div>
+  <div class="product-savebar"><p class="muted">Drafts stay private until approved.</p><div class="actions"><Button type="submit" form="product-details-form" variant="outline" :disabled="busy||sharing">{{busy?'Saving…':'Save draft'}}</Button><Button variant="default" type="button" :disabled="busy||sharing||form.parts.length<2" @click="save(true)">Submit for review</Button></div></div>
   <form v-if="form.sourceScanId&&!form.sourceTemplateId" class="panel stack" @submit.prevent="shareTemplate"><h3>Share as template</h3><p>Let approved sellers reuse this saved model and its part boundaries without generating it again. Admin compares source photos and tests parts before adding it to the shared library.</p><p class="muted">Sharing saves a separate copy of the current saved model, part labels and palette. Later product edits do not change that copy. Price, stock, orders and private photos are not shared with other sellers.</p><label>Template name<Input v-model="templateName" required minlength="2" maxlength="160" :disabled="sharing" /></label><label>Template description<Textarea v-model="templateDescription" required minlength="10" maxlength="3000" :disabled="sharing"></Textarea></label><label class="checks"><input v-model="allowReuse" type="checkbox" required :disabled="sharing">This is my original design, and I allow other KickCraft sellers to reuse its model and part boundaries with creator attribution.</label><p v-if="shared">Template status: {{shared.publicationState}}<span v-if="shared.reviewNote"> — {{shared.reviewNote}}</span></p><Button variant="outline" :disabled="busy||sharing||!allowReuse">{{sharing?'Submitting template…':'Submit shared template for review'}}</Button></form>
   <p v-if="form.sourceTemplateId" class="notice">Uses shared template {{form.sourceTemplateId}}. Your reference photo and listing need their own admin review.</p>
   </template>

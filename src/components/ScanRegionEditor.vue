@@ -11,7 +11,7 @@ import {captureShoeThumbnail} from '../scan-thumbnail.js'
 import RecentColors from './RecentColors.vue'
 import {rememberColor} from '../color-history.js'
 import {frameLatest} from '../color-input.js'
-import {setRegionControls,createRegionState,restoreRegionMesh,surfaceBrushFaces,sampleFaceColors,smartFillFaces,paintFaces,cropFaces,undoStroke,redoStroke,canPaintFace,brushStrokePoints,exportScanRegions,buildRegionGroups,neutralDetailTexture} from '../scan-regions.js'
+import {setRegionControls,restoreRegionMesh,surfaceBrushFaces,sampleFaceColors,smartFillFaces,paintFaces,cropFaces,undoStroke,redoStroke,canPaintFace,brushStrokePoints,exportScanRegions,buildRegionGroups,neutralDetailTexture} from '../scan-regions.js'
 const props=defineProps({previewUrl:{type:String,required:true},saving:{type:Boolean,default:false},parts:{type:Array,default:()=>[]},charmPoint:{type:Array,default:null},charmSettings:{type:Object,default:()=>({size:1,rotation:[0,0,0]})}})
 const emit=defineEmits(['complete'])
 const editor=ref(null),fullscreen=ref(false),fills=ref([])
@@ -268,14 +268,7 @@ onMounted(async()=>{
   controls=new OrbitControls(camera,renderer.domElement);controls.enableDamping=true;setRegionControls(controls,mode.value)
   const loaded=await new GLTFLoader().loadAsync(props.previewUrl)
   if(disposed){loaded.scene.traverse(o=>{o.geometry?.dispose()});return}
-  if(props.parts.length){const restored=restoreRegionMesh(loaded.scene,props.parts);mesh=restored.mesh;state=restored.state}
-  else {
-   const meshes=[];loaded.scene.traverse(o=>{if(o.isMesh)meshes.push(o)})
-   if(meshes.length!==1 || Array.isArray(meshes[0].material))throw new Error('Prepared scan must contain one textured surface. Check local conversion.')
-   mesh=meshes[0];mesh.updateWorldMatrix(true,false)
-   mesh.geometry.applyMatrix4(mesh.matrixWorld);mesh.matrix.identity();mesh.position.set(0,0,0);mesh.rotation.set(0,0,0);mesh.scale.set(1,1,1)
-   state=createRegionState(mesh)
-  }
+  const restored=restoreRegionMesh(loaded.scene,props.parts);mesh=restored.mesh;state=restored.state
   scene.add(mesh);mesh.geometry.dispose();mesh.geometry=state.geometry.clone();mesh.material=[mesh.material]
   overlay=new THREE.Mesh(mesh.geometry.clone(),[new THREE.MeshBasicMaterial({vertexColors:true,transparent:true,opacity:0.55,polygonOffset:true,polygonOffsetFactor:-1,depthWrite:false})]);scene.add(overlay)
   const box=new THREE.Box3().setFromObject(mesh),center=box.getCenter(new THREE.Vector3()),size=box.getSize(new THREE.Vector3()).length()

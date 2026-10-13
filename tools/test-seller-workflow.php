@@ -54,6 +54,43 @@ try {
  check($upload['status']===201,'Multi-material GLB upload failed');$products[]=$upload['data']['shoe']['id'];
  check(count($upload['data']['shoe']['parts'])===8 && $upload['data']['shoe']['charmsEnabled']===false,'Uploaded regions were guessed or unverified charm enabled');
  $listed=req('products/list.php',$a['cookie'])['data']['shoes'];check(count($listed)===1,'Uploaded draft not owned by seller');
+ // Synthetic original geometry verifies upload/painting plumbing, not shoe likeness.
+ $raw=file_get_contents(__DIR__.'/../public/models/shoe-soleview-final.glb');$length=unpack('V',substr($raw,12,4))[1];$gltf=json_decode(substr($raw,20,$length),true);$bin=substr($raw,28+$length);
+ $gltf['materials']=[['pbrMetallicRoughness'=>['baseColorTexture'=>['index'=>0]]]];
+ foreach($gltf['meshes'] as &$mesh)foreach($mesh['primitives'] as &$primitive)$primitive['material']=0;unset($mesh,$primitive);
+ $saveFixture=function($json)use($bin){$file=tempnam(sys_get_temp_dir(),'kc-upload-');$text=json_encode($json);$text.=str_repeat(' ',(4-strlen($text)%4)%4);file_put_contents($file,'glTF'.pack('VV',2,28+strlen($text)+strlen($bin)).pack('VV',strlen($text),0x4e4f534a).$text.pack('VV',strlen($bin),0x004e4942).$bin);return $file;};
+ $singleFile=$saveFixture($gltf);
+ try {
+  $single=req('products/upload.php',$a['cookie'],['file'=>new CURLFile($singleFile,'model/gltf-binary','single.glb'),'thumbnail'=>new CURLFile(realpath(__DIR__.'/../public/images/kickcraft-one-card.png'),'image/png','thumb.png')]);
+  check($single['status']===201,'Single-material GLB upload failed: '.json_encode($single['data']));$single=$single['data']['shoe'];$products[]=$single['id'];
+  check($single['parts']===[]&&$single['publicationState']==='draft'&&!$single['charmsEnabled'],'Single surface was treated as an editable whole-shoe part or published');
+  $singleUpdate=['id'=>$single['id'],'name'=>'Single upload workflow fixture','description'=>'Synthetic original geometry for local upload and region verification','price'=>100,'stock'=>2,'sizes'=>[9]];
+  check(post('products/save.php',$a['cookie'],$singleUpdate)['status']===200,'Unpainted draft details could not save');
+  check(post('products/submit.php',$a['cookie'],['id'=>$single['id']])['status']===422,'Unpainted upload submitted for review');
+  check(req('products/regions.php?id='.$single['id'],$a['cookie'])['status']===200,'Own raw upload could not open painter');
+  check(req('products/regions.php?id='.$single['id'],$b['cookie'])['status']===404,'Foreign seller opened raw upload painter');
+  check(req('products/regions.php?id='.$single['id'])['status']===401,'Guest opened raw upload painter');
+  $revision=['id'=>$single['id'],'expectedModel'=>$single['glbPath'],'file'=>new CURLFile($singleFile,'model/gltf-binary','regions.glb'),'neutralTexture'=>new CURLFile(realpath(__DIR__.'/../public/images/kickcraft-one-card.png'),'image/png','neutral.png'),'thumbnail'=>new CURLFile(realpath(__DIR__.'/../public/images/kickcraft-one-card.png'),'image/png','thumb.png'),'charmPoint'=>'null'];
+  check(req('products/regions.php',$a['cookie'],$revision)['status']===422,'Unpainted save bypassed two-region requirement');
+  $gltf['materials']=[['name'=>'KCScan_UpperMaterial','pbrMetallicRoughness'=>['baseColorTexture'=>['index'=>0]]],['name'=>'KCScan_MidsoleMaterial','pbrMetallicRoughness'=>['baseColorTexture'=>['index'=>0]]]];
+  $gltf['meshes'][0]['primitives'][0]['material']=1;$paintedFile=$saveFixture($gltf);
+  try {
+   $revision['file']=new CURLFile($paintedFile,'model/gltf-binary','painted.glb');
+   check(req('products/regions.php',$b['cookie'],$revision)['status']===404,'Foreign seller changed uploaded parts');
+   $painted=req('products/regions.php',$a['cookie'],$revision);check($painted['status']===200,'Uploaded painted-region save failed: '.json_encode($painted['data']));$painted=$painted['data']['shoe'];
+   check(count($painted['parts'])===2&&$painted['publicationState']==='draft'&&$painted['sourceScanId']===null,'Uploaded parts lost or scan ownership invented');
+   check(is_file(__DIR__.'/../public'.$single['glbPath']),'Painting overwrote original uploaded model');
+   check(req('products/regions.php?id='.$single['id'],$a['cookie'])['status']===200,'Painted upload could not reopen painter');
+   check(req('products/regions.php',$a['cookie'],$revision)['status']===409,'Stale uploaded painting overwrote newer model');
+   check(!in_array($single['id'],array_column(req('shoes/list.php')['data']['shoes'],'id'),true),'Painted upload auto-published');
+   check(post('products/submit.php',$a['cookie'],['id'=>$single['id']])['status']===200,'Painted upload could not submit');
+   check(post('products/review.php',$a['cookie'],['id'=>$single['id'],'status'=>'approved'])['status']===403,'Seller approved own painted upload');
+   check(post('products/review.php',$admin,['id'=>$single['id'],'status'=>'approved'])['status']===200,'Admin could not approve painted upload');
+   $revision['expectedModel']=$painted['glbPath'];
+   check(req('products/regions.php',$a['cookie'],$revision)['data']['shoe']['publicationState']==='draft','Repainting approved upload did not withdraw listing');
+   check(!in_array($single['id'],array_column(req('shoes/list.php')['data']['shoes'],'id'),true),'Repainted upload stayed live');
+  }finally{unlink($paintedFile);}
+ }finally{unlink($singleFile);}
  $r=post('products/create.php',$a['cookie'],['source'=>'template','template'=>'kickcraft-one']);check($r['status']===201,'Template draft creation failed: '.json_encode($r['data']));
  $product=$r['data']['shoe'];$products[]=$product['id'];$pid=$product['id'];
  check($product['sellerUserId']===$a['id'] && $product['publicationState']==='draft','Draft owner/state untrusted');

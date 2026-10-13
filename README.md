@@ -12,6 +12,8 @@ Vue 3 Frontend (Vite) ──> PHP REST API (Apache / XAMPP) ──> MySQL Databa
 - **Backend API:** Flat PHP endpoints under `api/` served via XAMPP Apache, PDO prepared statements, native session authentication, and soft-delete flags. Configure an isolated session cookie when running another checkout.
 - **Database:** MySQL (`kickcraft_db`) with `users`, `seller_profiles`, `shoes`, `reservations`, and private `scan_jobs`. Seller products and pickup orders reuse the existing shoe and reservation tables.
 
+Seller GLB uploads accept a single textured material as a private draft. Open **Paint customizable parts**, mark at least two regions, then save the model and submit for normal admin review. Existing multipart uploads keep their material parts. Painted uploads can reopen the same editor; revisions withdraw a live listing for another review. No Tripo calls or credits are used. Single-material painting requires embedded base texture, UV coordinates and normals; models with different texture atlases cannot be merged by this painter.
+
 Owner shoe uploads use the admin editor's GLB and thumbnail pickers. Files are validated by `api/shoes/upload.php`, stored under ignored `public/models/uploads/` or `public/images/uploads/`, then saved as local paths in MySQL.
 
 ---

@@ -17,17 +17,18 @@ function productInsert(int $owner,array $asset,?string $scan=null): array {
  getDb()->prepare("INSERT INTO shoes(id,name,description,price,stock,status,glb_path,thumbnail_path,charms_enabled,charm_offset,charm_scale,charm_dir,categories,parts,colors,seller_user_id,publication_state,source_scan_id,sizes) VALUES(?,'Untitled shoe','',1,0,'out_of_stock',?,?,?,?,?,?,'[\"marketplace\",\"sneakers\"]',?,?,?,'draft',?,'[7,8,9,10,11]')")->execute([$id,$asset['glbPath'],$asset['thumbnailPath'],(int)$asset['charmsEnabled'],$asset['charmOffset']??null,$asset['charmScale']??'1 1 1',$asset['charmDir']??null,json_encode($asset['parts']),json_encode($asset['colors']),$owner,$scan]);
  return formatShoeRow(productRow($id,$owner));
 }
-function productMaterialNames(string $path): array {
+function productMaterialNames(string $path,bool $allowSingle=false): array {
  $info=scanGlbInfo($path,false,false);
  $bytes=file_get_contents($path);$gltf=json_decode(substr($bytes,20,unpack('V',substr($bytes,12,4))[1]),true);
- $stack=$gltf['scenes'][$gltf['scene']??0]['nodes']??[];$seen=[];$materials=[];
+ $stack=$gltf['scenes'][$gltf['scene']??0]['nodes']??[];$seen=[];$materials=[];$used=[];
  if(!$stack || count($gltf['nodes']??[])>2000)scanFail('GLB needs a valid visible scene');
  while($stack){
   $id=array_pop($stack);if(!is_int($id) || isset($seen[$id]) || !isset($gltf['nodes'][$id]))scanFail('Invalid GLB scene graph');$seen[$id]=true;$node=$gltf['nodes'][$id];
   foreach($node['children']??[] as $child)$stack[]=$child;
-  if(isset($node['mesh']))foreach($gltf['meshes'][$node['mesh']]['primitives']??[] as $primitive){$name=$gltf['materials'][$primitive['material']??-1]['name']??'';if($name!=='')$materials[$name]=true;}
+  if(isset($node['mesh']))foreach($gltf['meshes'][$node['mesh']]['primitives']??[] as $primitive){$material=$primitive['material']??-1;$used[$material]=true;$name=$gltf['materials'][$material]['name']??'';if($name!=='')$materials[$name]=true;}
  }
- if(count($materials)<2 || count($materials)>16)scanFail('Upload a GLB with 2–16 independently named material regions, or scan photos and paint parts');
+ if($allowSingle && count($used)===1){scanGlbInfo($path,false,true);return [];}
+ if(count($materials)<2 || count($materials)>16)scanFail('Mark at least two customizable parts, or upload a GLB with 2–16 independently named material regions.');
  return array_keys($materials);
 }
 function productCheck(array $row): void {

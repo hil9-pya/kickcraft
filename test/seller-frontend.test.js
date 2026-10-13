@@ -21,6 +21,9 @@ test('product validation catches stock, sizes, and missing materials',()=>{
  const product={name:'Original shoe',description:'Made locally',price:1234,stock:2,sizes:[9],parts:[{id:'upper',label:'Upper'},{id:'sole',label:'Sole'}],colors:[{name:'White',value:'#ffffff'}]}
 
  assert.equal(validateProduct(product),'')
+ assert.equal(validateProduct({...product,parts:[]},false),'','raw upload details can save privately')
+ assert.ok(validateProduct({...product,parts:[]},true),'raw upload cannot submit')
+ assert.ok(validateProduct({...product,parts:[{label:''}]},false),'draft labels still validated')
 
  for(const patch of [{price:0},{stock:1.5},{sizes:[]},{sizes:[16]},{parts:[]},{colors:[{name:'Bad',value:'red'}]}])assert.ok(validateProduct({...product,...patch}))
 

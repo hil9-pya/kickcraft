@@ -204,7 +204,7 @@ export function restoreRegionMesh(scene,parts) {
    const faces=Array(geometry.getAttribute('position').count/3).fill(null)
    for(const group of geometry.groups.length?geometry.groups:[{start:0,count:geometry.getAttribute('position').count,materialIndex:0}]){
     const name=materials[group.materialIndex].name,id=known.get(name)
-    if(!id && name!=='KCScan_Original')throw new Error('Saved part does not match this model.')
+    if(parts.length && !id && name!=='KCScan_Original')throw new Error('Saved part does not match this model.')
     for(let face=group.start/3;face<(group.start+group.count)/3;face++)faces[face]=id||null
    }
    assignments.push(...faces)

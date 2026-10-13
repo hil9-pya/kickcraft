@@ -274,3 +274,15 @@ test('editor notifications stay inside canvas without adding fullscreen layout r
  assert.match(css,/\.scan-error\s*\{[^}]*position:\s*absolute/,'notification must not change canvas dimensions')
  assert.match(css,/\.scan-error\s*\{[^}]*pointer-events:\s*none/,'notification must not intercept painting or camera input')
 })
+
+test('raw single-texture upload opens with unassigned faces and paints independent parts',async()=>{
+ const {Scene,Texture}=await import('three'),{restoreRegionMesh}=await import('../src/scan-regions.js')
+ const scene=new Scene(),mesh=fixture();mesh.material.map=new Texture();mesh.material.name='WholeShoe';mesh.position.x=2;scene.add(mesh)
+ const restored=restoreRegionMesh(scene,[])
+ assert.deepEqual(restored.state.assignments,[null,null])
+ assert.equal(restored.state.geometry.getAttribute('position').getX(0),2)
+ paintFaces(restored.state,[0],'upper');paintFaces(restored.state,[1],'outsole')
+ assert.deepEqual(buildRegionGroups(restored.state,true).parts.map(part=>part.id),['upper','outsole'])
+ const second=fixture();second.material.map=new Texture();scene.add(second)
+ assert.throws(()=>restoreRegionMesh(scene,[]),/shared.*texture/,'different texture atlases cannot be merged by painter')
+})
