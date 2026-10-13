@@ -158,7 +158,7 @@ onBeforeUnmount(()=>{closed=true;clearTimeout(timer);clearFiles()})
    <label><input v-model="selectedEngine" type="radio" value="meshroom"> Local photo / video scanner</label>
    <label v-if="nativeAvailable"><input v-model="selectedEngine" type="radio" value="realityscan"> Video with AI background masks (comparison)</label>
    <label><input v-model="selectedEngine" type="radio" value="tripo" :disabled="!tripoAvailable"> Generate from photos — 1–4 photos, 30 credits</label>
-   <p v-if="!tripoAvailable">Photo generation needs a configured AI service and local worker.</p>
+   <p v-if="!tripoAvailable">Photo generation needs a configured cloud service and local worker.</p>
   </fieldset>
   <TripoCapture v-if="tripoMode && (!job || ['uploading','failed'].includes(job.state))" :job="job" :disabled="busy" :available="tripoAvailable" :mask-available="nativeAvailable" @mask="generateAiMasks" @saved="remember" @queued="tripoQueued" @busy="busy=$event" @reset="newCapture">
    <template #masks>

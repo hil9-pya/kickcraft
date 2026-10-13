@@ -65,7 +65,7 @@ function tripoProcess(array $job,callable $progress,?callable $request=null,?cal
   $status=$task['status']??'';
   if($status==='success')break;
   if(!in_array($status,['queued','running','processing'],true))scanFail('AI provider task did not succeed ('.(in_array($status,['failed','cancelled','banned','expired'],true)?$status:'unknown status').'). No automatic paid regeneration. Existing photos are kept.');
-  $percent=is_numeric($task['progress']??null)?max(0,min(100,(int)$task['progress'])):0;$progress('AI is generating your shoe: '.$percent.'%');
+  $percent=is_numeric($task['progress']??null)?max(0,min(100,(int)$task['progress'])):0;$progress('Generating your 3D shoe: '.$percent.'%');
   if(microtime(true)-$started>1800)scanFail('Generation is taking longer than expected. Retry resumes the saved task without another generation charge.');
   sleep(3);
  }
