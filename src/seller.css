@@ -128,3 +128,9 @@
 .seller-portal .seller-product-secondary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .seller-portal .seller-product-actions button { width: 100%; min-height: 40px; }
 .seller-portal .seller-product-remove { grid-column: 2; }
+
+/* Share content rows so wrapped titles and store names do not shift review actions. */
+.seller .review-card { grid-template-rows: subgrid; grid-row: span 6; min-width: 0; }
+.seller .review-card h2, .seller .review-card p { overflow-wrap: anywhere; }
+.seller .review-card-note { grid-row: 5; }
+.seller .review-card-action { grid-row: 6; align-self: end; }
