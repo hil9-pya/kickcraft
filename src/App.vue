@@ -7,6 +7,7 @@ import ConfirmModal from './components/ConfirmModal.vue'
 import KickCraftCalendar from './components/KickCraftCalendar.vue'
 import StudioSections from './components/StudioSections.vue'
 import { api } from './api.js'
+import {checkoutRequestId,forgetCheckoutRequest} from './checkout-request.js'
 import {frameLatest} from './color-input.js'
 import {publicCatalog,palettePresets} from './seller.js'
 import { adminShoeToCatalogCard } from './admin.js'
@@ -647,6 +648,7 @@ function normalizeColorInfo(colorVal) {
 }
 
 async function submitReservation() {
+  if(isSubmitting.value || reserved.value)return
   if (!customerName.value.trim() || !customerEmail.value.trim() || !pickupDate.value) {
     return
   }
@@ -655,24 +657,19 @@ async function submitReservation() {
   reservationError.value = ''
 
   try {
-    const res = await api('reservations/create.php', {
-      method: 'POST',
-      body: {
-        customerName: customerName.value.trim(),
-        email: customerEmail.value.trim(),
-        pickupDate: pickupDate.value,
-        shoeId: selectedShoe.value.id,
-        size: selectedSize.value,
-        partColors: { ...partColors.value },
-        charmId: selectedCharm.value.id,
-        charmLabel: selectedCharm.value.label,
-      },
-    })
+    const body={
+      customerName:customerName.value.trim(),email:customerEmail.value.trim(),pickupDate:pickupDate.value,
+      shoeId:selectedShoe.value.id,size:selectedSize.value,partColors:{...partColors.value},
+      charmId:selectedCharm.value.id,charmLabel:selectedCharm.value.label,
+    }
+    const requestId=await checkoutRequestId(body)
+    const res=await api('reservations/create.php',{method:'POST',body:{...body,requestId}})
 
     saveGuestProfile(customerName.value.trim(), customerEmail.value.trim())
 
     reservationReceipt.value = res.reservation
     reserved.value = true
+    forgetCheckoutRequest(requestId)
 
     try {
       const shoesRes = await api('shoes/list.php')
@@ -933,11 +930,11 @@ function scrollToTop() {
 </script>
 
 <template>
-  <div class="kc-app min-h-screen bg-[#f5f6f4] text-[#292b2d]">
+  <div class="kc-app min-h-screen text-foreground">
 
     <!-- ── Header ───────────────────────────────────────────── -->
-    <header class="border-b border-[#cfd2ce] bg-[#fcfdfb]">
-      <div class="mx-auto flex min-h-14 max-w-[1440px] flex-wrap items-center justify-between gap-3 py-3 sm:flex-nowrap sm:py-0 px-5 lg:px-8">
+    <header class="kc-header border-b border-border bg-card">
+      <div class="kc-header-inner mx-auto flex min-h-14 max-w-[1440px] flex-wrap items-center justify-between gap-3 py-3 sm:flex-nowrap sm:py-0 px-5 lg:px-8">
         <button
           class="flex items-center gap-3 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring"
           @click="goToShop"
@@ -1023,12 +1020,12 @@ function scrollToTop() {
     <!-- ══════════════════════════════════════════════════════ -->
     <!-- SHOP VIEW                                              -->
     <!-- ══════════════════════════════════════════════════════ -->
-    <main v-if="view === 'shop'" class="mx-auto max-w-[1440px] px-5 py-6 lg:px-8 lg:py-8">
+    <main v-if="view === 'shop'" class="kc-storefront mx-auto max-w-[1440px] px-5 py-6 lg:px-8 lg:py-8">
 
       <!-- The product is the hero: a real, interactive local 3D shoe. -->
-      <section v-if="view==='shop'" class="kc-shop-intro mb-6 grid overflow-hidden rounded-lg border border-border bg-card lg:grid-cols-[.95fr_1.05fr]" aria-labelledby="shop-heading">
-        <div class="flex flex-col justify-center p-6 lg:p-7">
-          <h1 id="shop-heading" class="font-display text-3xl font-bold leading-tight tracking-tight sm:text-4xl">Build your pair in 3D.</h1>
+      <section v-if="view==='shop'" class="kc-shop-intro" aria-labelledby="shop-heading">
+        <div class="kc-intro-copy">
+          <h1 id="shop-heading" class="font-display">Your pair. Your design.</h1>
           <p class="mt-3 max-w-md text-sm leading-6 text-muted-foreground">Recolor shoe parts, add a charm, choose your size, then reserve your design for store pickup.</p>
           <div class="mt-5 flex flex-wrap gap-3">
             <Button type="button" @click="goToStudio(SHOES[0].id)">Start designing</Button>
@@ -1036,7 +1033,7 @@ function scrollToTop() {
           </div>
           <p class="mt-3 text-xs text-muted-foreground">No account needed to reserve. Pay when you collect.</p>
         </div>
-        <div class="relative h-64 bg-secondary lg:h-[280px]">
+        <div class="kc-intro-preview">
           <model-viewer
             class="hero-model absolute inset-0"
             :src="SHOES[0].src"
@@ -1047,6 +1044,7 @@ function scrollToTop() {
             shadow-softness="1"
             exposure="1"
             environment-image="neutral"
+            camera-orbit="35deg 75deg 85%"
             interaction-prompt="auto"
             @load="heroModelReady = true"
             @error="heroModelReady = true"
@@ -1057,9 +1055,10 @@ function scrollToTop() {
       </section>
 
       <!-- Search & Filters Toolbar -->
-      <div id="shop-catalog" class="mb-5 border-b border-border pb-4">
+      <div id="shop-catalog" class="kc-catalog-toolbar">
+        <h2 class="font-display">Find your next pair</h2>
         <div class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 lg:grid-cols-[auto_minmax(14rem,1fr)_auto]">
-          <div class="col-span-2 flex flex-wrap gap-2 lg:col-span-1" role="group" aria-label="Shoe source">
+          <div class="kc-source-tabs col-span-2 flex flex-wrap gap-2 lg:col-span-1" role="group" aria-label="Shoe source">
             <Button variant="outline" v-for="source in [{id:'all',label:'All shoes'},{id:'kickcraft',label:'KickCraft originals'},{id:'seller',label:'Seller designs'}]" :key="source.id" type="button" :aria-pressed="catalogSource===source.id" :class="catalogSource===source.id?'bg-foreground text-white hover:bg-foreground/90 hover:text-white':''" @click="catalogSource=source.id">{{source.label}}</Button>
           </div>
           <!-- Search input -->
@@ -1134,18 +1133,7 @@ function scrollToTop() {
       <!-- Catalog grid -->
       <div v-else class="catalog-grid grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <template v-for="(card, index) in displayCatalog" :key="card.id">
-          <div v-if="index === 0" class="col-span-full flex flex-wrap items-end justify-between gap-2 border-b border-[#cfd2ce] pb-4">
-            <div>
-              <h2 class="font-display text-2xl font-black tracking-[-0.03em] text-[#202220]">
-                {{ liveCatalogCount ? 'Ready to customize' : 'More silhouettes' }}
-              </h2>
-              <p class="mt-1 text-sm text-[#626662]">
-                {{ liveCatalogCount ? `${liveCatalogCount} ${liveCatalogCount === 1 ? 'shoe is' : 'shoes are'} available in the 3D studio.` : 'These styles are not available for customization yet.' }}
-              </p>
-            </div>
-          </div>
-
-          <div v-if="liveCatalogCount > 0 && index === liveCatalogCount" class="col-span-full mt-5 border-b border-[#cfd2ce] pb-4">
+          <div v-if="liveCatalogCount > 0 && index === liveCatalogCount" class="kc-catalog-heading col-span-full mt-5">
             <h2 class="font-display text-2xl font-black tracking-[-0.03em] text-[#202220]">More silhouettes</h2>
             <p class="mt-1 text-sm text-[#626662]">Future and temporarily unavailable styles stay visible without blocking today’s choices.</p>
           </div>
@@ -1159,7 +1147,7 @@ function scrollToTop() {
             :aria-label="`Customize and reserve ${card.name}`"
           >
             <!-- Thumbnail -->
-            <div class="relative grid h-56 place-items-center overflow-hidden bg-secondary p-5">
+            <div class="kc-product-stage">
               <img
                 v-if="card.image"
                 :src="card.image"
@@ -1173,7 +1161,7 @@ function scrollToTop() {
             </div>
 
             <!-- Card body -->
-            <div class="flex flex-1 flex-col p-5">
+            <div class="kc-product-details">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <h2 class="font-display text-lg font-bold leading-snug text-foreground">{{ card.name }}</h2><p v-if="card.storeName" class="mt-1 text-xs font-semibold text-[#626662]">{{card.storeName}}</p>
@@ -1183,7 +1171,7 @@ function scrollToTop() {
               </div>
 
               <!-- CTA row -->
-              <div class="mt-5 flex w-full items-center justify-between border-t border-[#d9dcd8] pt-4 text-sm font-bold text-[#292b2d] transition-colors duration-150 group-hover:text-[#b94d27]">
+              <div class="kc-product-action">
                 Customize &amp; Reserve
                 <svg class="size-4" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                   <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1198,7 +1186,7 @@ function scrollToTop() {
             class="kc-catalog-card flex flex-col overflow-hidden border border-border bg-card text-left opacity-90"
           >
             <!-- Thumbnail / Placeholder -->
-            <div class="relative grid h-56 place-items-center overflow-hidden bg-secondary p-5">
+            <div class="kc-product-stage">
               <img
                 v-if="card.image"
                 :src="card.image"
@@ -1211,7 +1199,7 @@ function scrollToTop() {
                 </div>
               </div>
               <div
-                class="pointer-events-none absolute left-3 top-3 border bg-[#fcfdfb] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider"
+                class="pointer-events-none absolute left-3 top-3 rounded-sm border bg-card px-2.5 py-1 text-xs font-semibold"
                 :class="card.status === 'out_of_stock' ? 'border-[#d5a28f] text-[#963a20]' : 'border-[#cfd2ce] text-[#6a6e6a]'"
               >
                 {{ card.status === 'out_of_stock' ? 'Out of Stock' : 'Coming Soon' }}
@@ -1219,7 +1207,7 @@ function scrollToTop() {
             </div>
 
             <!-- Card body -->
-            <div class="flex flex-1 flex-col p-5">
+            <div class="kc-product-details">
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
                   <h2 class="font-display text-lg font-bold leading-snug text-foreground">{{ card.name }}</h2>
@@ -1230,7 +1218,7 @@ function scrollToTop() {
 
               <!-- Disabled indicator row -->
               <div
-                class="mt-5 flex w-full items-center border-t border-[#d9dcd8] pt-4 text-sm font-semibold select-none"
+                class="kc-product-action select-none"
                 :class="card.status === 'out_of_stock' ? 'text-[#963a20]' : 'text-[#8e938e]'"
               >
                 {{ card.status === 'out_of_stock' ? 'Temporarily Out of Stock' : 'Available Soon' }}

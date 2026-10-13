@@ -1293,6 +1293,7 @@ async function restoreShoe(shoe) {
       </select>
     </label>
     <!-- ── Admin Section Tabs (Inventory vs Financials) ────────── -->
+    <div class="admin-layout">
     <div class="admin-sections hidden md:flex" role="navigation" aria-label="Admin sections">
       <Button variant="outline" :aria-current="adminSection === 'inventory'"
         type="button"
@@ -1340,6 +1341,7 @@ async function restoreShoe(shoe) {
       </Button>
       <Button variant="outline" v-for="item in [{id:'sellers',label:'Seller applications'},{id:'seller-products',label:'Seller products'},{id:'shared-templates',label:'Shared templates'}]" :key="item.id" :aria-current="adminSection===item.id" type="button" class="border-b-2 px-6 py-3.5 text-xs font-bold" :class="adminSection===item.id?'border-[#b94d27] text-[#202220]':'border-transparent text-[#5f635f]'" @click="adminSection=item.id;editorMode=false">{{item.label}}</Button>
     </div>
+    <div class="admin-content">
     <SellerModeration v-if="['sellers','seller-products','shared-templates'].includes(adminSection)" :mode="adminSection==='sellers'?'sellers':adminSection==='shared-templates'?'templates':'products'" @changed="loadData" />
 
     <div v-if="dataLoading" role="status" class="mb-6 border border-[#cfd2ce] bg-white px-4 py-3 text-sm font-semibold text-[#5f635f]">
@@ -3289,6 +3291,8 @@ async function restoreShoe(shoe) {
       </div>
     </div>
 
+    </div>
+    </div>
     <PhotoScanner :account-id="currentUser?.id" v-if="editorMode && showPhotoScanner" class="fixed inset-4 z-50 overflow-auto" @complete="acceptPhotoScan" @cancel="showPhotoScanner = false" />
   <ConfirmModal
       :show="adminConfirm.show"
