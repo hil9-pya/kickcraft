@@ -1330,9 +1330,9 @@ async function restoreShoe(shoe) {
           {{ userStats.total }}
         </span>
       </button>
-      <button v-for="item in [{id:'sellers',label:'Seller applications'},{id:'seller-products',label:'Seller products'}]" :key="item.id" type="button" class="border-b-2 px-6 py-3.5 text-xs font-bold" :class="adminSection===item.id?'border-[#b94d27] text-[#202220]':'border-transparent text-[#5f635f]'" @click="adminSection=item.id;editorMode=false">{{item.label}}</button>
+      <button v-for="item in [{id:'sellers',label:'Seller applications'},{id:'seller-products',label:'Seller products'},{id:'shared-templates',label:'Shared templates'}]" :key="item.id" type="button" class="border-b-2 px-6 py-3.5 text-xs font-bold" :class="adminSection===item.id?'border-[#b94d27] text-[#202220]':'border-transparent text-[#5f635f]'" @click="adminSection=item.id;editorMode=false">{{item.label}}</button>
     </div>
-    <SellerModeration v-if="['sellers','seller-products'].includes(adminSection)" :mode="adminSection==='sellers'?'sellers':'products'" @changed="loadData" />
+    <SellerModeration v-if="['sellers','seller-products','shared-templates'].includes(adminSection)" :mode="adminSection==='sellers'?'sellers':adminSection==='shared-templates'?'templates':'products'" @changed="loadData" />
 
     <div v-if="dataLoading" role="status" class="mb-6 border border-[#cfd2ce] bg-white px-4 py-3 text-sm font-semibold text-[#5f635f]">
       Refreshing owner data…

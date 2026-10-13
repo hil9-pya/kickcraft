@@ -134,6 +134,7 @@ function formatShoeRow(array $row): array {
         'publicationState' => $row['publication_state'] ?? 'approved',
         'reviewNote' => $row['review_note'] ?? '',
         'sourceScanId' => $row['source_scan_id'] ?? null,
+        'sourceTemplateId' => $row['source_template_id'] ?? null,
         'sizes' => $decodeJson($row['sizes'] ?? '[7,8,9,10,11]'),
         'storeName' => $row['seller_store_name'] ?? 'KickCraft Flagship Studio',
         'pickupAddress' => $row['pickup_address'] ?? 'KickCraft Flagship Studio — contact pickup desk for directions',

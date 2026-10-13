@@ -1,7 +1,7 @@
 <?php
 require_once __DIR__.'/common.php';
 sellerRequest('POST',function($user){
- $body=scanJson();foreach(['glbPath','thumbnailPath','sellerUserId','publicationState','sourceScanId','charmDir','charmOffset','charmsEnabled'] as $key)if(array_key_exists($key,$body))scanFail('Model, ownership and publication fields cannot be supplied here');
+ $body=scanJson();foreach(['glbPath','thumbnailPath','sellerUserId','publicationState','sourceScanId','sourceTemplateId','charmDir','charmOffset','charmsEnabled'] as $key)if(array_key_exists($key,$body))scanFail('Model, ownership and publication fields cannot be supplied here');
  $db=getDb();$db->beginTransaction();$row=productRow(sellerText($body,'id',1,100),(int)$user['id'],true);
  if(array_key_exists('expectedStock',$body) && (!is_int($body['expectedStock']) || $body['expectedStock']!==(int)$row['stock']))scanFail('Stock changed while this editor was open. Refresh the product before saving.',409);
  $name=sellerText($body,'name',2,160);$description=sellerText($body,'description',0,3000);

@@ -248,3 +248,16 @@ Lower alignment may produce incomplete geometry, holes, or missing shoe surfaces
 
 
 Local retry verification (2026-10-13): the existing physical-shoe capture that previously failed at 41/61 aligned views was explicitly retried at 65%. The rerun aligned 46/61 and reached a private, validated 49,892-triangle / 6,719,364-byte preview. SHA-256 checks confirmed every saved photo and reviewed mask, plus their metadata, remained unchanged. The job stayed `ready`, without finalization or publication. This verifies retry processing and model validation, not photographed-shoe likeness; manual comparison is still pending. Automated checks cover both native and Meshroom alignment boundaries, explicit opt-in, mask integrity, owner/origin authorization, idempotent queuing, and restoring the 80% default.
+
+
+### Shared seller templates and region editing
+
+Apply additive `api/database/shared-templates.sql` after the existing seller and scan migrations. Vue still uses PHP/MySQL; template reuse never calls the AI provider or worker.
+
+Finished photo-generated seller products offer **Product details → Share as template**. Creator must confirm original-design ownership and permit model/part reuse. Submission snapshots the saved GLB, thumbnail and replacement textures. Admin finds **Shared templates**, compares the private original photographs, tests two independent regions, then approves or rejects. Other approved sellers see only approved templates from active approved creators; private source photos remain admin-only.
+
+**Seller Studio → Shared templates → Preview template → Use template** requires the seller's own matching-shoe photo and explicit confirmation. Reuse preserves geometry, part boundaries, palette and charm placement, creates a new private draft with zero stock, and records template provenance. It copies no price, inventory, orders or listing approval. Normal product validation, photo comparison and admin review still apply. Later source edits/deletion leave snapshot assets intact; withdrawing a template stops new reuse while existing listings retain their separate moderation. Reused templates cannot be re-shared as original models. A shared model only suits an actually matching shoe; style similarity does not prove geometric accuracy.
+
+Region editor: left click paints/selects; middle mouse rotates in every tool, wheel zooms, right mouse pans. Smart-fill clicks accumulate for the selected part, including different views. Remove individual pending fills or clear all, then **Apply all fills** once. Tolerance updates each suggestion from its original camera view. **Clear selected part** and **Undo** reverse assigned boundaries. Apply or clear pending fills before changing tools/parts. **Fullscreen editor** preserves camera and edits; Escape exits using the browser's normal fullscreen control.
+
+Verification: `php tools/test-shared-templates.php` uses the isolated local database and original KickCraft fixtures, retires its test accounts/listings, and makes no cloud calls. Do not run it against production. `npm test` includes region/permission/path checks; browser checks cover multi-fill, clear/undo and fullscreen state preservation.

@@ -5,6 +5,7 @@ import {validateStore,pickupActions,pickupLabels} from '../seller.js'
 import {forgetCompletedScan} from '../scan-capture.js'
 import PhotoScanner from './PhotoScanner.vue'
 import ConfirmModal from './ConfirmModal.vue'
+import SharedTemplateLibrary from './SharedTemplateLibrary.vue'
 import SellerProductEditor from './SellerProductEditor.vue'
 import '../seller.css'
 const props=defineProps({user:{type:Object,required:true}})
@@ -77,7 +78,7 @@ onBeforeUnmount(()=>{closed=true;clearInterval(timer)})
    </template>
    <template v-else>
     <section v-if="guide&&!editing&&!scanning" class="tutorial stack" aria-label="Seller walkthrough"><div class="actions"><h2>Getting started · {{profile.tutorialStep+1}} / 5</h2><button @click="tutorial(5)">Dismiss walkthrough</button></div><h3>{{guide.title}}</h3><p>{{guide.text}}</p><div class="actions"><button @click="tab=guide.tab">Show {{guide.tab==='orders'?'pickup orders':guide.tab==='settings'?'store settings':'products'}}</button><button class="primary" @click="tutorial(profile.tutorialStep+1)">{{profile.tutorialStep===4?'Finish walkthrough':'Next step'}}</button></div></section>
-    <nav aria-label="Seller sections"><button v-for="item in ['products','orders','settings']" :key="item" :aria-current="tab===item" @click="tab=item;editing=null;scanning=false;uploading=false">{{item==='products'?'My products':item==='orders'?'Pickup orders':'Store settings'}}</button></nav>
+    <nav aria-label="Seller sections"><button v-for="item in ['products','templates','orders','settings']" :key="item" :aria-current="tab===item" @click="tab=item;editing=null;scanning=false;uploading=false">{{item==='products'?'My products':item==='templates'?'Shared templates':item==='orders'?'Pickup orders':'Store settings'}}</button></nav>
     <section v-if="tab==='products'">
      <PhotoScanner v-if="scanning" :account-id="user.id" @complete="scanned" @cancel="scanning=false" />
      <SellerProductEditor v-else-if="editing" :key="editing.id" :shoe="editing" @saved="saved" @close="editing=null;refresh()" />
@@ -89,6 +90,7 @@ onBeforeUnmount(()=>{closed=true;clearInterval(timer)})
       <div class="product-list"><article v-for="shoe in products" :key="shoe.id" class="panel stack"><img class="product-image" :src="shoe.thumbnailPath" :alt="shoe.name"><p class="tag">{{shoe.publicationState}} · {{shoe.parts.length}} custom parts</p><h2>{{shoe.name}}</h2><p>₱{{Number(shoe.price).toLocaleString()}} · {{shoe.stock}} pairs</p><p v-if="shoe.reviewNote" class="notice">{{shoe.reviewNote}}</p><button @click="editing=shoe">Edit product</button></article></div>
      </template>
     </section>
+    <SharedTemplateLibrary v-else-if="tab==='templates'" @created="tab='products';saved($event)" />
     <section v-else-if="tab==='orders'" class="panel stack">
      <div class="actions"><h2>Pickup orders</h2><label>Show<select v-model="orderFilter"><option value="all">All orders</option><option v-for="(label,status) in pickupLabels" :key="status" :value="status">{{label}}</option></select></label></div>
      <p v-if="!visibleOrders.length">No pickup orders in this view.</p>
