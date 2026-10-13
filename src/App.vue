@@ -7,6 +7,7 @@ import ConfirmModal from './components/ConfirmModal.vue'
 import KickCraftCalendar from './components/KickCraftCalendar.vue'
 import StudioSections from './components/StudioSections.vue'
 import { api } from './api.js'
+import {checkoutRequestId,forgetCheckoutRequest} from './checkout-request.js'
 import {frameLatest} from './color-input.js'
 import {publicCatalog,palettePresets} from './seller.js'
 import { adminShoeToCatalogCard } from './admin.js'
@@ -647,6 +648,7 @@ function normalizeColorInfo(colorVal) {
 }
 
 async function submitReservation() {
+  if(isSubmitting.value || reserved.value)return
   if (!customerName.value.trim() || !customerEmail.value.trim() || !pickupDate.value) {
     return
   }
@@ -655,24 +657,19 @@ async function submitReservation() {
   reservationError.value = ''
 
   try {
-    const res = await api('reservations/create.php', {
-      method: 'POST',
-      body: {
-        customerName: customerName.value.trim(),
-        email: customerEmail.value.trim(),
-        pickupDate: pickupDate.value,
-        shoeId: selectedShoe.value.id,
-        size: selectedSize.value,
-        partColors: { ...partColors.value },
-        charmId: selectedCharm.value.id,
-        charmLabel: selectedCharm.value.label,
-      },
-    })
+    const body={
+      customerName:customerName.value.trim(),email:customerEmail.value.trim(),pickupDate:pickupDate.value,
+      shoeId:selectedShoe.value.id,size:selectedSize.value,partColors:{...partColors.value},
+      charmId:selectedCharm.value.id,charmLabel:selectedCharm.value.label,
+    }
+    const requestId=await checkoutRequestId(body)
+    const res=await api('reservations/create.php',{method:'POST',body:{...body,requestId}})
 
     saveGuestProfile(customerName.value.trim(), customerEmail.value.trim())
 
     reservationReceipt.value = res.reservation
     reserved.value = true
+    forgetCheckoutRequest(requestId)
 
     try {
       const shoesRes = await api('shoes/list.php')

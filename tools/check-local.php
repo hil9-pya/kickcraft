@@ -5,6 +5,7 @@ require_once __DIR__.'/../api/scans/tripo-common.php';
 try{
  foreach(['pdo_mysql','curl','gd'] as $extension)if(!extension_loaded($extension))throw new RuntimeException('PHP extension missing: '.$extension);
  try{getDb()->query('SELECT id FROM scan_jobs LIMIT 1');}catch(Throwable $error){throw new RuntimeException('MySQL unavailable or scan tables missing. Start MySQL in XAMPP; check api/.env.');}
+ try{getDb()->query('SELECT checkout_request_id,checkout_request_hash FROM reservations LIMIT 1');}catch(Throwable $error){throw new RuntimeException('Apply api/database/checkout-retries.sql to the configured database before starting checkout.');}
  echo "MySQL and scan queue ready.\n";
  if(!is_writable(scanRoot()))throw new RuntimeException('Private scan storage is not writable.');
  if(!is_file((string)configValue('BLENDER_EXE')))throw new RuntimeException('Blender unavailable. Check BLENDER_EXE in api/.env.');

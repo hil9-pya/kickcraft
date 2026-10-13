@@ -4,6 +4,7 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers.php';
+require_once __DIR__.'/retries.php';
 
 requireMethod('POST');
 
@@ -32,11 +33,6 @@ if (!$dateObject || $hasDateErrors || $dateObject->format('Y-m-d') !== $pickupDa
     jsonError('Valid pickup date (YYYY-MM-DD) is required', 400);
 }
 
-$today = new DateTimeImmutable('today');
-$pickup = new DateTimeImmutable($pickupDate);
-if ($pickup < $today->modify('+7 days') || $pickup > $today->modify('+365 days')) {
-    jsonError('Pickup date must be between 1 week and 1 year from today', 400);
-}
 
 $shoeId = trim((string)($body['shoeId'] ?? ''));
 if ($shoeId === '') {
@@ -60,6 +56,17 @@ if (!is_array($partColors) || count($partColors) > 16) {
     jsonError('Invalid customized part colors', 400);
 }
 
+$requestId=$body['requestId']??null;
+if(!is_string($requestId)||!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/Di',$requestId))jsonError('A valid checkout request ID is required. Refresh the checkout and try again.',400);
+$requestId=strtolower($requestId);$requestedColors=[];
+foreach($partColors as $partId=>$color){
+    if(!is_string($partId)||!is_array($color)||!is_string($color['value']??null))jsonError('Customization contains an invalid color',400);
+    $value=strtolower(trim($color['value']));if(!preg_match('/^#[0-9a-f]{6}$/D',$value))jsonError('Customization contains an invalid color',400);
+    $requestedColors[$partId]=$value;
+}
+ksort($requestedColors);
+$requestHash=hash('sha256',json_encode([$customerName,strtolower($email),$pickupDate,$shoeId,$size,$charmId,$requestedColors],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+
 // 4. Database Transaction & Stock / Price Integrity
 $db = getDb();
 $db->beginTransaction();
@@ -69,6 +76,16 @@ try {
     $stmtShoe = $db->prepare('SELECT * FROM shoes WHERE id = ? AND deleted_at IS NULL AND permanently_deleted = 0 FOR UPDATE');
     $stmtShoe->execute([$shoeId]);
     $shoe = $stmtShoe->fetch();
+
+    // Shoe lock serializes same-product retries, including the last available pair.
+    if($saved=reservationRetry($db,$requestId,$requestHash)){
+        $db->commit();jsonResponse(['success'=>true,'reservation'=>formatReservationRow($saved)],200);
+    }
+    $today = new DateTimeImmutable('today');
+    $pickup = new DateTimeImmutable($pickupDate);
+    if ($pickup < $today->modify('+7 days') || $pickup > $today->modify('+365 days')) {
+        jsonError('Pickup date must be between 1 week and 1 year from today', 400);
+    }
 
     if (!$shoe || (int)$shoe['stock'] <= 0 || !in_array($shoe['status'], ['available', 'in_stock'], true)) {
         $db->rollBack();
@@ -128,7 +145,7 @@ try {
     $reservationId = generateReceiptId($db);
 
     // Insert reservation record with prepared statement
-    $stmtInsert = $db->prepare('INSERT INTO reservations (id, customer_name, email, pickup_date, shoe_id, shoe_name, size, price, part_colors, charm_id, charm_label, status, notes, seller_user_id, pickup_store, pickup_address) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    $stmtInsert = $db->prepare('INSERT INTO reservations (id, customer_name, email, pickup_date, shoe_id, shoe_name, size, price, part_colors, charm_id, charm_label, status, notes, seller_user_id, pickup_store, pickup_address, checkout_request_id, checkout_request_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)');
     $stmtInsert->execute([
         $reservationId,
         $customerName,
@@ -146,6 +163,8 @@ try {
         $sellerId,
         $pickupStore,
         $pickupAddress,
+        $requestId,
+        $requestHash,
     ]);
 
     // Decrement stock; mark out_of_stock if stock <= 0
@@ -185,6 +204,8 @@ try {
     if ($db->inTransaction()) {
         $db->rollBack();
     }
+    // Different-product requests can race on the same globally unique request ID.
+    if($e instanceof PDOException && $e->getCode()==='23000' && ($saved=reservationRetry($db,$requestId,$requestHash)))jsonResponse(['success'=>true,'reservation'=>formatReservationRow($saved)],200);
     error_log('KickCraft reservation create failed: ' . $e->getMessage());
     jsonError('Failed to create reservation. Please try again.', 500);
 }

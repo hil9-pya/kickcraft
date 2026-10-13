@@ -180,6 +180,12 @@ In the parts editor, choose **Place charm**, click the attachment point, then ad
 
 Saving fits all three local charm models to that point with the same size and rotation. It uses no Tripo credits. Existing originals stay unchanged; fitted assets use new revision directories and persist through product import, repainting, customer selection, and template reuse. Reopening **Edit painted parts** restores the saved fit. Revised seller products become private drafts requiring admin review again. Check each charm from multiple angles: placement is manually reviewed and does not simulate collision or physics.
 
+## Checkout retry protection
+
+Apply additive `api/database/checkout-retries.sql` to the configured database before using this version. Do not reimport `setup.sql` into an existing database. Existing reservations keep their records; new checkouts require a UUID `requestId`.
+
+The Vue checkout keeps a request ID for the same customer/design/date details until it receives a saved reservation. It stores only a fingerprint and the ID locally, so an unchanged retry or page reload can recover the original receipt. Server-side uniqueness prevents a second stock decrement, including simultaneous retries and retries after the product becomes unavailable. Reusing an ID with different details returns 409. Acknowledged success clears the browser retry marker; a subsequent intentional reservation gets a new ID. With browser storage blocked, recovery survives retries in the current page only.
+
 ## Seller marketplace
 
 Apply at `http://localhost:5174/#seller-register`, then sign in at `#seller`. Pending sellers can view their review status and correct store details. Admin uses `#admin` → **Seller applications** to approve, request changes, or suspend a store. Approved sellers get a persistent five-step walkthrough, product creation, pickup orders, and store settings.

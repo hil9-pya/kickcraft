@@ -17,10 +17,11 @@ function req(string $path,string $cookie='', $body=null,array $headers=[]): arra
  preg_match_all('/^Set-Cookie:\s*([^;\r\n]+)/mi',substr($raw,0,$size),$cookies);
  return ['status'=>curl_getinfo($h,CURLINFO_RESPONSE_CODE),'data'=>$data,'cookie'=>end($cookies[1])?:''];
 }
-function post(string $path,string $cookie,array $body,array $headers=[]): array {return req($path,$cookie,json_encode($body),$headers);}
-function raceCheckout(array $body): array {
+function checkoutFixtureId(): string {$hex=bin2hex(random_bytes(16));return substr($hex,0,8).'-'.substr($hex,8,4).'-4'.substr($hex,13,3).'-8'.substr($hex,17,3).'-'.substr($hex,20);}
+function post(string $path,string $cookie,array $body,array $headers=[]): array {if($path==='reservations/create.php'&&!array_key_exists('requestId',$body))$body['requestId']=checkoutFixtureId();return req($path,$cookie,json_encode($body),$headers);}
+function raceCheckout(array $body,?array $second=null): array {
  global $base;$multi=curl_multi_init();$handles=[];$results=[];
- for($i=0;$i<2;$i++){$h=curl_init($base.'/reservations/create.php');curl_setopt_array($h,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>json_encode($body),CURLOPT_TIMEOUT=>30,CURLOPT_HTTPHEADER=>['X-Requested-With: KickCraft','Content-Type: application/json']]);$handles[]=$h;curl_multi_add_handle($multi,$h);}
+ for($i=0;$i<2;$i++){$payload=$i===1&&$second!==null?$second:$body;if(!isset($payload['requestId']))$payload['requestId']=checkoutFixtureId();$h=curl_init($base.'/reservations/create.php');curl_setopt_array($h,[CURLOPT_RETURNTRANSFER=>true,CURLOPT_POST=>true,CURLOPT_POSTFIELDS=>json_encode($payload),CURLOPT_TIMEOUT=>30,CURLOPT_HTTPHEADER=>['X-Requested-With: KickCraft','Content-Type: application/json']]);$handles[]=$h;curl_multi_add_handle($multi,$h);}
  do{curl_multi_exec($multi,$running);if($running)curl_multi_select($multi,1);}while($running);
  foreach($handles as $h){$results[]=['status'=>curl_getinfo($h,CURLINFO_RESPONSE_CODE),'data'=>json_decode(curl_multi_getcontent($h),true)];curl_multi_remove_handle($multi,$h);}curl_multi_close($multi);return $results;
 }
@@ -133,6 +134,31 @@ try {
   check(post('products/create.php',$a['cookie'],['source'=>'scan','scanId'=>$jobId])['status']===409,'Removed capture import did not explain restore');
   $restored=post('products/visibility.php',$a['cookie'],['id'=>$scanPid,'action'=>'restore']);check($restored['status']===200&&$restored['data']['shoe']['publicationState']==='draft'&&$restored['data']['shoe']['glbPath']===$revised['glbPath'],'Restored generated shoe lost edited model or bypassed review');
  }
+ // Dedicated retry fixture keeps the existing order/stock tests independent.
+ $retryProduct=post('products/create.php',$a['cookie'],['source'=>'template','template'=>'kickcraft-one'])['data']['shoe'];$retryPid=$retryProduct['id'];$products[]=$retryPid;
+ check(post('products/save.php',$a['cookie'],['id'=>$retryPid,'name'=>'Checkout retry fixture','description'=>'Original template for duplicate-request checks','price'=>1234,'stock'=>2,'sizes'=>[9,10]])['status']===200,'Retry fixture save failed');
+ check(post('products/submit.php',$a['cookie'],['id'=>$retryPid])['status']===200,'Retry fixture submit failed');check(post('products/review.php',$admin,['id'=>$retryPid,'status'=>'approved'])['status']===200,'Retry fixture approval failed');
+ $retryBody=['requestId'=>checkoutFixtureId(),'shoeId'=>$retryPid,'customerName'=>'Retry Guest','email'=>'checkout-retry@example.test','pickupDate'=>(new DateTimeImmutable('today'))->modify('+8 days')->format('Y-m-d'),'size'=>9,'charmId'=>'none','partColors'=>['upper'=>['name'=>'Ignored label','value'=>'#13ABCD']]];
+ $retryResults=raceCheckout($retryBody);$retryStatuses=array_column($retryResults,'status');sort($retryStatuses);check($retryStatuses===[200,201],'Concurrent same-checkout retries did not return saved reservation');
+ $retryRid=$retryResults[0]['data']['reservation']['id'];$receipts[]=$retryRid;check($retryRid===$retryResults[1]['data']['reservation']['id'],'Concurrent retries created different receipts');
+ $stmt=$db->prepare('SELECT stock FROM shoes WHERE id=?');$stmt->execute([$retryPid]);check((int)$stmt->fetchColumn()===1,'Retry decremented stock more than once');
+ $stmt=$db->prepare('SELECT COUNT(*) FROM reservations WHERE checkout_request_id=?');$stmt->execute([$retryBody['requestId']]);check((int)$stmt->fetchColumn()===1,'Retry saved multiple rows');
+ $replay=$retryBody;$replay['email']=strtoupper($replay['email']);$replay['partColors']['upper']=['name'=>'Changed label','value'=>'#13abcd'];check(post('reservations/create.php','',$replay)['data']['reservation']['id']===$retryRid,'Equivalent input did not replay saved reservation');
+ check(post('reservations/create.php','',array_merge($retryBody,['size'=>10]))['status']===409,'Same request ID accepted changed design');
+ check(post('reservations/create.php','',array_merge($retryBody,['email'=>'another@example.test']))['status']===409,'Same request ID exposed another guest reservation');
+ foreach([null,[], 'invalid'] as $badId)check(post('reservations/create.php','',array_merge($retryBody,['requestId'=>$badId]))['status']===400,'Invalid request ID passed');
+ $otherRetry=post('products/create.php',$a['cookie'],['source'=>'template','template'=>'kickcraft-one'])['data']['shoe'];$otherRetryPid=$otherRetry['id'];$products[]=$otherRetryPid;
+ check(post('products/save.php',$a['cookie'],['id'=>$otherRetryPid,'name'=>'Other checkout retry fixture','description'=>'Original template for conflicting request checks','price'=>1234,'stock'=>1,'sizes'=>[9]])['status']===200,'Other retry fixture save failed');
+ check(post('products/submit.php',$a['cookie'],['id'=>$otherRetryPid])['status']===200&&post('products/review.php',$admin,['id'=>$otherRetryPid,'status'=>'approved'])['status']===200,'Other retry fixture review failed');
+ $crossBody=array_merge($retryBody,['requestId'=>checkoutFixtureId()]);$crossOther=array_merge($crossBody,['shoeId'=>$otherRetryPid]);$crossResults=raceCheckout($crossBody,$crossOther);$crossStatuses=array_column($crossResults,'status');sort($crossStatuses);check($crossStatuses===[201,409],'Same ID with different products did not resolve safely');
+ foreach($crossResults as $result)if($result['status']===201){$crossRid=$result['data']['reservation']['id'];$receipts[]=$crossRid;$db->prepare('UPDATE reservations SET deleted_at=NOW() WHERE id=?')->execute([$crossRid]);}
+ $stmt=$db->prepare('SELECT SUM(stock) FROM shoes WHERE id IN (?,?)');$stmt->execute([$retryPid,$otherRetryPid]);check((int)$stmt->fetchColumn()===1,'Conflicting retry decremented both products');
+ $db->prepare("UPDATE shoes SET stock=0,status='out_of_stock',publication_state='draft',deleted_at=NOW() WHERE id=?")->execute([$retryPid]);
+ $afterRemoval=post('reservations/create.php','',$retryBody);check($afterRemoval['status']===200&&$afterRemoval['data']['reservation']['id']===$retryRid,'Lost-response retry failed after stock or publication changed');
+ $stmt=$db->prepare('SELECT stock FROM shoes WHERE id=?');$stmt->execute([$retryPid]);check((int)$stmt->fetchColumn()===0,'Replay touched unavailable stock');
+ $retryBody['pickupDate']=(new DateTimeImmutable('today'))->modify('+2 days')->format('Y-m-d');$oldHash=hash('sha256',json_encode([$retryBody['customerName'],$retryBody['email'],$retryBody['pickupDate'],$retryPid,9,'none',['upper'=>'#13abcd']],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+ $db->prepare('UPDATE reservations SET pickup_date=?,checkout_request_hash=? WHERE id=?')->execute([$retryBody['pickupDate'],$oldHash,$retryRid]);check(post('reservations/create.php','',$retryBody)['data']['reservation']['id']===$retryRid,'Historical retry incorrectly reapplied new-booking date window');
+ $db->prepare('UPDATE reservations SET deleted_at=NOW() WHERE id=?')->execute([$retryRid]);check(post('reservations/create.php','',$retryBody)['status']===409,'Removed reservation was silently recreated');
  $pickup=(new DateTimeImmutable('today'))->modify('+8 days')->format('Y-m-d');
  $checkout=['shoeId'=>$pid,'customerName'=>'Guest Verification','email'=>'guest-verification@example.com','pickupDate'=>$pickup,'size'=>8,'charmId'=>'none','partColors'=>['upper'=>['name'=>'Injected label','value'=>'#ffffff']],'price'=>1,'sellerUserId'=>$b['id']];
  foreach(['customerName','email','pickupDate','shoeId','charmId'] as $field){$invalid=post('reservations/create.php','',array_merge($checkout,[$field=>['invalid']]));check($invalid['status']===400 && is_array($invalid['data']),'Malformed checkout '.$field.' broke JSON or passed validation');}

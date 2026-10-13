@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import path from 'node:path'
-import { execSync } from 'node:child_process'
+import { execSync, execFileSync } from 'node:child_process'
 
 const ROOT_DIR = path.resolve(import.meta.dirname, '..')
 const RESERVATIONS_DIR = path.join(ROOT_DIR, 'api', 'reservations')
@@ -403,56 +403,15 @@ test('create.php enforces pickup date window between 1 week and 1 year', () => {
   assert.match(code, /modify\(['"]\+365 days['"]\)/, 'create.php must enforce one-year maximum')
   assert.match(code, /Pickup date must be between 1 week and 1 year from today/, 'create.php must error if pickup date is out of window')
 
-  const runCreate = (body) => {
-    const runner = path.join(RESERVATIONS_DIR, 'test_create_window_tmp.php')
-    fs.writeFileSync(
-      runner,
-      `<?php
-$_SERVER['REQUEST_METHOD'] = 'POST';
-$GLOBALS['__JSON_BODY__'] = '${JSON.stringify(body).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}';
-require __DIR__ . '/create.php';
-`
-    )
-    try {
-      const out = execSync(`php "${runner}"`, { encoding: 'utf8' })
-      return JSON.parse(out)
-    } finally {
-      if (fs.existsSync(runner)) fs.unlinkSync(runner)
-    }
-  }
+  // Execute the actual new-reservation date guard; replay deliberately runs before it.
+  const begin=code.indexOf("$today = new DateTimeImmutable('today');")
+  const window=code.slice(begin,code.indexOf('if (!$shoe',begin))
+  const runWindow=date=>JSON.parse(execFileSync('php',['-r',`require ${JSON.stringify(path.join(ROOT_DIR,'api/helpers.php'))};$pickupDate=${JSON.stringify(date)};${window}echo json_encode(['valid'=>true]);`],{encoding:'utf8'}))
+  const date=days=>new Date(Date.now()+days*24*60*60*1000).toISOString().slice(0,10)
+  assert.equal(runWindow(date(2)).error,'Pickup date must be between 1 week and 1 year from today')
+  assert.equal(runWindow(date(400)).error,'Pickup date must be between 1 week and 1 year from today')
+  assert.equal(runWindow(date(14)).valid,true)
 
-  // 1. Pickup date too soon (e.g. +2 days)
-  const tooSoonDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-  const resTooSoon = runCreate({
-    customerName: 'Alex Reyes',
-    email: 'alex@example.com',
-    pickupDate: tooSoonDate,
-    shoeId: 'kickcraft-one',
-    size: 9,
-  })
-  assert.equal(resTooSoon.error, 'Pickup date must be between 1 week and 1 year from today')
-
-  // 2. Pickup date too far in future (e.g. +400 days)
-  const tooFarDate = new Date(Date.now() + 400 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-  const resTooFar = runCreate({
-    customerName: 'Alex Reyes',
-    email: 'alex@example.com',
-    pickupDate: tooFarDate,
-    shoeId: 'kickcraft-one',
-    size: 9,
-  })
-  assert.equal(resTooFar.error, 'Pickup date must be between 1 week and 1 year from today')
-
-  // 3. Valid pickup date (+14 days) passes date check and proceeds to shoeId check
-  const validDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
-  const resValid = runCreate({
-    customerName: 'Alex Reyes',
-    email: 'alex@example.com',
-    pickupDate: validDate,
-    shoeId: '',
-    size: 9,
-  })
-  assert.equal(resValid.error, 'Shoe ID is required')
 })
 
 test('setup.sql defines focused statuses and soft-delete columns on reservations table', () => {
