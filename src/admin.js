@@ -159,6 +159,7 @@ export function adminShoeToCatalogCard(shoe) {
     categories: shoe.categories || ['kickcraft'],
     image: shoe.thumbnailPath || '/images/kickcraft-one-card.png',
     shoeId: shoe.id,
+    glbPath: shoe.glbPath,
     status: shoe.status === 'available' || shoe.status === 'in_stock'
       ? 'live'
       : (shoe.status === 'out_of_stock' ? 'out_of_stock' : 'soon'),

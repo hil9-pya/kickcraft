@@ -184,12 +184,10 @@ button.kc-catalog-card:hover .kc-product-action { color:var(--primary); }
 @media(max-width:1023px) { .kc-shop-intro { gap:24px; } .kc-intro-preview { height:280px; } }
 @media(max-width:760px) { .kc-shop-intro { grid-template-columns:minmax(0,1fr); } }
 
-/* Move only the shoe preview; card text and actions stay still. */
+/* Only the active shoe moves; its frame, text and actions stay fixed. */
+.kc-product-stage > .shoe-thumbnail { width:100%; height:100%; background:transparent; }
 .thumbnail-stage { overflow:hidden; }
-.thumbnail-stage > img { width:100%; height:100%; object-fit:contain; }
 @media(hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference) {
- .kc-product-stage > img, .thumbnail-stage > :is(img,model-viewer) { transition:transform 200ms ease-out; }
- button.kc-catalog-card:is(:hover,:focus-visible) .kc-product-stage > img,
- .thumbnail-stage:hover > :is(img,model-viewer),
- article:focus-within .thumbnail-stage > :is(img,model-viewer) { transform:scale(1.045); }
+ .thumbnail-stage > :is(img,model-viewer) { transition:transform 450ms ease-out; }
+ .thumbnail-stage[data-active=true] > :is(img,model-viewer) { transform:scale(1.08); transition-duration:600ms; }
 }

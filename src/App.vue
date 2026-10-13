@@ -6,6 +6,7 @@ import { computed, defineAsyncComponent, nextTick, onMounted, onBeforeUnmount, r
 import ConfirmModal from './components/ConfirmModal.vue'
 import KickCraftCalendar from './components/KickCraftCalendar.vue'
 import StudioSections from './components/StudioSections.vue'
+import ShoeThumbnail from './components/ShoeThumbnail.vue'
 import { api } from './api.js'
 import {checkoutRequestId,forgetCheckoutRequest} from './checkout-request.js'
 import {frameLatest} from './color-input.js'
@@ -1148,16 +1149,7 @@ function scrollToTop() {
           >
             <!-- Thumbnail -->
             <div class="kc-product-stage">
-              <img
-                v-if="card.image"
-                :src="card.image"
-                :alt="`${card.name} customizable sneaker`"
-                class="h-full w-full object-contain transition-opacity duration-150 group-hover:opacity-90"
-              />
-              <div v-else class="text-center text-[#6a6e6a]">
-                <div class="mx-auto mb-3 grid size-16 place-items-center border border-[#bfc3bf] bg-[#fcfdfb] text-2xl">3D</div>
-                <p class="text-xs font-bold uppercase tracking-widest">{{ card.name }}</p>
-              </div>
+              <ShoeThumbnail :src="card.glbPath || SHOES.find(shoe=>shoe.id===card.shoeId)?.src" :image="card.image" :alt="`${card.name} customizable sneaker`" />
             </div>
 
             <!-- Card body -->

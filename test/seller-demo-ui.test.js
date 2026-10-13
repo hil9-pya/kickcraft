@@ -39,14 +39,39 @@ test('generation needs confirmation and valid reviewed inputs; repeated confirma
  await generate();await generate();assert.equal(starts,1)
 })
 
-test('seller thumbnails frame the model with a static lazy preview and retain image fallback',async()=>{
+test('thumbnail starts with its image and defers the 3D model until interaction',async()=>{
  const thumb=await component('ShoeThumbnail')
  const html=await render(thumb,{src:'/models/original.glb',image:'/old.png',alt:'Original shoe'})
- assert.match(html,/<model-viewer[^>]*src="\/models\/original.glb"/)
- assert.match(html,/camera-orbit="45deg 70deg 110%"/)
- assert.match(html,/loading="lazy"/)
- assert.doesNotMatch(html,/camera-controls|auto-rotate/)
+ assert.match(html,/<img[^>]*src="\/old.png"/)
+ assert.doesNotMatch(html,/<model-viewer/)
+ const noImage=await render(thumb,{src:'/models/original.glb',alt:'Original shoe'})
+ assert.match(noImage,/<model-viewer[^>]*src="\/models\/original.glb"/)
+ assert.match(noImage,/camera-orbit="45deg 70deg 110%"/)
+ assert.match(noImage,/loading="lazy"/)
+ assert.doesNotMatch(noImage,/camera-controls|auto-rotate/)
  assert.match(await render(thumb,{image:'/fallback.png',alt:'Original shoe'}),/<img[^>]*src="\/fallback.png"[^>]*alt="Original shoe"/)
+})
+
+test('thumbnail hover holds the angle, returns on leave, and obeys reduced motion',()=>{
+ const source=readFileSync(new URL('../src/components/ShoeThumbnail.vue',import.meta.url),'utf8')
+ const {descriptor}=parse(source)
+ const hooks=[],cleanup=[],listeners=new Map(),mediaListeners=new Map()
+ const media={matches:true,addEventListener:(name,fn)=>mediaListeners.set(name,fn),removeEventListener:(name)=>mediaListeners.delete(name)}
+ const card={addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:(name)=>listeners.delete(name),contains:()=>false}
+ const element={closest:()=>card}
+ const body=descriptor.scriptSetup.content.replace(/^import .*$/gm,'').replace(/const props=defineProps\([^\n]+/,'const props={src:"/shoe.glb",image:"/shoe.png"}')
+ const state=new Function('ref','computed','watch','onMounted','onBeforeUnmount','window',body+';return {host,active,visited,ready,orbit,failed}')(
+  Vue.ref,Vue.computed,()=>{},fn=>hooks.push(fn),fn=>cleanup.push(fn),{matchMedia:()=>media})
+ state.host.value=element;hooks.forEach(fn=>fn())
+ assert.equal(state.visited.value,false)
+ listeners.get('mouseenter')();assert.equal(state.active.value,true);assert.equal(state.visited.value,true)
+ state.ready.value=true;assert.equal(state.orbit.value,'5deg 70deg 110%')
+ listeners.get('mouseleave')();assert.equal(state.active.value,false);assert.equal(state.orbit.value,'45deg 70deg 110%')
+ listeners.get('focusin')();assert.equal(state.active.value,true)
+ listeners.get('mouseenter')();listeners.get('mouseleave')();assert.equal(state.active.value,true)
+ listeners.get('focusout')({relatedTarget:null});assert.equal(state.active.value,false)
+ media.matches=false;mediaListeners.get('change')();listeners.get('mouseenter')();assert.equal(state.active.value,false)
+ cleanup.forEach(fn=>fn());assert.equal(listeners.size,0);assert.equal(mediaListeners.size,0)
 })
 
 test('pickup layout keeps customer, pickup, notes and all valid status actions',async()=>{
