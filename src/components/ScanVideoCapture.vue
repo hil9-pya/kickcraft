@@ -1,4 +1,5 @@
 <script setup>
+import { Button } from './ui/button'
 import {ref,onBeforeUnmount} from 'vue'
 import {validateVideoInput,extractVideoFrames} from '../scan-video.js'
 const props=defineProps({native:{type:Boolean,default:false},disabled:{type:Boolean,default:false},capacity:{type:Number,default:120}})
@@ -46,8 +47,8 @@ onBeforeUnmount(()=>{closed=true;controller?.abort();if(preview.value)URL.revoke
    <p v-if="native">Video uploads privately to this computer. AI masks are drafts: review every frame and fix shoe edges before reconstruction.</p>
    <p v-else>Video stays on this device. Only selected JPEG frames upload when you save them. Frames lack camera EXIF; shape may fail, so compare the reconstruction carefully. Original camera photos remain available.</p>
    <p v-if="!native && capacity<30" class="video-error">Make room for at least 30 frames by removing selected photos or starting a new capture.</p>
-   <div v-if="native" class="video-actions"><button type="button" :disabled="disabled||!metadataReady" @click="emit('video',clip)">{{disabled?'Uploading video…':'Upload video and generate AI masks'}}</button></div>
-   <div v-else class="video-actions"><button type="button" :disabled="disabled||extracting||capacity<30" @click="extract">{{extracting?'Selecting frames…':'Select sharp frames'}}</button><button v-if="extracting" type="button" @click="controller?.abort()">Cancel frame selection</button></div>
+   <div v-if="native" class="video-actions"><Button variant="outline" type="button" :disabled="disabled||!metadataReady" @click="emit('video',clip)">{{disabled?'Uploading video…':'Upload video and generate AI masks'}}</Button></div>
+   <div v-else class="video-actions"><Button variant="outline" type="button" :disabled="disabled||extracting||capacity<30" @click="extract">{{extracting?'Selecting frames…':'Select sharp frames'}}</Button><Button variant="outline" v-if="extracting" type="button" @click="controller?.abort()">Cancel frame selection</Button></div>
   </template>
   <div v-if="progress" role="status" aria-live="polite"><p>{{progress.stage}} · {{progress.done}} / {{progress.total}}</p><progress :value="progress.done" :max="progress.total" aria-label="Video frame processing"></progress></div>
   <p v-if="error" role="alert" class="video-error">{{error}}</p>
@@ -56,5 +57,5 @@ onBeforeUnmount(()=>{closed=true;controller?.abort();if(preview.value)URL.revoke
  </section>
 </template>
 <style scoped>
-.scan-video{border-top:1px solid #cfd2ce;border-bottom:1px solid #cfd2ce;padding:16px 0;display:grid;gap:12px}.scan-video h4{font-weight:700}.scan-video p{line-height:1.5}.video-actions{display:flex;flex-wrap:wrap;gap:12px}.video-actions label{display:grid;gap:6px;font-weight:600;font-size:14px}.video-actions input{max-width:260px;font-size:12px}.scan-video video{width:100%;max-width:560px;max-height:300px;background:#202220}.scan-video button{border:1px solid #777;padding:10px 14px;background:white;cursor:pointer}.scan-video button:disabled{opacity:.45;cursor:not-allowed}.scan-video :focus-visible{outline:2px solid #b94d27;outline-offset:2px}.video-help{font-size:12px;color:#626662}.video-error{padding:12px;background:#fff0eb;color:#a92d17}.scan-video progress{width:min(100%,560px)}
+.scan-video{border-top:1px solid #cfd2ce;border-bottom:1px solid #cfd2ce;padding:16px 0;display:grid;gap:12px}.scan-video h4{font-weight:700}.scan-video p{line-height:1.5}.video-actions{display:flex;flex-wrap:wrap;gap:12px}.video-actions label{display:grid;gap:6px;font-weight:600;font-size:14px}.video-actions input{max-width:260px;font-size:12px}.scan-video video{width:100%;max-width:560px;max-height:300px;background:#202220}.scan-video button:not([data-slot]){border:1px solid #777;padding:10px 14px;background:white;cursor:pointer}.scan-video button:not([data-slot]):disabled{opacity:.45;cursor:not-allowed}.scan-video :focus-visible{outline:2px solid #b94d27;outline-offset:2px}.video-help{font-size:12px;color:#626662}.video-error{padding:12px;background:#fff0eb;color:#a92d17}.scan-video progress{width:min(100%,560px)}
 </style>

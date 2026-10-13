@@ -1,4 +1,5 @@
 <script setup>
+import { Button } from './ui/button'
 import {ref,computed,watch,onBeforeUnmount} from 'vue'
 import {validateCaptureFile,fetchScanJob} from '../scan-capture.js'
 import {uploadTripoCapture,startTripoScan} from '../tripo-capture.js'
@@ -57,12 +58,12 @@ onBeforeUnmount(()=>{for(const item of Object.values(selected.value))URL.revokeO
     <span v-if="saved[view.id]">Saved locally</span>
     <input v-else type="file" accept="image/jpeg,image/png" :aria-label="view.label" @change="choose($event,view.id)">
    </label></div>
-   <button type="button" :disabled="!hasFiles || (!saved.front && !selected.front)" @click="upload">Save reference photos</button>
+   <Button variant="outline" type="button" :disabled="!hasFiles || (!saved.front && !selected.front)" @click="upload">Save reference photos</Button>
   </fieldset>
   <section v-if="job?.state==='uploading' && job.imageCount" class="background-tools" aria-label="Optional background removal">
    <h4>Background cleanup (optional)</h4>
    <p>Remove backgrounds locally before sending photos to Tripo. No extra Tripo credits. Reviewed masks are kept; check laces, toe and sole edges carefully.</p>
-   <button type="button" :disabled="disabled || hasFiles || !maskAvailable || job.maskCount===job.imageCount" @click="consent=false;emit('mask')">Remove backgrounds</button>
+   <Button variant="outline" type="button" :disabled="disabled || hasFiles || !maskAvailable || job.maskCount===job.imageCount" @click="consent=false;emit('mask')">Remove backgrounds</Button>
    <p v-if="!maskAvailable">Local AI masking is unavailable. Use the original photos or configure the existing local masking worker.</p>
    <label v-if="hasMasks" class="cloud-consent"><input v-model="useMasks" type="checkbox" :disabled="disabled" @change="consent=false">Use background-removed photos for generation</label>
    <p v-if="hasMasks" role="status">{{useMasks?'Review and save every cutout before generation.':'Original photos will be sent. Saved masks remain available.'}} {{job.maskCount}} of {{job.imageCount}} masks reviewed.</p>
@@ -73,13 +74,13 @@ onBeforeUnmount(()=>{for(const item of Object.values(selected.value))URL.revokeO
    <p v-if="resumed">Resume saved Tripo task. No new generation request or generation charge will be made.</p>
    <p v-else><strong>Generation costs 30 API credits ($0.30), from the owner's Tripo balance.</strong> Saving photos locally is free. Defining and recoloring parts afterwards is free. No paid segmentation is included.</p>
    <label class="cloud-consent"><input v-model="consent" type="checkbox" :disabled="disabled || !available">{{resumed?'Resume the saved task and download its result from Tripo.':'I agree to send these reference photos to Tripo cloud and use 30 API credits for this generation.'}}</label>
-   <button type="button" :disabled="disabled || !available || !consent || hasFiles || !saved.front || !masksReady" @click="generate">{{disabled?'Working…':resumed?'Resume saved Tripo task':'Generate shoe — 30 credits'}}</button>
+   <Button variant="outline" type="button" :disabled="disabled || !available || !consent || hasFiles || !saved.front || !masksReady" @click="generate">{{disabled?'Working…':resumed?'Resume saved Tripo task':'Generate shoe — 30 credits'}}</Button>
   </template>
   <p v-if="useMasks && !masksReady" role="status">Generation stays disabled until every background-removed photo is reviewed. Uncheck the option to use originals instead.</p>
   <p>Generated models need photo comparison, at least two editable parts, and normal product/admin review. Nothing is approved or published automatically.</p>
-  <button v-if="job" type="button" :disabled="disabled" @click="emit('reset')">Start new capture</button>
+  <Button variant="outline" v-if="job" type="button" :disabled="disabled" @click="emit('reset')">Start new capture</Button>
  </div>
 </template>
 <style scoped>
-.tripo-capture{display:grid;gap:16px}.background-tools{display:grid;gap:12px;border-top:1px solid #ccc;padding-top:16px}.background-tools h4{font-weight:700}.view-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.view-grid label{display:grid;gap:8px;align-content:start}.view-grid img{width:100%;height:150px;object-fit:contain;background:#f4f5f3}.cloud-consent{display:flex;align-items:start;gap:10px}fieldset{border:1px solid #ccc;padding:16px}button{border:1px solid #8c918a;padding:10px 14px;background:white;color:#202220;justify-self:start}button:disabled{opacity:.45;cursor:not-allowed}button:focus-visible,input:focus-visible{outline:2px solid #b94d27;outline-offset:2px}.capture-error{color:#a92d17;background:#fff0eb;padding:12px}@media(max-width:600px){.view-grid{grid-template-columns:1fr}}
+.tripo-capture{display:grid;gap:16px}.background-tools{display:grid;gap:12px;border-top:1px solid #ccc;padding-top:16px}.background-tools h4{font-weight:700}.view-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.view-grid label{display:grid;gap:8px;align-content:start}.view-grid img{width:100%;height:150px;object-fit:contain;background:#f4f5f3}.cloud-consent{display:flex;align-items:start;gap:10px}fieldset{border:1px solid #ccc;padding:16px}button:not([data-slot]){border:1px solid #8c918a;padding:10px 14px;background:white;color:#202220;justify-self:start}button:not([data-slot]):disabled{opacity:.45;cursor:not-allowed}button:not([data-slot]):focus-visible,input:focus-visible{outline:2px solid #b94d27;outline-offset:2px}.capture-error{color:#a92d17;background:#fff0eb;padding:12px}@media(max-width:600px){.view-grid{grid-template-columns:1fr}}
 </style>

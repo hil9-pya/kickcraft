@@ -1,24 +1,32 @@
-import test from 'node:test'
+import test, {after} from 'node:test'
+import {createServer} from 'vite'
+import vue from '@vitejs/plugin-vue'
+import path from 'node:path'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {parse} from '@vue/compiler-sfc'
 import {compile} from '@vue/compiler-dom'
 import * as Vue from 'vue'
 import {renderToString} from '@vue/server-renderer'
+const server=await createServer({configFile:false,cacheDir:'node_modules/.vite-template-tests',plugins:[vue()],resolve:{alias:{'@':path.resolve('src')}},server:{middlewareMode:true,hmr:false},appType:'custom'})
+after(()=>server.close())
+const shared={}
+for(const name of ['Button','Input','Textarea'])shared[name]=(await server.ssrLoadModule('/src/components/ui/'+name.toLowerCase()+'/'+name+'.vue')).default
+async function renderScreen(render,values){const app=Vue.createSSRApp({render,setup:()=>values});for(const [name,component]of Object.entries(shared))app.component(name,component);return (await renderToString(app)).replace(/<!--.*?-->/gs,'')}
 const {descriptor}=parse(readFileSync(new URL('../src/components/SellerModeration.vue',import.meta.url),'utf8'))
 const render=new Function('Vue',compile(descriptor.template.content,{prefixIdentifiers:true,isCustomElement:tag=>tag==='model-viewer'}).code)(Vue)
 const shoe={id:'shared-check',name:'Shared original shoe',description:'Original fixture',glbPath:'/models/check.glb',storeName:'Creator Studio',parts:[{id:'upper',label:'Upper',material:'UpperMaterial'},{id:'midsole',label:'Midsole',material:'MidsoleMaterial'}],publicationState:'pending',sourceScanId:'capture'}
 async function screen(changes={}){
  const values={mode:'templates',ready:true,selected:shoe,source:{images:[]},reference:null,rows:[],filter:'all',error:'',busy:false,loading:false,notes:{},part:'UpperMaterial',testedParts:[],photoReviewed:false,load(){},loaded(){},recolor(){},reset(){},review(){},inspect(){},...changes}
- return renderToString(Vue.createSSRApp({render,setup:()=>values}))
+ return renderScreen(render,values)
 }
 test('shared template review renders without product price, stock or sizes; approval needs photos and two parts',async()=>{
  const pending=await screen()
  assert.match(pending,/Creator: Creator Studio/);assert.doesNotMatch(pending,/US sizes|NaN/)
- assert.match(pending,/<button[^>]*disabled[^>]*>Approve shared template<\/button>/)
+ assert.match(pending,/<button[^>]*\sdisabled(?=[\s=>])[^>]*>Approve shared template<\/button>/)
  const ready=await screen({photoReviewed:true,testedParts:['UpperMaterial','MidsoleMaterial']})
- assert.match(ready,/<button class="primary">Approve shared template<\/button>/)
- const loading=await screen({ready:false});assert.match(loading,/<button disabled>Test rust<\/button>/)
+ assert.match(ready,/<button\b(?![^>]*\sdisabled(?=[\s=>]))[^>]*>Approve shared template<\/button>/)
+ const loading=await screen({ready:false});assert.match(loading,/<button\b[^>]*\sdisabled(?=[\s=>])[^>]*>Test rust<\/button>/)
 })
 test('seller product review still includes inventory and sizes',async()=>{
  const html=await screen({mode:'products',selected:{...shoe,price:1234,stock:2,sizes:[8,9],pickupAddress:'Pickup Studio'}})
@@ -29,15 +37,15 @@ test('seller product review still includes inventory and sizes',async()=>{
 async function renderFile(file,values){
  const {descriptor}=parse(readFileSync(new URL('../src/components/'+file,import.meta.url),'utf8'))
  const render=new Function('Vue',compile(descriptor.template.content,{prefixIdentifiers:true,isCustomElement:tag=>['model-viewer','extra-model'].includes(tag)}).code)(Vue)
- return renderToString(Vue.createSSRApp({render,setup:()=>values}))
+ return renderScreen(render,values)
 }
 test('template library requires own photo and match confirmation; pending templates offer no reuse form',async()=>{
  const values={templates:[],selected:{...shoe,canReuse:true},viewer:null,part:'UpperMaterial',error:'',busy:false,loading:false,file:null,photoUrl:'',matches:false,load(){},choosePhoto(){},useTemplate(){},loaded(){},recolor(){},reset(){},clearPhoto(){}}
  const html=await renderFile('SharedTemplateLibrary.vue',values)
  assert.match(html,/Your matching-shoe reference photo/);assert.match(html,/type="file"[^>]*required/)
- assert.match(html,/<button class="primary" disabled>Use template/)
+ assert.match(html,/<button\b[^>]*\sdisabled(?=[\s=>])[^>]*>Use template/)
  const ready=await renderFile('SharedTemplateLibrary.vue',{...values,file:{name:'shoe.png'},matches:true})
- assert.match(ready,/<button class="primary">Use template/)
+ assert.match(ready,/<button\b(?![^>]*\sdisabled(?=[\s=>]))[^>]*>Use template/)
  const pending=await renderFile('SharedTemplateLibrary.vue',{...values,selected:{...shoe,canReuse:false}})
  assert.doesNotMatch(pending,/type="file"/);assert.match(pending,/Awaiting admin review/)
 })

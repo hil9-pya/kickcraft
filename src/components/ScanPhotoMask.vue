@@ -1,4 +1,5 @@
 <script setup>
+import { Button } from './ui/button'
 import {ref,watch,onBeforeUnmount} from 'vue'
 import {createForegroundMask,paintMask,readSavedMask,maskCoverage,readPhotoPixels,photoMaskPng} from '../scan-masks.js'
 const props=defineProps({image:{type:Object,required:true},saving:Boolean,aiAvailable:Boolean})
@@ -74,33 +75,33 @@ onBeforeUnmount(()=>{generation++;cancelAnimationFrame(frame)})
 </script>
 <template>
  <section class="mask-editor" aria-label="Remove photo background">
-  <div class="mask-heading"><h4>{{image.name}}</h4><button type="button" :disabled="saving || loading" @click="emit('close')">Close mask editor</button></div>
+  <div class="mask-heading"><h4>{{image.name}}</h4><Button variant="outline" type="button" :disabled="saving || loading" @click="emit('close')">Close mask editor</Button></div>
   <p>Red area will be removed. Keep the entire shoe, including sole and laces. Remove floor, shadows, and background. Brush changes save only when you press Save.</p>
   <p v-if="error" role="alert" class="mask-error">{{error}}</p>
   <p v-if="loading" role="status">Preparing mask…</p>
   <fieldset :disabled="saving || loading || !!error">
-   <div v-if="aiAvailable" class="mask-tools"><button type="button" @click="emit('ai')">Generate AI masks for unreviewed photos</button><p>Use AI for mixed backgrounds or similar shoe and background colors. Reviewed masks stay unchanged.</p></div>
+   <div v-if="aiAvailable" class="mask-tools"><Button variant="outline" type="button" @click="emit('ai')">Generate AI masks for unreviewed photos</Button><p>Use AI for mixed backgrounds or similar shoe and background colors. Reviewed masks stay unchanged.</p></div>
    <div class="mask-tools">
-    <button type="button" :aria-pressed="mode==='pick'" @click="mode='pick'">Pick background</button>
+    <Button variant="outline" type="button" :aria-pressed="mode==='pick'" @click="mode='pick'">Pick background</Button>
     <label>Background color<input v-model="background" type="color"></label>
     <label>Color tolerance<input v-model="tolerance" type="range" min="10" max="220"><output>{{tolerance}}</output></label>
-    <button type="button" @click="regenerate">Remove by color</button>
-    <button type="button" :aria-pressed="mode==='keep'" @click="mode='keep'">Keep shoe brush</button>
-    <button type="button" :aria-pressed="mode==='remove'" @click="mode='remove'">Remove background brush</button>
+    <Button variant="outline" type="button" @click="regenerate">Remove by color</Button>
+    <Button variant="outline" type="button" :aria-pressed="mode==='keep'" @click="mode='keep'">Keep shoe brush</Button>
+    <Button variant="outline" type="button" :aria-pressed="mode==='remove'" @click="mode='remove'">Remove background brush</Button>
     <label>Brush size<input v-model="radius" type="range" min="4" max="80"></label>
-    <button type="button" :disabled="!canUndo" @click="undo">Undo</button>
+    <Button variant="outline" type="button" :disabled="!canUndo" @click="undo">Undo</Button>
    </div>
    <div class="mask-scroll"><canvas ref="surface" class="mask-canvas" tabindex="0" aria-label="Photo mask; arrow keys move brush, Space paints or picks background" @keydown="keydown" @pointerdown="down" @pointermove="move" @pointerup="up" @pointercancel="up" @lostpointercapture="up"></canvas></div>
    <p>Keyboard: focus photo, use arrow keys to move, then Space to paint or pick background.</p>
    <p>{{Math.round(coverage*100)}}% of photo kept. Check shoe edges carefully before saving.</p>
    <div class="mask-tools">
-    <button type="button" :disabled="coverage<=0 || coverage>=1" @click="save">Save reviewed mask</button>
-    <button type="button" @click="emit('batch',{background:rgb(),tolerance:Number(tolerance)})">Generate color masks for remaining photos</button>
+    <Button variant="outline" type="button" :disabled="coverage<=0 || coverage>=1" @click="save">Save reviewed mask</Button>
+    <Button variant="outline" type="button" @click="emit('batch',{background:rgb(),tolerance:Number(tolerance)})">Generate color masks for remaining photos</Button>
    </div>
    <p>Batch generation saves drafts. Review drafts together in the mask grid before reconstruction. Color removal works best with a contrasting, plain background.</p>
   </fieldset>
  </section>
 </template>
 <style scoped>
-.mask-editor{border:1px solid #aaa;padding:16px;display:grid;gap:12px}.mask-heading,.mask-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.mask-heading{justify-content:space-between}.mask-heading h4{font-weight:700}.mask-tools{margin-bottom:12px}.mask-tools label{display:flex;gap:8px;align-items:center;font-size:14px}.mask-scroll{max-height:600px;overflow:auto}.mask-canvas{display:block;width:100%;touch-action:none;cursor:crosshair;background:#f4f5f3;height:auto}.mask-error{color:#a92d17}button{border:1px solid #777;padding:8px 12px;background:white}button[aria-pressed=true]{background:#202220;color:white}button:disabled,fieldset:disabled{opacity:.5}button:focus-visible,input:focus-visible,canvas:focus-visible{outline:2px solid #b94d27;outline-offset:2px}fieldset>p{margin:12px 0}input[type=color]{width:40px}
+.mask-editor{border:1px solid #aaa;padding:16px;display:grid;gap:12px}.mask-heading,.mask-tools{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.mask-heading{justify-content:space-between}.mask-heading h4{font-weight:700}.mask-tools{margin-bottom:12px}.mask-tools label{display:flex;gap:8px;align-items:center;font-size:14px}.mask-scroll{max-height:600px;overflow:auto}.mask-canvas{display:block;width:100%;touch-action:none;cursor:crosshair;background:#f4f5f3;height:auto}.mask-error{color:#a92d17}button:not([data-slot]){border:1px solid #777;padding:8px 12px;background:white}button[aria-pressed=true]{background:#202220;color:white}button:not([data-slot]):disabled,fieldset:disabled{opacity:.5}button:not([data-slot]):focus-visible,input:focus-visible,canvas:focus-visible{outline:2px solid #b94d27;outline-offset:2px}fieldset>p{margin:12px 0}input[type=color]{width:40px}
 </style>

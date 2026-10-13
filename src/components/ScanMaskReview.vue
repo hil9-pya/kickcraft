@@ -1,4 +1,5 @@
 <script setup>
+import { Button } from './ui/button'
 import {ref,computed,watch,nextTick,onBeforeUnmount} from 'vue'
 import {readPhotoPixels,readSavedMask,maskCoverage} from '../scan-masks.js'
 const props=defineProps({images:{type:Array,required:true},saving:Boolean})
@@ -49,8 +50,8 @@ onBeforeUnmount(()=>{generation++})
   <h4>Review masks together</h4>
   <p>Red areas will be removed. Check that each whole shoe stays visible and the floor, support, and shadows are red. Select good masks; edit only the ones that need correction.</p>
   <div class="review-actions">
-   <button type="button" :disabled="saving || loading" @click="selectVisible">Select visible unreviewed masks</button>
-   <button type="button" :disabled="saving || !selected.length" @click="emit('save',selected.slice())">Save selected masks ({{selected.length}})</button>
+   <Button variant="outline" type="button" :disabled="saving || loading" @click="selectVisible">Select visible unreviewed masks</Button>
+   <Button variant="outline" type="button" :disabled="saving || !selected.length" @click="emit('save',selected.slice())">Save selected masks ({{selected.length}})</Button>
   </div>
   <p aria-live="polite">Page {{page+1}} of {{pages}}<span v-if="loading"> · Loading overlays…</span></p>
   <div class="review-grid" :aria-busy="loading">
@@ -61,17 +62,17 @@ onBeforeUnmount(()=>{generation++})
     <p v-else-if="image.maskReviewed">Mask reviewed</p>
     <p v-else-if="!image.maskUrl">Mask needed</p>
     <label v-else><input v-model="selected" type="checkbox" :value="image.id" :disabled="saving || !ready[image.id]"> Mask looks correct</label>
-    <button type="button" :disabled="saving" :aria-label="'Edit mask for '+image.name" @click="emit('edit',image.id)">Edit mask</button>
+    <Button variant="outline" type="button" :disabled="saving" :aria-label="'Edit mask for '+image.name" @click="emit('edit',image.id)">Edit mask</Button>
    </figure>
   </div>
   <div class="review-actions">
-   <button type="button" :disabled="saving || page===0" @click="page--">Previous 12</button>
-   <button type="button" :disabled="saving || page+1>=pages" @click="page++">Next 12</button>
-   <button type="button" :disabled="saving || !selected.length" @click="emit('save',selected.slice())">Save selected masks ({{selected.length}})</button>
+   <Button variant="outline" type="button" :disabled="saving || page===0" @click="page--">Previous 12</Button>
+   <Button variant="outline" type="button" :disabled="saving || page+1>=pages" @click="page++">Next 12</Button>
+   <Button variant="outline" type="button" :disabled="saving || !selected.length" @click="emit('save',selected.slice())">Save selected masks ({{selected.length}})</Button>
   </div>
   <p>Changing pages clears unsaved selections. Save selected masks before moving on.</p>
  </section>
 </template>
 <style scoped>
-.mask-review{border:1px solid #aaa;padding:16px;display:grid;gap:12px}.mask-review h4{font-weight:700}.review-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.review-grid figure{min-width:0;display:grid;align-content:start;gap:8px}.review-grid canvas{width:100%;height:190px;object-fit:contain;background:#f4f5f3}.review-grid figcaption{font-size:12px;overflow-wrap:anywhere}.review-grid label{display:flex;gap:8px;align-items:center}.review-actions{display:flex;flex-wrap:wrap;gap:8px}.review-error{color:#a92d17}button{border:1px solid #777;padding:8px 12px;background:white}button:disabled{opacity:.45;cursor:not-allowed}button:focus-visible,input:focus-visible{outline:2px solid #b94d27;outline-offset:2px}@media(max-width:500px){.review-grid{grid-template-columns:1fr}.mask-review{padding:12px}.review-grid canvas{height:240px}}
+.mask-review{border:1px solid #aaa;padding:16px;display:grid;gap:12px}.mask-review h4{font-weight:700}.review-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}.review-grid figure{min-width:0;display:grid;align-content:start;gap:8px}.review-grid canvas{width:100%;height:190px;object-fit:contain;background:#f4f5f3}.review-grid figcaption{font-size:12px;overflow-wrap:anywhere}.review-grid label{display:flex;gap:8px;align-items:center}.review-actions{display:flex;flex-wrap:wrap;gap:8px}.review-error{color:#a92d17}button:not([data-slot]){border:1px solid #777;padding:8px 12px;background:white}button:not([data-slot]):disabled{opacity:.45;cursor:not-allowed}button:not([data-slot]):focus-visible,input:focus-visible{outline:2px solid #b94d27;outline-offset:2px}@media(max-width:500px){.review-grid{grid-template-columns:1fr}.mask-review{padding:12px}.review-grid canvas{height:240px}}
 </style>

@@ -1,2 +1,53 @@
- .seller{max-width:1280px;margin:auto;padding:28px 24px;color:#292b2d}.seller h1{font-size:30px;font-weight:800;letter-spacing:-.035em}.seller h2{font-size:22px;font-weight:750}.seller h3{font-size:17px;font-weight:700}.seller p{line-height:1.6}.seller header,.seller .actions{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}.seller .actions{justify-content:flex-start}.seller header{border-bottom:1px solid #cfd2ce;padding-bottom:18px;margin-bottom:22px}.seller button,.seller .button{border:1px solid #bfc3bf;background:white;padding:10px 16px;font-weight:650;cursor:pointer}.seller button:hover{border-color:#292b2d}.seller button.primary{background:#292b2d;color:white;border-color:#292b2d}.seller button:disabled{opacity:.45;cursor:not-allowed}.seller :focus-visible{outline:2px solid #b94d27;outline-offset:3px}.seller label{display:grid;gap:6px;font-size:14px;font-weight:650}.seller input:not([type=checkbox]):not([type=color]),.seller textarea,.seller select{border:1px solid #bfc3bf;background:white;padding:11px;min-width:0;width:100%;font-weight:400}.seller textarea{min-height:90px}.seller input[type=checkbox]{accent-color:#b94d27}.seller .fields{display:grid;grid-template-columns:1fr 1fr;gap:18px}.seller .wide{grid-column:1/-1}.seller .panel{background:white;border:1px solid #cfd2ce;padding:22px}.seller .stack{display:grid;align-content:start;gap:18px}.seller .muted{color:#626662;font-size:14px}.seller .notice{border-left:3px solid #b94d27;background:#fff9f5;padding:14px 18px}.seller .error{color:#963a20;border:1px solid #b94d27;padding:12px;background:#fdf2ef}.seller .success{border:1px solid #3f7652;padding:12px;background:#f1f7f2;color:#315c40}.seller nav{display:flex;gap:4px;border-bottom:1px solid #cfd2ce;margin-bottom:22px;flex-wrap:wrap}.seller nav button{border:0;border-bottom:2px solid transparent;background:transparent}.seller nav button[aria-current=true]{border-color:#b94d27}.seller .product-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:20px}.seller .product-image{height:210px;width:100%;object-fit:contain;background:#f5f6f4}.seller .tag{font-size:12px;text-transform:uppercase;letter-spacing:.04em;font-weight:700}.seller .row{border-bottom:1px solid #cfd2ce;padding:18px 0;display:grid;gap:12px}.seller model-viewer{width:100%;height:420px;background:#f5f6f4}.seller .editor-grid{display:grid;align-items:start;grid-template-columns:minmax(300px,1fr) minmax(300px,1fr);gap:24px}.seller .checks{display:flex;gap:14px;flex-wrap:wrap}.seller .checks label{display:flex;align-items:center;gap:6px}.seller .colors{display:flex;align-items:center;gap:8px}.seller .colors input[type=color]{width:44px;height:40px;padding:2px}.seller .tutorial{border:1px solid #cfd2ce;padding:18px;background:white;margin-bottom:22px}.seller .tutorial ol{list-style:decimal;padding-left:22px}.seller .tutorial li{padding:4px}.seller .review-images{display:flex;gap:10px;overflow:auto}.seller .review-images img{height:150px;max-width:220px;object-fit:contain}.seller small{font-size:12px}@media(max-width:760px){.seller{padding:20px 14px}.seller .fields,.seller .editor-grid{grid-template-columns:1fr}.seller h1{font-size:26px}.seller model-viewer{height:330px}.seller header{align-items:start}.seller .panel{padding:16px}}
-
+.seller { max-width: 1440px; margin: auto; padding: 28px 32px; color: var(--foreground); }
+.seller h1 { font-family: Bahnschrift, "Arial Narrow", sans-serif; font-size: 30px; font-weight: 700; letter-spacing: -.03em; }
+.seller h2 { font-size: 21px; font-weight: 650; }
+.seller h3 { font-size: 17px; font-weight: 650; }
+.seller p { line-height: 1.6; }
+.seller header, .seller .actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.seller .actions { justify-content: flex-start; }
+.seller header { border-bottom: 1px solid var(--border); padding-bottom: 20px; margin-bottom: 24px; }
+.seller header h1 { overflow-wrap: anywhere; }
+.seller button:not([data-slot]), .seller .button { border: 1px solid var(--input); border-radius: 6px; background: var(--card); padding: 9px 14px; font-weight: 600; cursor: pointer; }
+.seller button:not([data-slot]):hover { background: var(--muted); }
+.seller button.primary:not([data-slot]) { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+.seller button:disabled { opacity: .5; cursor: not-allowed; }
+.seller :focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.seller label { display: grid; gap: 6px; font-size: 14px; font-weight: 600; }
+.seller input:not([data-slot]):not([type=checkbox]):not([type=color]):not([type=range]), .seller textarea:not([data-slot]), .seller select { border: 1px solid var(--input); border-radius: 6px; background: var(--card); padding: 10px 12px; min-width: 0; width: 100%; font-weight: 400; }
+.seller textarea { min-height: 96px; }
+.seller input[type=checkbox] { accent-color: var(--primary); }
+.seller .fields { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
+.seller .wide { grid-column: 1/-1; }
+.seller .panel { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 24px; }
+.seller .stack { display: grid; align-content: start; gap: 18px; }
+.seller .muted { color: var(--muted-foreground); font-size: 14px; }
+.seller .notice { border-left: 3px solid var(--primary); background: #fff9f5; padding: 12px 16px; font-size: 14px; }
+.seller .error { color: var(--destructive); border: 1px solid #dcb8ac; border-radius: 6px; padding: 12px 16px; background: #fdf2ef; }
+.seller .success { border: 1px solid #a8c7b0; border-radius: 6px; padding: 12px 16px; background: #f1f7f2; color: #315c40; }
+.seller nav { display: flex; gap: 16px; border-bottom: 1px solid var(--border); margin-bottom: 24px; overflow-x: auto; }
+.seller nav button[data-slot] { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: transparent; padding-inline: 4px; color: var(--muted-foreground); }
+.seller nav button[aria-current=true] { border-bottom-color: var(--primary); color: var(--foreground); }
+.seller .product-list { display: grid; grid-template-columns: repeat(auto-fill,minmax(260px,1fr)); gap: 24px; }
+.seller .product-list .panel { overflow: hidden; gap: 12px; padding: 18px; }
+.seller .product-image { height: 220px; width: 100%; border-radius: 6px; object-fit: contain; background: var(--background); }
+.seller .tag { font-size: 13px; font-weight: 500; color: var(--muted-foreground); }
+.seller .row { border-bottom: 1px solid var(--border); padding: 18px 0; display: grid; gap: 12px; }
+.seller .row.panel { padding: 20px; }
+.seller model-viewer { width: 100%; height: clamp(300px,42dvh,480px); border-radius: 6px; background: var(--background); }
+.seller .editor-grid { display: grid; align-items: start; grid-template-columns: minmax(0,1.1fr) minmax(0,.9fr); gap: 28px; }
+.seller .editor-grid > :first-child { position: sticky; top: 24px; min-width: 0; }
+.seller .editor-grid > * { min-width: 0; }
+.seller .checks { display: flex; gap: 12px; flex-wrap: wrap; }
+.seller .checks label { display: flex; align-items: flex-start; gap: 8px; }
+.seller .checks input { margin-top: 4px; }
+.seller .colors { display: flex; align-items: center; gap: 8px; }
+.seller .colors input[type=color] { width: 44px; height: 40px; padding: 2px; border: 1px solid var(--input); border-radius: 6px; }
+.seller .tutorial { border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px; background: var(--card); margin-bottom: 24px; }
+.seller .tutorial h2 { font-size: 17px; }
+.seller .tutorial ol { list-style: decimal; padding-left: 22px; }
+.seller .tutorial li { padding: 4px; }
+.seller .review-images { display: flex; gap: 10px; overflow: auto; padding-block: 4px; }
+.seller .review-images img { height: 120px; max-width: 180px; object-fit: contain; }
+.seller small { font-size: 13px; color: var(--muted-foreground); line-height: 1.5; }
+@media(max-width:900px) { .seller .editor-grid { grid-template-columns: minmax(0,1fr); } .seller .editor-grid > :first-child { position: static; } }
+@media(max-width:760px) { .seller { padding: 20px 16px; } .seller .fields { grid-template-columns: minmax(0,1fr); } .seller h1 { font-size: 26px; } .seller model-viewer { height: clamp(240px,35dvh,360px); } .seller header { align-items: start; } .seller .panel { padding: 16px; } .seller .actions { gap: 8px; } .seller nav { gap: 12px; } }

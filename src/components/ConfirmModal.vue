@@ -1,5 +1,7 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
+import { Button } from './ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog'
 
 const props = defineProps({
   show: {
@@ -34,95 +36,19 @@ const props = defineProps({
   },
 })
 
+
 const emit = defineEmits(['confirm', 'cancel'])
-
 const cancelButtonRef = ref(null)
-
-const iconBadgeClass = computed(() => {
-  switch (props.icon) {
-    case 'logout':
-      return 'bg-[#292b2d] text-white border-[#202220]'
-    case 'trash':
-      return 'bg-[#b94d27] text-white border-[#8f391b]'
-    case 'reset':
-      return 'bg-[#d97706] text-white border-[#b45309]'
-    case 'warning':
-    default:
-      return 'bg-[#d97706] text-white border-[#b45309]'
-  }
-})
-
-const confirmButtonClass = computed(() => {
-  switch (props.variant) {
-    case 'danger':
-    case 'warning':
-      return 'bg-[#b94d27] hover:bg-[#963a20] text-white'
-    case 'default':
-    default:
-      return 'bg-[#292b2d] hover:bg-[#1a1b1c] text-white'
-  }
-})
-
-function handleConfirm() {
-  emit('confirm')
-}
-
-function handleCancel() {
-  emit('cancel')
-}
-
-function handleKeydown(event) {
-  if (event.key === 'Escape' && props.show) {
-    handleCancel()
-  }
-}
-
-watch(
-  () => props.show,
-  newVal => {
-    if (newVal) {
-      nextTick(() => {
-        cancelButtonRef.value?.focus()
-      })
-    }
-  }
-)
-
-onMounted(() => {
-  window.addEventListener('keydown', handleKeydown)
-  if (props.show) {
-    nextTick(() => {
-      cancelButtonRef.value?.focus()
-    })
-  }
-})
-
-onUnmounted(() => {
-  window.removeEventListener('keydown', handleKeydown)
-})
+let previousFocus
+watch(() => props.show, open => { if (open && typeof document !== 'undefined') previousFocus = document.activeElement }, { immediate: true })
+function restoreFocus() { if (previousFocus?.isConnected) previousFocus.focus() }
 </script>
 
 <template>
-  <div
-    v-if="show"
-    class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-    role="dialog"
-    aria-modal="true"
-    aria-labelledby="confirm-modal-title"
-    @click.self="handleCancel"
-  >
-    <div
-      class="w-full max-w-md border border-[#8e938e] bg-[#fcfdfb] p-6 shadow-2xl text-[#292b2d]"
-      @click.stop
-    >
-      <div class="flex items-start gap-4">
-        <!-- Contextual Icon Badge -->
-        <div
-          class="flex size-11 shrink-0 items-center justify-center border shadow-inner"
-          :class="iconBadgeClass"
-          aria-hidden="true"
-        >
-          <!-- Logout Icon -->
+  <Dialog :open="show" @update:open="open => { if (!open) emit('cancel') }">
+    <DialogContent class="max-w-md sm:max-w-md" :show-close-button="false" @open-auto-focus.prevent="cancelButtonRef?.$el?.focus()" @close-auto-focus.prevent="restoreFocus">
+      <DialogHeader>
+        <div class="mb-2 text-primary [&_svg]:size-6" aria-hidden="true">
           <svg
             v-if="icon === 'logout'"
             class="size-6"
@@ -186,40 +112,13 @@ onUnmounted(() => {
             <line x1="12" y1="17" x2="12.01" y2="17" />
           </svg>
         </div>
-
-        <!-- Title & Explanatory Body -->
-        <div class="flex-1 min-w-0 pt-0.5">
-          <h3
-            id="confirm-modal-title"
-            class="font-display text-lg font-black text-[#202220] tracking-tight"
-          >
-            {{ title }}
-          </h3>
-          <p class="mt-2 text-sm leading-6 text-[#5f635f]">
-            {{ message }}
-          </p>
-        </div>
-      </div>
-
-      <!-- Action Buttons -->
-      <div class="mt-6 flex items-center justify-end gap-3">
-        <button
-          ref="cancelButtonRef"
-          type="button"
-          class="border border-[#bfc3bf] bg-white px-5 py-2.5 text-sm font-semibold text-[#292b2d] hover:bg-[#f1f3f0] transition-colors focus-visible:outline-2 focus-visible:outline-[#245fa8]"
-          @click="handleCancel"
-        >
-          {{ cancelText }}
-        </button>
-        <button
-          type="button"
-          class="px-5 py-2.5 text-sm font-bold transition-colors focus-visible:outline-2 focus-visible:outline-[#245fa8]"
-          :class="confirmButtonClass"
-          @click="handleConfirm"
-        >
-          {{ confirmText }}
-        </button>
-      </div>
-    </div>
-  </div>
+        <DialogTitle class="font-display text-xl">{{ title }}</DialogTitle>
+        <DialogDescription class="text-sm leading-6">{{ message }}</DialogDescription>
+      </DialogHeader>
+      <DialogFooter class="mt-2">
+        <Button ref="cancelButtonRef" type="button" variant="outline" @click="emit('cancel')">{{ cancelText }}</Button>
+        <Button type="button" :variant="variant === 'danger' ? 'destructive' : 'default'" @click="emit('confirm')">{{ confirmText }}</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
 </template>

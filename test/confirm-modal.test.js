@@ -29,32 +29,14 @@ test('ConfirmModal component file exists and defines required props and emits', 
   assert.match(content, /['"]cancel['"]/, 'Must emit cancel event')
 })
 
-test('ConfirmModal implements KickCraft brutalist styling and layout structure', () => {
-  const filePath = path.resolve('src/components/ConfirmModal.vue')
-  assert.ok(fs.existsSync(filePath), 'ConfirmModal.vue must exist')
-  const content = fs.readFileSync(filePath, 'utf8')
-
-  // Backdrop overlay styling
-  assert.match(content, /fixed inset-0/, 'Backdrop must have fixed inset-0')
-  assert.match(content, /z-50/, 'Backdrop must have high z-index (z-50)')
-  assert.match(content, /bg-black\/60/, 'Backdrop must have translucent black background')
-  assert.match(content, /backdrop-blur-sm/, 'Backdrop must have blur effect')
-
-  // Modal card container styling
-  assert.match(content, /border-\[#8e938e\]/, 'Modal card must have KickCraft border color #8e938e')
-  assert.match(content, /bg-\[#fcfdfb\]/, 'Modal card must have KickCraft background color #fcfdfb')
-  assert.match(content, /max-w-md/, 'Modal card must be max-w-md')
-  assert.match(content, /shadow-2xl/, 'Modal card must have shadow-2xl')
-
-  // Typography
-  assert.match(content, /font-display/, 'Title must use KickCraft display font')
-  assert.match(content, /text-\[#202220\]/, 'Title must use dark charcoal text color')
-  assert.match(content, /text-\[#5f635f\]/, 'Body message must use muted text color')
-
-  // Action buttons
-  assert.match(content, /border-\[#bfc3bf\]/, 'Cancel button must use border #bfc3bf')
-  assert.match(content, /bg-\[#b94d27\]/, 'Danger confirm button must use terracotta color #b94d27')
-  assert.match(content, /bg-\[#292b2d\]/, 'Default confirm button must use charcoal color #292b2d')
+test('ConfirmModal uses shared dialog, readable descriptions and deliberate action variants', () => {
+  const content = fs.readFileSync(path.resolve('src/components/ConfirmModal.vue'), 'utf8')
+  assert.match(content, /<Dialog :open="show"/)
+  assert.match(content, /<DialogTitle/)
+  assert.match(content, /<DialogDescription/)
+  assert.match(content, /variant="outline"/)
+  assert.ok(content.includes("variant === 'danger' ? 'destructive' : 'default'"))
+  assert.doesNotMatch(content, /shadow-2xl|backdrop-blur/)
 })
 
 test('ConfirmModal implements contextual iconography badges', () => {
@@ -70,15 +52,13 @@ test('ConfirmModal implements contextual iconography badges', () => {
   assert.match(content, /<svg/i, 'Must render SVG icons')
 })
 
-test('ConfirmModal handles Escape key and backdrop dismissal', () => {
-  const filePath = path.resolve('src/components/ConfirmModal.vue')
-  assert.ok(fs.existsSync(filePath), 'ConfirmModal.vue must exist')
-  const content = fs.readFileSync(filePath, 'utf8')
-
-  // Keyboard navigation
-  assert.match(content, /Escape/, 'Must listen for Escape key')
-  assert.match(content, /addEventListener|keydown/, 'Must attach keydown listener for keyboard accessibility')
-  assert.match(content, /removeEventListener/, 'Must remove keydown listener on unmount')
+test('ConfirmModal delegates focus containment and dismissal to Reka, and restores prior focus', () => {
+  const content = fs.readFileSync(path.resolve('src/components/ConfirmModal.vue'), 'utf8')
+  assert.match(content, /@update:open=/)
+  assert.match(content, /@open-auto-focus.prevent=/)
+  assert.match(content, /@close-auto-focus.prevent="restoreFocus"/)
+  assert.match(content, /previousFocus\?\.isConnected/)
+  assert.match(content, /cancelButtonRef\?\.\$el\?\.focus/)
 })
 
 test('App.vue imports ConfirmModal and sets up confirmModal reactive state', () => {
@@ -175,4 +155,3 @@ test('AdminPanel.vue mounts ConfirmModal with adminConfirm bindings', () => {
   assert.match(content, /<ConfirmModal[\s\S]*?:show="adminConfirm\.show"[\s\S]*?:title="adminConfirm\.title"[\s\S]*?:message="adminConfirm\.message"/, 'ConfirmModal must bind adminConfirm props')
   assert.match(content, /<ConfirmModal[\s\S]*?@confirm="handleAdminModalConfirm"[\s\S]*?@cancel="handleAdminModalCancel"/, 'ConfirmModal must bind @confirm and @cancel events')
 })
-

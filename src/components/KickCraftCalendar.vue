@@ -158,7 +158,7 @@ function applyPreset(offsetDays) {
 </script>
 
 <template>
-  <div class="border border-[#cfd2ce] bg-[#fcfdfb] p-3 md:p-4 text-[#202220]">
+  <div class="kc-calendar rounded-md border border-[#cfd2ce] bg-[#fcfdfb] p-3 md:p-4 text-[#202220]">
     <!-- Quick Presets -->
     <div class="mb-3 flex flex-wrap items-center gap-2">
       <span class="text-[11px] font-bold uppercase tracking-wider text-[#5f635f]">Quick:</span>
@@ -228,7 +228,7 @@ function applyPreset(offsetDays) {
     </div>
 
     <!-- Day Grid -->
-    <div class="grid grid-cols-7 gap-1 text-center text-xs">
+    <div class="calendar-days grid grid-cols-7 gap-1 text-center text-xs">
       <div
         v-for="blank in calendarDays.blanks"
         :key="blank.key"

@@ -1,4 +1,7 @@
 <script setup>
+import { Button } from './ui/button'
+import { Input } from './ui/input'
+import { Textarea } from './ui/textarea'
 import {forgetCompletedScan} from '../scan-capture.js'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import ConfirmModal from './ConfirmModal.vue'
@@ -1256,7 +1259,7 @@ async function restoreShoe(shoe) {
 </script>
 
 <template>
-  <div class="mx-auto max-w-[1480px] px-5 py-6 lg:px-8" :aria-busy="dataLoading">
+  <div class="admin-shell mx-auto px-4 py-6 sm:px-6 lg:px-8" :aria-busy="dataLoading">
 
     <!-- Top Breadcrumb & Status Bar -->
     <div class="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-[#cfd2ce] pb-4">
@@ -1265,41 +1268,46 @@ async function restoreShoe(shoe) {
           KickCraft
         </span>
         <span class="text-[#cfd2ce]">/</span>
-        <span class="font-bold text-xs uppercase tracking-wider text-[#b94d27]">Owner Admin Portal</span>
+        <span class="text-sm font-semibold text-muted-foreground">Admin</span>
       </div>
 
       <div class="flex items-center gap-3 text-xs">
-        <button
+        <Button variant="outline"
           type="button"
-          class="border border-[#bfc3bf] bg-white px-3.5 py-1.5 font-bold text-[#202220] shadow-sm transition-all duration-150 hover:border-[#202220] hover:bg-[#202220] hover:text-white focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+          class="border border-input bg-white px-3.5 py-1.5 font-bold text-[#202220] shadow-sm transition-all duration-150 hover:border-[#202220] hover:bg-[#202220] hover:text-white focus-visible:outline-2 focus-visible:outline-ring"
           @click="emit('backToShop')"
         >
           Preview Customer Shop
-        </button>
+        </Button>
 
         <span class="flex items-center gap-1.5 font-semibold text-[#5f635f]">
-          <span class="size-2 rounded-full bg-[#3f7652]" />
+          <span class="size-2 rounded-md bg-[#3f7652]" />
           Signed in: <strong class="text-[#202220]">{{ currentUser?.email || 'owner@kickcraft.local' }}</strong>
         </span>
       </div>
     </div>
 
+    <label class="admin-section-picker block text-sm font-semibold md:hidden">Admin section
+      <select v-model="adminSection" @change="editorMode=false; if(adminSection==='users') fetchUsers()">
+        <option value="inventory">Shoe catalog & inventory</option><option value="reservations">Pickup reservations</option><option value="users">Admin accounts</option><option value="sellers">Seller applications</option><option value="seller-products">Seller products</option><option value="shared-templates">Shared templates</option>
+      </select>
+    </label>
     <!-- ── Admin Section Tabs (Inventory vs Financials) ────────── -->
-    <div class="mb-6 flex flex-wrap border-b border-[#cfd2ce] bg-white shadow-sm">
-      <button
+    <div class="admin-sections hidden md:flex" role="navigation" aria-label="Admin sections">
+      <Button variant="outline" :aria-current="adminSection === 'inventory'"
         type="button"
-        class="border-b-2 px-6 py-3.5 text-xs font-bold transition-all duration-150 focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+        class="border-b-2 px-6 py-3.5 text-xs font-bold transition-all duration-150 focus-visible:outline-2 focus-visible:outline-ring"
         :class="adminSection === 'inventory'
           ? 'border-[#b94d27] bg-[#fcfdfb] text-[#202220]'
           : 'border-transparent text-[#5f635f] hover:bg-[#f7f8f6] hover:text-[#202220]'"
         @click="adminSection = 'inventory'; editorMode = false"
       >
         Shoe Catalog &amp; Inventory
-      </button>
+      </Button>
 
-      <button
+      <Button variant="outline" :aria-current="adminSection === 'reservations'"
         type="button"
-        class="flex items-center gap-2 border-b-2 px-6 py-3.5 text-xs font-bold transition-all duration-150 focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+        class="flex items-center gap-2 border-b-2 px-6 py-3.5 text-xs font-bold transition-all duration-150 focus-visible:outline-2 focus-visible:outline-ring"
         :class="adminSection === 'reservations'
           ? 'border-[#b94d27] bg-[#fcfdfb] text-[#202220]'
           : 'border-transparent text-[#5f635f] hover:bg-[#f7f8f6] hover:text-[#202220]'"
@@ -1308,15 +1316,15 @@ async function restoreShoe(shoe) {
         <span>Pickup Reservations</span>
         <span
           v-if="pendingCount > 0"
-          class="rounded-full bg-[#c97d1e] px-1.5 py-0.5 text-[10px] font-black text-white"
+          class="rounded-md bg-[#c97d1e] px-1.5 py-0.5 text-[10px] font-black text-white"
         >
           {{ pendingCount }} pending
         </span>
-      </button>
+      </Button>
 
-      <button
+      <Button variant="outline" :aria-current="adminSection === 'users'"
         type="button"
-        class="flex items-center gap-2 border-b-2 px-6 py-3.5 text-xs font-bold transition-all duration-150 focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+        class="flex items-center gap-2 border-b-2 px-6 py-3.5 text-xs font-bold transition-all duration-150 focus-visible:outline-2 focus-visible:outline-ring"
         :class="adminSection === 'users'
           ? 'border-[#b94d27] bg-[#fcfdfb] text-[#202220]'
           : 'border-transparent text-[#5f635f] hover:bg-[#f7f8f6] hover:text-[#202220]'"
@@ -1325,12 +1333,12 @@ async function restoreShoe(shoe) {
         <span>Admin Accounts</span>
         <span
           v-if="userStats.total > 0"
-          class="rounded-full bg-[#292b2d] px-1.5 py-0.5 text-[10px] font-black text-white"
+          class="rounded-md bg-[#292b2d] px-1.5 py-0.5 text-[10px] font-black text-white"
         >
           {{ userStats.total }}
         </span>
-      </button>
-      <button v-for="item in [{id:'sellers',label:'Seller applications'},{id:'seller-products',label:'Seller products'},{id:'shared-templates',label:'Shared templates'}]" :key="item.id" type="button" class="border-b-2 px-6 py-3.5 text-xs font-bold" :class="adminSection===item.id?'border-[#b94d27] text-[#202220]':'border-transparent text-[#5f635f]'" @click="adminSection=item.id;editorMode=false">{{item.label}}</button>
+      </Button>
+      <Button variant="outline" v-for="item in [{id:'sellers',label:'Seller applications'},{id:'seller-products',label:'Seller products'},{id:'shared-templates',label:'Shared templates'}]" :key="item.id" :aria-current="adminSection===item.id" type="button" class="border-b-2 px-6 py-3.5 text-xs font-bold" :class="adminSection===item.id?'border-[#b94d27] text-[#202220]':'border-transparent text-[#5f635f]'" @click="adminSection=item.id;editorMode=false">{{item.label}}</Button>
     </div>
     <SellerModeration v-if="['sellers','seller-products','shared-templates'].includes(adminSection)" :mode="adminSection==='sellers'?'sellers':adminSection==='shared-templates'?'templates':'products'" @changed="loadData" />
 
@@ -1342,13 +1350,13 @@ async function restoreShoe(shoe) {
         <p class="font-bold">Some owner data is unavailable.</p>
         <p class="mt-0.5 text-xs">{{ dataError }}</p>
       </div>
-      <button
+      <Button variant="outline"
         type="button"
         class="border border-[#b94d27] px-3 py-1.5 text-xs font-bold hover:bg-[#b94d27] hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#b94d27]"
         @click="loadData"
       >
         Retry all data
-      </button>
+      </Button>
     </div>
 
     <!-- ══════════════════════════════════════════════════════════ -->
@@ -1371,37 +1379,13 @@ async function restoreShoe(shoe) {
           </div>
 
           <div class="flex items-center gap-3">
-            <button
+            <Button variant="ghost"
               type="button"
-              class="bg-[#292b2d] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-150 hover:bg-[#b94d27] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+              class="bg-[#292b2d] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-150 hover:bg-[#b94d27] focus-visible:outline-2 focus-visible:outline-ring"
               @click="openNewShoeEditor"
             >
               Add New Shoe
-            </button>
-          </div>
-        </div>
-
-        <!-- Stat Badges Strip -->
-        <div class="grid grid-cols-2 gap-3 sm:grid-cols-5">
-          <div class="border border-[#cfd2ce] bg-white p-4">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-[#6a6e6a]">Total Silhouettes</p>
-            <p class="mt-1 text-2xl font-black text-[#202220]">{{ stats.total }}</p>
-          </div>
-          <div class="border border-[#cfd2ce] bg-white p-4">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-[#3f7652]">Available for Order</p>
-            <p class="mt-1 text-2xl font-black text-[#3f7652]">{{ stats.available }}</p>
-          </div>
-          <div class="border border-[#cfd2ce] bg-white p-4">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-[#c97d1e]">Coming Soon</p>
-            <p class="mt-1 text-2xl font-black text-[#c97d1e]">{{ stats.comingSoon }}</p>
-          </div>
-          <div class="border border-[#cfd2ce] bg-white p-4">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-[#b94d27]">Out of Stock</p>
-            <p class="mt-1 text-2xl font-black text-[#b94d27]">{{ stats.outOfStock }}</p>
-          </div>
-          <div class="border border-[#cfd2ce] bg-white p-4">
-            <p class="text-[11px] font-bold uppercase tracking-wider text-[#5f635f]">Archived</p>
-            <p class="mt-1 text-2xl font-black text-[#5f635f]">{{ stats.archived }}</p>
+            </Button>
           </div>
         </div>
 
@@ -1409,51 +1393,51 @@ async function restoreShoe(shoe) {
         <div class="flex flex-col gap-4 border border-[#cfd2ce] bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
           <!-- Status Tabs -->
           <div class="flex flex-wrap gap-1 text-xs font-bold">
-            <button
+            <Button variant="ghost"
               type="button"
               class="px-3 py-2 transition-colors"
               :class="activeTab === 'all' ? 'bg-[#292b2d] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
               @click="activeTab = 'all'"
             >
               All ({{ stats.total }})
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               type="button"
               class="px-3 py-2 transition-colors"
               :class="activeTab === 'available' ? 'bg-[#3f7652] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
               @click="activeTab = 'available'"
             >
               Available ({{ stats.available }})
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               type="button"
               class="px-3 py-2 transition-colors"
               :class="activeTab === 'coming_soon' ? 'bg-[#c97d1e] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
               @click="activeTab = 'coming_soon'"
             >
               Coming Soon ({{ stats.comingSoon }})
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               type="button"
               class="px-3 py-2 transition-colors"
               :class="activeTab === 'out_of_stock' ? 'bg-[#b94d27] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
               @click="activeTab = 'out_of_stock'"
             >
               Out of Stock ({{ stats.outOfStock }})
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               type="button"
               class="px-3 py-2 transition-colors"
               :class="activeTab === 'archived' ? 'bg-[#5f635f] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
               @click="activeTab = 'archived'"
             >
               Archived ({{ stats.archived }})
-            </button>
+            </Button>
           </div>
 
           <!-- Search -->
           <div class="relative sm:w-72">
-            <input
+            <Input
               v-model="searchQuery"
               type="search"
               placeholder="Search shoes by name or category..."
@@ -1527,54 +1511,54 @@ async function restoreShoe(shoe) {
 
               <!-- Action buttons strip -->
               <div v-if="activeTab === 'archived' || shoe.deletedAt" class="mt-4 grid grid-cols-2 gap-2 border-t border-[#f1f3f0] pt-3">
-                <button
+                <Button variant="outline"
                   type="button"
                   class="h-8 border border-[#3f7652] bg-white text-[11px] font-bold text-[#3f7652] transition-colors hover:bg-[#edf5f0]"
                   @click="restoreShoe(shoe)"
                 >
                   Restore
-                </button>
-                <button
+                </Button>
+                <Button variant="default"
                   type="button"
                   class="h-8 border border-[#b94d27] bg-[#b94d27] text-[11px] font-bold text-white transition-colors hover:bg-[#963a20]"
                   @click="confirmPermanentDelete(shoe)"
                 >
                   Delete Permanently
-                </button>
+                </Button>
               </div>
               <div v-else class="mt-4 grid grid-cols-3 gap-2 border-t border-[#f1f3f0] pt-3">
-                <button
+                <Button variant="outline"
                   type="button"
-                  class="h-8 border border-[#bfc3bf] bg-white text-[11px] font-bold text-[#202220] transition-colors hover:border-[#292b2d]"
+                  class="h-8 border border-input bg-white text-[11px] font-bold text-[#202220] transition-colors hover:border-[#292b2d]"
                   @click="openEditShoe(shoe)"
                 >
                   Edit
-                </button>
-                <button
+                </Button>
+                <Button variant="outline"
                   type="button"
-                  class="h-8 border border-[#bfc3bf] bg-white text-[11px] font-bold text-[#245fa8] transition-colors hover:border-[#245fa8] hover:bg-[#edf5f0]"
+                  class="h-8 border border-input bg-white text-[11px] font-bold text-[#245fa8] transition-colors hover:border-[#245fa8] hover:bg-[#edf5f0]"
                   @click="openRestock(shoe)"
                 >
                   Restock
-                </button>
-                <button
+                </Button>
+                <Button variant="outline"
                   type="button"
-                  class="h-8 border border-[#bfc3bf] bg-white text-[11px] font-bold text-[#b94d27] transition-colors hover:border-[#b94d27] hover:bg-[#fdf2ef]"
+                  class="h-8 border border-input bg-white text-[11px] font-bold text-[#b94d27] transition-colors hover:border-[#b94d27] hover:bg-[#fdf2ef]"
                   @click="deleteShoe(shoe)"
                 >
                   Delete
-                </button>
+                </Button>
               </div>
 
               <!-- Preview in Customer Studio link -->
               <div class="mt-3 text-center">
-                <button
+                <Button variant="ghost"
                   type="button"
                   class="text-[11px] font-semibold text-[#5f635f] underline hover:text-[#202220]"
                   @click="emit('openStudio', shoe.id)"
                 >
                   Test in 3D Customer Studio →
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -1584,13 +1568,13 @@ async function restoreShoe(shoe) {
         <div v-else class="border border-[#cfd2ce] bg-white p-12 text-center">
           <p class="font-display text-lg font-bold text-[#202220]">{{ shoes.length ? 'No shoes match this view' : 'No shoes in catalog' }}</p>
           <p class="mt-1 text-xs text-[#5f635f]">{{ shoes.length ? 'Clear your search or change the selected status.' : 'Add the first 3D shoe to begin.' }}</p>
-          <button
+          <Button variant="ghost"
             type="button"
             class="mx-auto mt-4 bg-[#292b2d] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition-all duration-150 hover:bg-[#b94d27]"
             @click="shoes.length ? (searchQuery = '', activeTab = 'all') : openNewShoeEditor()"
           >
             {{ shoes.length ? 'Clear filters' : 'Add New Shoe' }}
-          </button>
+          </Button>
         </div>
 
       </div>
@@ -1601,33 +1585,33 @@ async function restoreShoe(shoe) {
         <!-- Editor Header -->
         <div class="flex items-center justify-between border-b border-[#cfd2ce] pb-4">
           <div>
-            <button
+            <Button variant="ghost"
               type="button"
               class="text-xs font-bold text-[#5f635f] transition-colors hover:text-[#202220] hover:underline"
               @click="cancelEdit"
             >
               Back to Shoe Inventory
-            </button>
+            </Button>
             <h2 class="font-display mt-2 text-2xl font-black tracking-[-0.03em] text-[#202220]">
               {{ isEditing ? `Edit: ${form.name}` : (form.glbPath ? `Configure: ${form.name}` : 'Add New 3D Shoe Model') }}
             </h2>
           </div>
 
           <div v-if="form.glbPath" class="flex items-center gap-2">
-            <button
+            <Button variant="outline"
               type="button"
-              class="border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#5f635f] hover:border-[#292b2d]"
+              class="border border-input bg-white px-4 py-2 text-xs font-bold text-[#5f635f] hover:border-[#292b2d]"
               @click="cancelEdit"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button variant="default"
               type="button"
               class="bg-[#b94d27] px-5 py-2 text-xs font-bold text-white hover:bg-[#963a20]"
               @click="handleSaveShoe"
             >
               {{ isEditing ? 'Save Changes' : 'Publish Shoe to Shop' }}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -1681,20 +1665,20 @@ async function restoreShoe(shoe) {
 
           <!-- Action buttons -->
           <div class="mt-6 flex flex-wrap justify-center gap-3">
-            <button
+            <Button variant="outline"
               type="button"
               class="border border-[#292b2d] bg-[#292b2d] px-5 py-2.5 text-xs font-bold text-white transition-colors hover:bg-[#b94d27]"
               @click="triggerFolderPicker"
             >
               Browse Folder
-            </button>
-            <button
+            </Button>
+            <Button variant="outline"
               type="button"
-              class="border border-[#bfc3bf] bg-white px-5 py-2.5 text-xs font-bold text-[#202220] transition-colors hover:border-[#292b2d]"
+              class="border border-input bg-white px-5 py-2.5 text-xs font-bold text-[#202220] transition-colors hover:border-[#292b2d]"
               @click="triggerFilePicker"
             >
               Choose .GLB File
-            </button>
+            </Button>
           </div>
 
           <div v-if="uploadError" class="mt-4 text-xs font-semibold text-[#b94d27]">
@@ -1720,45 +1704,45 @@ async function restoreShoe(shoe) {
                   </p>
                   <p class="text-[10px] text-[#6a6e6a]">{{ detected.sizeFormatted }}</p>
                 </div>
-                <button
+                <Button variant="ghost"
                   type="button"
                   class="shrink-0 bg-[#245fa8] px-3 py-1.5 text-[11px] font-bold text-white transition-colors hover:bg-[#184478]"
                   @click="configureDetectedModel(detected)"
                 >
                   Customize →
-                </button>
+                </Button>
               </div>
             </div>
           </div>
 
-          <button type="button" class="border border-[#202220] px-5 py-3 font-semibold text-[#202220]" @click="showPhotoScanner = true">Scan from photos</button>
+          <Button variant="outline" type="button" class="border border-[#202220] px-5 py-3 font-semibold text-[#202220]" @click="showPhotoScanner = true">Scan from photos</Button>
           <!-- Or Choose from Existing Model Library -->
           <div class="mt-10 border-t border-[#d9dcd8] pt-6">
             <p class="text-[11px] font-bold uppercase tracking-wider text-[#8e938e]">
               Or choose an existing 3D model from the library
             </p>
             <div class="mt-3 flex flex-wrap justify-center gap-3">
-              <button
+              <Button variant="outline"
                 type="button"
                 class="border border-[#cfd2ce] bg-white px-3 py-1.5 text-xs font-semibold text-[#5f635f] hover:border-[#292b2d] hover:text-[#202220]"
                 @click="selectLibraryModel('/models/shoe-soleview-final.glb', 'KickCraft One Silhouette')"
               >
                 KickCraft One (.glb)
-              </button>
-              <button
+              </Button>
+              <Button variant="outline"
                 type="button"
                 class="border border-[#cfd2ce] bg-white px-3 py-1.5 text-xs font-semibold text-[#5f635f] hover:border-[#292b2d] hover:text-[#202220]"
                 @click="selectLibraryModel('/models/nike-air-max-custom.glb', 'Air Max Silhouette')"
               >
                 Air Max (.glb)
-              </button>
-              <button
+              </Button>
+              <Button variant="outline"
                 type="button"
                 class="border border-[#cfd2ce] bg-white px-3 py-1.5 text-xs font-semibold text-[#5f635f] hover:border-[#292b2d] hover:text-[#202220]"
                 @click="selectLibraryModel('/models/nike-dunk.glb', 'Dunk Silhouette')"
               >
                 Nike Dunk (.glb)
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1790,13 +1774,13 @@ async function restoreShoe(shoe) {
                   <span class="size-2 bg-[#3f7652]" />
                   Interactive 3D Preview
                 </span>
-                <button
+                <Button variant="outline"
                   type="button"
-                  class="border border-[#bfc3bf] bg-white/95 px-2.5 py-1.5 text-xs font-bold text-[#5f635f] shadow-sm hover:border-[#292b2d] hover:text-[#202220]"
+                  class="border border-input bg-white/95 px-2.5 py-1.5 text-xs font-bold text-[#5f635f] shadow-sm hover:border-[#292b2d] hover:text-[#202220]"
                   @click="changeModel"
                 >
                   Change 3D Model
-                </button>
+                </Button>
               </div>
 
               <!-- Material highlight banner -->
@@ -1807,13 +1791,13 @@ async function restoreShoe(shoe) {
                 <span>
                   Highlighting Part: <strong class="text-[#b94d27]">{{ activeHighlightedMaterial }}</strong> (turned red)
                 </span>
-                <button
+                <Button variant="ghost"
                   type="button"
                   class="text-[11px] underline hover:text-[#f1efe8]"
                   @click="resetHighlight"
                 >
                   Reset Color
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -1834,7 +1818,7 @@ async function restoreShoe(shoe) {
               <div class="mt-4 space-y-4">
                 <label class="block">
                   <span class="mb-1 block text-xs font-bold text-[#404345]">Shoe Name</span>
-                  <input
+                  <Input
                     v-model="form.name"
                     type="text"
                     placeholder="e.g. KickCraft Velocity"
@@ -1844,7 +1828,7 @@ async function restoreShoe(shoe) {
 
                 <label class="block">
                   <span class="mb-1 block text-xs font-bold text-[#404345]">Description</span>
-                  <textarea
+                  <Textarea
                     v-model="form.description"
                     rows="2"
                     placeholder="Brief summary of silhouette, intended performance, and design highlights."
@@ -1855,7 +1839,7 @@ async function restoreShoe(shoe) {
                 <div class="grid grid-cols-3 gap-3">
                   <label class="block">
                     <span class="mb-1 block text-xs font-bold text-[#404345]">Price (₱)</span>
-                    <input
+                    <Input
                       v-model.number="form.price"
                       type="number"
                       min="1"
@@ -1865,7 +1849,7 @@ async function restoreShoe(shoe) {
 
                   <label class="block">
                     <span class="mb-1 block text-xs font-bold text-[#404345]">Stock (Pairs)</span>
-                    <input
+                    <Input
                       v-model.number="form.stock"
                       type="number"
                       min="0"
@@ -1972,7 +1956,7 @@ async function restoreShoe(shoe) {
                   :class="activeHighlightedMaterial === part.material ? 'border-[#b94d27] bg-[#fdf2ef]' : 'bg-[#fcfdfb]'"
                 >
                   <!-- Highlight trigger button -->
-                  <button
+                  <Button variant="ghost"
                     type="button"
                     class="flex items-center gap-2 text-left font-mono text-xs font-bold transition-colors hover:text-[#b94d27]"
                     :title="`Click to highlight ${part.material} in 3D`"
@@ -1983,11 +1967,11 @@ async function restoreShoe(shoe) {
                       :class="activeHighlightedMaterial === part.material ? 'bg-[#ff2222]' : 'bg-[#bfc3bf]'"
                     />
                     <span>{{ part.material }}</span>
-                  </button>
+                  </Button>
 
                   <!-- Customer Label input & Customizable Toggle -->
                   <div class="flex items-center gap-3">
-                    <input
+                    <Input
                       v-model="part.label"
                       type="text"
                       placeholder="Customer part label"
@@ -2032,14 +2016,14 @@ async function restoreShoe(shoe) {
                   />
                   <span class="font-bold text-[#202220]">{{ col.name }}</span>
                   <span class="font-mono text-[10px] text-[#8e938e]">{{ col.value }}</span>
-                  <button
+                  <Button variant="ghost"
                     type="button"
-                    class="ml-1 size-4 rounded-full text-xs text-[#8e938e] hover:bg-[#b94d27] hover:text-white"
+                    class="ml-1 size-4 rounded-md text-xs text-[#8e938e] hover:bg-[#b94d27] hover:text-white"
                     title="Remove color"
                     @click="removeColorFromPalette(idx)"
                   >
                     ×
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -2051,7 +2035,7 @@ async function restoreShoe(shoe) {
                     type="color"
                     class="size-8 cursor-pointer border border-[#cfd2ce] p-0.5"
                   />
-                  <input
+                  <Input
                     v-model="newColorName"
                     type="text"
                     placeholder="Color Name (e.g. Cobalt)"
@@ -2060,32 +2044,32 @@ async function restoreShoe(shoe) {
                   />
                 </div>
 
-                <button
+                <Button variant="ghost"
                   type="button"
                   class="h-8 bg-[#292b2d] px-3.5 text-xs font-bold text-white shadow-sm transition-all duration-150 hover:bg-[#b94d27]"
                   @click="addColorToPalette"
                 >
                   Add Color
-                </button>
+                </Button>
               </div>
             </div>
 
             <!-- Bottom Action Buttons -->
             <div class="flex items-center justify-end gap-3 pt-2">
-              <button
+              <Button variant="outline"
                 type="button"
-                class="border border-[#bfc3bf] bg-white px-5 py-2.5 text-xs font-bold text-[#5f635f] hover:border-[#292b2d]"
+                class="border border-input bg-white px-5 py-2.5 text-xs font-bold text-[#5f635f] hover:border-[#292b2d]"
                 @click="cancelEdit"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button variant="default"
                 type="button"
                 class="bg-[#b94d27] px-6 py-2.5 text-xs font-bold text-white hover:bg-[#963a20] shadow-sm"
                 @click="handleSaveShoe"
               >
                 {{ isEditing ? 'Save Changes' : 'Publish Shoe to Shop' }}
-              </button>
+              </Button>
             </div>
 
           </div>
@@ -2117,78 +2101,78 @@ async function restoreShoe(shoe) {
       <div class="flex flex-col gap-4 border border-[#cfd2ce] bg-white p-4 sm:flex-row sm:items-center sm:justify-between shadow-sm">
         <!-- Status Filter Tabs -->
         <div class="flex flex-wrap gap-1 text-xs font-bold">
-          <button
+          <Button variant="ghost"
             type="button"
             class="px-3 py-2 transition-colors"
             :class="orderStatusFilter === 'all' ? 'bg-[#292b2d] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
             @click="orderStatusFilter = 'all'"
           >
             All ({{ orders.length }})
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             type="button"
             class="px-3 py-2 transition-colors"
             :class="orderStatusFilter === 'today' ? 'bg-[#c97d1e] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
             @click="orderStatusFilter = 'today'"
           >
             Today ({{ todayCount }})
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             type="button"
             class="px-3 py-2 transition-colors"
             :class="orderStatusFilter === 'upcoming' ? 'bg-[#245fa8] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
             @click="orderStatusFilter = 'upcoming'"
           >
             Upcoming ({{ upcomingCount }})
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             type="button"
             class="px-3 py-2 transition-colors"
             :class="orderStatusFilter === 'overdue' ? 'bg-[#b94d27] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
             @click="orderStatusFilter = 'overdue'"
           >
             Overdue ({{ overdueCount }})
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             type="button"
             class="px-3 py-2 transition-colors"
             :class="orderStatusFilter === 'ready' ? 'bg-[#3f7652] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
             @click="orderStatusFilter = 'ready'"
           >
             Ready ({{ readyCount }})
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             type="button"
             class="px-3 py-2 transition-colors"
             :class="orderStatusFilter === 'completed' ? 'bg-[#3f7652] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
             @click="orderStatusFilter = 'completed'"
           >
             Completed ({{ completedCount }})
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             type="button"
             class="px-3 py-2 transition-colors"
             :class="orderStatusFilter === 'cancelled' ? 'bg-[#b94d27] text-white' : 'text-[#5f635f] hover:bg-[#f1f3f0]'"
             @click="orderStatusFilter = 'cancelled'"
           >
             Cancelled ({{ cancelledCount }})
-          </button>
+          </Button>
         </div>
 
         <div class="flex w-full gap-2 sm:w-auto">
-          <input
+          <Input
             v-model="orderSearchQuery"
             type="search"
             placeholder="Search receipt #, customer name, email..."
             class="h-9 min-w-0 flex-1 border border-[#cfd2ce] bg-[#fcfdfb] px-3 text-xs outline-none transition-colors focus:border-[#245fa8] sm:w-72"
           />
-          <button
+          <Button variant="outline"
             type="button"
             class="h-9 border border-[#292b2d] bg-white px-3 text-xs font-bold text-[#292b2d] hover:bg-[#292b2d] hover:text-white"
             @click="exportReservationsCsv"
           >
             Export CSV
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -2267,15 +2251,15 @@ async function restoreShoe(shoe) {
               <!-- Action buttons -->
               <td class="whitespace-nowrap px-4 py-3 text-right">
                 <div class="flex items-center justify-end gap-2">
-                  <button
+                  <Button variant="outline"
                     type="button"
-                    class="border border-[#bfc3bf] bg-white px-2.5 py-1 text-[11px] font-bold text-[#202220] hover:border-[#292b2d]"
+                    class="border border-input bg-white px-2.5 py-1 text-[11px] font-bold text-[#202220] hover:border-[#292b2d]"
                     @click="viewReservationDetails(order)"
                   >
                     View Details
-                  </button>
+                  </Button>
 
-                  <button
+                  <Button variant="ghost"
                     v-if="order.status === 'pending'"
                     type="button"
                     class="bg-[#245fa8] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#1d4b88]"
@@ -2283,9 +2267,9 @@ async function restoreShoe(shoe) {
                     @click="requestOrderStatusChange(order, 'approved')"
                   >
                     Approve
-                  </button>
+                  </Button>
 
-                  <button
+                  <Button variant="ghost"
                     v-if="order.status === 'approved'"
                     type="button"
                     class="bg-[#3f7652] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#2a593a]"
@@ -2293,9 +2277,9 @@ async function restoreShoe(shoe) {
                     @click="requestOrderStatusChange(order, 'ready')"
                   >
                     Mark Ready
-                  </button>
+                  </Button>
 
-                  <button
+                  <Button variant="ghost"
                     v-if="order.status === 'ready'"
                     type="button"
                     class="bg-[#3f7652] px-2.5 py-1 text-[11px] font-bold text-white hover:bg-[#2a593a]"
@@ -2303,25 +2287,25 @@ async function restoreShoe(shoe) {
                     @click="requestOrderStatusChange(order, 'completed')"
                   >
                     Complete Pickup
-                  </button>
+                  </Button>
 
-                  <button
+                  <Button variant="outline"
                     v-if="!['completed', 'cancelled'].includes(order.status)"
                     type="button"
                     class="border border-[#b94d27] bg-white px-2.5 py-1 text-[11px] font-bold text-[#b94d27] hover:bg-[#fdf2ef]"
                     @click="requestCancelOrder(order)"
                   >
                     Cancel
-                  </button>
+                  </Button>
 
-                  <button
+                  <Button variant="ghost"
                     v-if="order.status === 'cancelled'"
                     type="button"
                     class="text-xs font-bold text-[#b94d27] hover:underline"
                     @click="requestDeleteReservation(order)"
                   >
                     Delete Record
-                  </button>
+                  </Button>
                 </div>
               </td>
             </tr>
@@ -2342,23 +2326,23 @@ async function restoreShoe(shoe) {
     <aside
       v-if="reservationAlert"
       aria-label="New reservation alert"
-      class="fixed top-6 right-6 z-50 w-96 max-w-[calc(100vw-2rem)] border-2 border-[#202220] bg-white p-4 shadow-2xl"
+      class="fixed top-6 right-6 z-50 w-96 max-w-[calc(100vw-2rem)] border-2 border-[#202220] bg-white p-4 shadow-sm"
     >
       <div class="flex items-start justify-between gap-3">
         <div class="flex items-center gap-2">
-          <span class="inline-block size-2.5 rounded-full bg-[#3f7652] animate-pulse" />
+          <span class="inline-block size-2.5 rounded-md bg-[#3f7652] animate-pulse" />
           <span class="font-display text-xs font-black uppercase tracking-wider text-[#202220]">
             New Reservation Received
           </span>
         </div>
-        <button
+        <Button variant="ghost"
           type="button"
           class="text-xs font-bold text-[#5f635f] hover:text-[#202220]"
           title="Dismiss alert"
           @click="dismissReservationAlert"
         >
           Close
-        </button>
+        </Button>
       </div>
 
       <div class="mt-2.5 border-l-2 border-[#b94d27] pl-3">
@@ -2374,20 +2358,20 @@ async function restoreShoe(shoe) {
       </div>
 
       <div class="mt-3.5 flex items-center justify-end gap-2 border-t border-[#f1f3f0] pt-3">
-        <button
+        <Button variant="outline"
           type="button"
           class="border border-[#cfd2ce] bg-white px-3 py-1.5 text-xs font-bold text-[#5f635f] hover:border-[#202220] hover:text-[#202220]"
           @click="dismissReservationAlert"
         >
           Close
-        </button>
-        <button
+        </Button>
+        <Button variant="ghost"
           type="button"
           class="bg-[#202220] px-3.5 py-1.5 text-xs font-bold text-white transition-colors hover:bg-[#b94d27]"
           @click="openInspectionModal(reservationAlert); dismissReservationAlert()"
         >
           View Details
-        </button>
+        </Button>
       </div>
     </aside>
 
@@ -2396,7 +2380,7 @@ async function restoreShoe(shoe) {
       v-if="showInspectionModal && selectedInspectionReservation"
       class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/60 p-4"
     >
-      <div class="my-8 w-full max-w-2xl border-2 border-[#202220] bg-[#fcfdfb] p-6 shadow-2xl sm:p-8">
+      <div class="my-8 w-full max-w-2xl border-2 border-[#202220] bg-[#fcfdfb] p-6 shadow-sm sm:p-8">
 
         <!-- Modal Header -->
         <div class="flex items-start justify-between border-b-2 border-[#202220] pb-4">
@@ -2422,14 +2406,14 @@ async function restoreShoe(shoe) {
             </h2>
           </div>
 
-          <button
+          <Button variant="ghost"
             type="button"
             class="text-sm font-bold text-[#5f635f] hover:text-[#202220]"
             title="Close inspection modal"
             @click="closeInspectionModal"
           >
             ✕ Close
-          </button>
+          </Button>
         </div>
 
         <!-- Customer & Schedule Meta Cards -->
@@ -2552,61 +2536,61 @@ async function restoreShoe(shoe) {
         <!-- Action Footer -->
         <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t-2 border-[#202220] pt-4">
           <div class="flex flex-wrap items-center gap-2">
-            <button
+            <Button variant="ghost"
               v-if="selectedInspectionReservation.status === 'pending'"
               type="button"
               class="bg-[#245fa8] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#1d4b88]"
               @click="requestOrderStatusChange(selectedInspectionReservation, 'approved')"
             >
               Approve Reservation
-            </button>
+            </Button>
 
-            <button
+            <Button variant="ghost"
               v-if="selectedInspectionReservation.status === 'approved'"
               type="button"
               class="bg-[#3f7652] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#2a593a]"
               @click="requestOrderStatusChange(selectedInspectionReservation, 'ready')"
             >
               Mark Ready
-            </button>
+            </Button>
 
-            <button
+            <Button variant="ghost"
               v-if="selectedInspectionReservation.status === 'ready'"
               type="button"
               class="bg-[#3f7652] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#2a593a]"
               @click="requestOrderStatusChange(selectedInspectionReservation, 'completed')"
             >
               Complete Pickup
-            </button>
+            </Button>
 
             <!-- Cancel Reservation (when not cancelled) -->
-            <button
+            <Button variant="outline"
               v-if="!['completed', 'cancelled'].includes(selectedInspectionReservation.status)"
               type="button"
               class="border border-[#b94d27] bg-white px-4 py-2 text-xs font-bold text-[#b94d27] transition-colors hover:bg-[#fdf2ef]"
               @click="openOwnerCancelModal(selectedInspectionReservation)"
             >
               Cancel Reservation
-            </button>
+            </Button>
 
             <!-- Delete Record (when cancelled) -->
-            <button
+            <Button variant="ghost"
               v-if="selectedInspectionReservation.status === 'cancelled'"
               type="button"
               class="text-xs font-bold text-[#b94d27] hover:underline"
               @click="requestDeleteReservation(selectedInspectionReservation)"
             >
               Delete Record
-            </button>
+            </Button>
           </div>
 
-          <button
+          <Button variant="outline"
             type="button"
-            class="border border-[#bfc3bf] bg-white px-5 py-2 text-xs font-bold text-[#5f635f] transition-colors hover:border-[#202220] hover:text-[#202220]"
+            class="border border-input bg-white px-5 py-2 text-xs font-bold text-[#5f635f] transition-colors hover:border-[#202220] hover:text-[#202220]"
             @click="closeInspectionModal"
           >
             Close
-          </button>
+          </Button>
         </div>
 
       </div>
@@ -2617,7 +2601,7 @@ async function restoreShoe(shoe) {
       v-if="showOwnerCancelModal && cancelReservationTarget"
       class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/60 p-4"
     >
-      <div class="my-8 w-full max-w-lg border-2 border-[#202220] bg-[#fcfdfb] p-6 shadow-2xl sm:p-8">
+      <div class="my-8 w-full max-w-lg border-2 border-[#202220] bg-[#fcfdfb] p-6 shadow-sm sm:p-8">
         <!-- Header -->
         <div class="flex items-start justify-between border-b-2 border-[#202220] pb-4">
           <div>
@@ -2639,7 +2623,7 @@ async function restoreShoe(shoe) {
               </span>
             </p>
           </div>
-          <button
+          <Button variant="outline"
             type="button"
             class="border border-[#202220] bg-white p-1 text-[#202220] transition-colors hover:bg-[#202220] hover:text-white"
             aria-label="Close"
@@ -2648,7 +2632,7 @@ async function restoreShoe(shoe) {
             <svg class="size-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
-          </button>
+          </Button>
         </div>
 
         <!-- Quick Explanation Presets -->
@@ -2657,30 +2641,30 @@ async function restoreShoe(shoe) {
             Store Cancellation Presets:
           </label>
           <div class="flex flex-col gap-2">
-            <button
+            <Button variant="outline"
               type="button"
               class="border border-[#cfd2ce] bg-white p-2.5 text-left text-xs font-semibold text-[#202220] transition-all hover:border-[#b94d27] hover:bg-[#fdf2ef]"
               :class="{ 'border-[#b94d27] bg-[#fdf2ef] font-bold text-[#b94d27]': cancellationReason === 'Selected custom color / material is currently unavailable' }"
               @click="cancellationReason = 'Selected custom color / material is currently unavailable'"
             >
               Selected custom color / material is currently unavailable
-            </button>
-            <button
+            </Button>
+            <Button variant="outline"
               type="button"
               class="border border-[#cfd2ce] bg-white p-2.5 text-left text-xs font-semibold text-[#202220] transition-all hover:border-[#b94d27] hover:bg-[#fdf2ef]"
               :class="{ 'border-[#b94d27] bg-[#fdf2ef] font-bold text-[#b94d27]': cancellationReason === 'Silhouette size out of stock' }"
               @click="cancellationReason = 'Silhouette size out of stock'"
             >
               Silhouette size out of stock
-            </button>
-            <button
+            </Button>
+            <Button variant="outline"
               type="button"
               class="border border-[#cfd2ce] bg-white p-2.5 text-left text-xs font-semibold text-[#202220] transition-all hover:border-[#b94d27] hover:bg-[#fdf2ef]"
               :class="{ 'border-[#b94d27] bg-[#fdf2ef] font-bold text-[#b94d27]': cancellationReason === 'Custom craftsmanship constraint' }"
               @click="cancellationReason = 'Custom craftsmanship constraint'"
             >
               Custom craftsmanship constraint
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -2689,30 +2673,30 @@ async function restoreShoe(shoe) {
           <label class="mb-1 block text-xs font-bold uppercase tracking-wider text-[#5f635f]">
             Additional Explanation / Custom Reason:
           </label>
-          <textarea
+          <Textarea
             v-model="cancellationReason"
             rows="3"
             class="w-full border border-[#cfd2ce] bg-white p-3 text-xs text-[#202220] outline-none transition-colors focus:border-[#b94d27]"
             placeholder="Explain why this reservation is being cancelled (visible to customer)..."
-          ></textarea>
+          ></Textarea>
         </div>
 
         <!-- Actions -->
         <div class="mt-6 flex flex-wrap items-center justify-end gap-3 border-t-2 border-[#202220] pt-4">
-          <button
+          <Button variant="outline"
             type="button"
-            class="border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#5f635f] transition-colors hover:border-[#202220] hover:text-[#202220]"
+            class="border border-input bg-white px-4 py-2 text-xs font-bold text-[#5f635f] transition-colors hover:border-[#202220] hover:text-[#202220]"
             @click="closeOwnerCancelModal"
           >
             Keep Active
-          </button>
-          <button
+          </Button>
+          <Button variant="default"
             type="button"
             class="border border-[#b94d27] bg-[#b94d27] px-4 py-2 text-xs font-bold text-white transition-colors hover:bg-[#963a20]"
             @click="submitOwnerCancellation"
           >
             Confirm Cancellation
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -2722,7 +2706,7 @@ async function restoreShoe(shoe) {
       v-if="showRestockModal"
       class="fixed inset-0 z-50 grid place-items-center bg-black/50 p-4"
     >
-      <div class="w-full max-w-sm border border-[#292b2d] bg-white p-6 shadow-xl">
+      <div class="w-full max-w-sm border border-[#292b2d] bg-white p-6 shadow-sm">
         <h3 class="font-display text-lg font-black text-[#202220]">
           Restock {{ restockTargetShoe?.name }}
         </h3>
@@ -2733,7 +2717,7 @@ async function restoreShoe(shoe) {
         <div class="mt-4">
           <label class="block text-xs font-bold text-[#404345]">
             Pairs to add to inventory:
-            <input
+            <Input
               v-model.number="restockAmount"
               type="number"
               min="1"
@@ -2743,20 +2727,20 @@ async function restoreShoe(shoe) {
         </div>
 
         <div class="mt-6 flex justify-end gap-3">
-          <button
+          <Button variant="outline"
             type="button"
-            class="border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#5f635f] hover:border-[#292b2d]"
+            class="border border-input bg-white px-4 py-2 text-xs font-bold text-[#5f635f] hover:border-[#292b2d]"
             @click="showRestockModal = false"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             type="button"
             class="bg-[#245fa8] px-5 py-2 text-xs font-bold text-white hover:bg-[#184478]"
             @click="confirmRestock"
           >
             Update Stock
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -2768,7 +2752,7 @@ async function restoreShoe(shoe) {
       v-if="showReceiptModal && selectedOrderForReceipt"
       class="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
     >
-      <div class="w-full max-w-lg border border-[#292b2d] bg-[#fcfdfb] p-6 shadow-2xl sm:p-8">
+      <div class="w-full max-w-lg border border-[#292b2d] bg-[#fcfdfb] p-6 shadow-sm sm:p-8">
 
         <!-- Printable Receipt Voucher Area -->
         <div id="printable-receipt" class="border border-[#cfd2ce] bg-white p-6 shadow-sm">
@@ -2884,55 +2868,55 @@ async function restoreShoe(shoe) {
         <div class="mt-6 flex flex-wrap items-center justify-between gap-3 border-t border-[#d9dcd8] pt-4">
           <div class="flex items-center gap-2">
             <span class="text-xs font-bold text-[#5f635f]">Status:</span>
-            <button
+            <Button variant="ghost"
               v-if="selectedOrderForReceipt.status === 'pending'"
               type="button"
               class="bg-[#245fa8] px-3.5 py-1.5 text-xs font-bold text-white hover:bg-[#1d4b88]"
               @click="handleOrderStatusChange(selectedOrderForReceipt.id, 'approved')"
             >
               Approve
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               v-if="selectedOrderForReceipt.status === 'approved'"
               type="button"
               class="bg-[#3f7652] px-3.5 py-1.5 text-xs font-bold text-white hover:bg-[#2a593a]"
               @click="handleOrderStatusChange(selectedOrderForReceipt.id, 'ready')"
             >
               Mark Ready
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               v-if="selectedOrderForReceipt.status === 'ready'"
               type="button"
               class="bg-[#3f7652] px-3.5 py-1.5 text-xs font-bold text-white hover:bg-[#2a593a]"
               @click="handleOrderStatusChange(selectedOrderForReceipt.id, 'completed')"
             >
               Complete Pickup
-            </button>
-            <button
+            </Button>
+            <Button variant="outline"
               v-if="!['completed', 'cancelled'].includes(selectedOrderForReceipt.status)"
               type="button"
               class="border border-[#b94d27] bg-white px-2.5 py-1.5 text-xs font-bold text-[#b94d27] transition-all duration-150 hover:bg-[#fdf2ef]"
               @click="requestCancelOrder(selectedOrderForReceipt)"
             >
               Cancel Reservation
-            </button>
+            </Button>
           </div>
 
           <div class="flex items-center gap-2">
-            <button
+            <Button variant="outline"
               type="button"
               class="border border-[#292b2d] bg-[#292b2d] px-4 py-1.5 text-xs font-bold text-white transition-all duration-150 hover:border-[#b94d27] hover:bg-[#b94d27]"
               @click="printReceipt"
             >
               Print Receipt
-            </button>
-            <button
+            </Button>
+            <Button variant="outline"
               type="button"
-              class="border border-[#bfc3bf] bg-white px-4 py-1.5 text-xs font-bold text-[#5f635f] hover:border-[#292b2d]"
+              class="border border-input bg-white px-4 py-1.5 text-xs font-bold text-[#5f635f] hover:border-[#292b2d]"
               @click="showReceiptModal = false"
             >
               Close
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -2955,22 +2939,22 @@ async function restoreShoe(shoe) {
         </div>
 
         <div class="flex items-center gap-2">
-          <button
+          <Button variant="ghost"
             type="button"
             class="bg-[#292b2d] px-4 py-2 text-xs font-bold text-white shadow-sm transition-all duration-150 hover:bg-[#b94d27]"
             @click="openCreateUserModal"
           >
             Add Administrator
-          </button>
+          </Button>
 
-          <button
+          <Button variant="outline"
             type="button"
-            class="border border-[#bfc3bf] bg-white px-4 py-2 text-xs font-bold text-[#202220] shadow-sm transition-all duration-150 hover:border-[#202220] hover:bg-[#202220] hover:text-white"
+            class="border border-input bg-white px-4 py-2 text-xs font-bold text-[#202220] shadow-sm transition-all duration-150 hover:border-[#202220] hover:bg-[#202220] hover:text-white"
             :disabled="usersLoading"
             @click="fetchUsers"
           >
             {{ usersLoading ? 'Refreshing…' : 'Refresh Accounts' }}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -2998,7 +2982,7 @@ async function restoreShoe(shoe) {
         class="flex items-center justify-between border border-[#3f7652] bg-[#f0f7f2] px-4 py-3 text-xs font-semibold text-[#3f7652]"
       >
         <span>{{ saveFeedback }}</span>
-        <button type="button" class="font-bold underline" @click="saveFeedback = ''">Dismiss</button>
+        <Button variant="ghost" type="button" class="font-bold underline" @click="saveFeedback = ''">Dismiss</Button>
       </div>
 
       <!-- Error Banner -->
@@ -3007,13 +2991,13 @@ async function restoreShoe(shoe) {
         class="flex items-center justify-between border border-[#b94d27] bg-[#fdf2ef] px-4 py-3 text-xs font-semibold text-[#b94d27]"
       >
         <span>{{ usersError }}</span>
-        <button type="button" class="font-bold underline" :disabled="usersLoading" @click="fetchUsers">Retry</button>
+        <Button variant="ghost" type="button" class="font-bold underline" :disabled="usersLoading" @click="fetchUsers">Retry</Button>
       </div>
 
       <!-- Filter Controls & Search -->
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div class="flex flex-wrap gap-1 border border-[#cfd2ce] bg-white p-1 shadow-sm">
-          <button
+          <Button variant="ghost"
             type="button"
             class="px-3 py-1.5 text-xs font-bold transition-colors"
             :class="userRoleFilter === 'all'
@@ -3022,8 +3006,8 @@ async function restoreShoe(shoe) {
             @click="userRoleFilter = 'all'"
           >
             All ({{ userStats.active }})
-          </button>
-          <button
+          </Button>
+          <Button variant="ghost"
             type="button"
             class="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold transition-colors"
             :class="userRoleFilter === 'archived'
@@ -3034,28 +3018,28 @@ async function restoreShoe(shoe) {
             <span>Archived</span>
             <span
               v-if="userStats.archived > 0"
-              class="rounded-full bg-[#fcfdfb] px-1.5 py-0.2 text-[10px] font-black text-[#c97d1e]"
+              class="rounded-md bg-[#fcfdfb] px-1.5 py-0.2 text-[10px] font-black text-[#c97d1e]"
             >
               {{ userStats.archived }}
             </span>
-          </button>
+          </Button>
         </div>
 
         <div class="relative w-full sm:w-72">
-          <input
+          <Input
             v-model="userSearchQuery"
             type="text"
             placeholder="Search by name or email…"
             class="w-full border border-[#cfd2ce] bg-white px-3 py-2 text-xs text-[#202220] shadow-sm transition-colors focus:border-[#245fa8] focus:outline-none"
           />
-          <button
+          <Button variant="ghost"
             v-if="userSearchQuery"
             type="button"
             class="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-[#8e938e] hover:text-[#202220]"
             @click="userSearchQuery = ''"
           >
             ×
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -3082,7 +3066,7 @@ async function restoreShoe(shoe) {
               <td class="px-4 py-3.5">
                 <div class="flex items-center gap-3">
                   <div
-                    class="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#b94d27] font-display text-xs font-black text-white"
+                    class="flex size-8 shrink-0 items-center justify-center rounded-md bg-[#b94d27] font-display text-xs font-black text-white"
                   >
                     {{ (u.name || u.email || 'U').charAt(0).toUpperCase() }}
                   </div>
@@ -3121,14 +3105,14 @@ async function restoreShoe(shoe) {
                   v-if="u.deleted_at"
                   class="inline-flex items-center gap-1 text-[11px] font-bold text-[#c97d1e]"
                 >
-                  <span class="size-1.5 rounded-full bg-[#c97d1e]" />
+                  <span class="size-1.5 rounded-md bg-[#c97d1e]" />
                   Archived
                 </span>
                 <span
                   v-else
                   class="inline-flex items-center gap-1 text-[11px] font-bold text-[#3f7652]"
                 >
-                  <span class="size-1.5 rounded-full bg-[#3f7652]" />
+                  <span class="size-1.5 rounded-md bg-[#3f7652]" />
                   Active
                 </span>
               </td>
@@ -3139,49 +3123,49 @@ async function restoreShoe(shoe) {
                   <!-- Self-account guard -->
                   <!-- Current Account Actions -->
                   <template v-if="u.email === currentUser?.email">
-                    <button
+                    <Button variant="outline"
                       type="button"
                       class="border border-[#cfd2ce] bg-white px-2.5 py-1 text-[11px] font-bold text-[#202220] transition-colors hover:border-[#245fa8] hover:bg-[#f0f4fa] hover:text-[#245fa8]"
                       @click="openEditUserModal(u)"
                     >
                       Edit Profile
-                    </button>
+                    </Button>
                   </template>
 
                   <!-- Active User Actions -->
                   <template v-else-if="!u.deleted_at">
-                    <button
+                    <Button variant="outline"
                       type="button"
                       class="border border-[#cfd2ce] bg-white px-2.5 py-1 text-[11px] font-bold text-[#202220] transition-colors hover:border-[#245fa8] hover:bg-[#f0f4fa] hover:text-[#245fa8]"
                       @click="openEditUserModal(u)"
                     >
                       Edit
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="outline"
                       type="button"
                       class="border border-[#cfd2ce] bg-white px-2.5 py-1 text-[11px] font-bold text-[#5f635f] transition-colors hover:border-[#b94d27] hover:bg-[#fdf2ef] hover:text-[#b94d27]"
                       @click="deleteUser(u, 'soft')"
                     >
                       Archive
-                    </button>
+                    </Button>
                   </template>
 
                   <!-- Archived User Actions -->
                   <template v-else>
-                    <button
+                    <Button variant="outline"
                       type="button"
                       class="border border-[#3f7652] bg-[#f0f7f2] px-2.5 py-1 text-[11px] font-bold text-[#3f7652] transition-colors hover:bg-[#3f7652] hover:text-white"
                       @click="restoreUser(u)"
                     >
                       Restore
-                    </button>
-                    <button
+                    </Button>
+                    <Button variant="outline"
                       type="button"
                       class="border border-[#b94d27] bg-white px-2.5 py-1 text-[11px] font-bold text-[#b94d27] transition-colors hover:bg-[#b94d27] hover:text-white"
                       @click="deleteUser(u, 'hard')"
                     >
                       Delete Permanently
-                    </button>
+                    </Button>
                   </template>
                 </div>
               </td>
@@ -3207,21 +3191,21 @@ async function restoreShoe(shoe) {
       class="fixed inset-0 z-50 flex items-center justify-center p-4"
     >
       <div
-        class="fixed inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+        class="fixed inset-0 bg-black/60  transition-opacity"
         @click="showUserModal = false"
       />
-      <div class="relative w-full max-w-md border border-[#292b2d] bg-white p-6 shadow-2xl">
+      <div class="relative w-full max-w-md border border-[#292b2d] bg-white p-6 shadow-sm">
         <div class="flex items-center justify-between border-b border-[#cfd2ce] pb-3">
           <h2 class="font-display text-lg font-black text-[#202220]">
             {{ isEditingUser ? 'Edit Admin Account' : 'Create Admin Account' }}
           </h2>
-          <button
+          <Button variant="ghost"
             type="button"
             class="px-2.5 py-1 text-xs font-bold text-[#8e938e] transition-all duration-150 hover:bg-[#f1f3f0] hover:text-[#202220]"
             @click="showUserModal = false"
           >
             Close
-          </button>
+          </Button>
         </div>
 
         <form class="mt-4 space-y-4" @submit.prevent="handleSaveUser">
@@ -3234,7 +3218,7 @@ async function restoreShoe(shoe) {
 
           <div>
             <label class="block text-xs font-bold uppercase tracking-wider text-[#5f635f]">Full Name</label>
-            <input
+            <Input
               v-model="userForm.name"
               type="text"
               required
@@ -3245,7 +3229,7 @@ async function restoreShoe(shoe) {
 
           <div>
             <label class="block text-xs font-bold uppercase tracking-wider text-[#5f635f]">Email Address</label>
-            <input
+            <Input
               v-model="userForm.email"
               type="email"
               required
@@ -3259,15 +3243,15 @@ async function restoreShoe(shoe) {
               {{ isEditingUser ? 'New Password (Optional)' : 'Password' }}
             </label>
             <div class="relative mt-1">
-              <input
+              <Input
                 v-model="userForm.password"
                 :type="showUserPassword ? 'text' : 'password'"
                 :placeholder="isEditingUser ? 'Leave blank to keep current password' : 'Minimum 6 characters'"
                 class="w-full border border-[#cfd2ce] bg-white px-3 py-2 pr-10 text-xs text-[#202220] focus:border-[#245fa8] focus:outline-none"
               />
-              <button
+              <Button variant="ghost"
                 type="button"
-                class="absolute inset-y-0 right-0 flex items-center px-3 text-[#5f635f] hover:text-[#202220] focus-visible:outline-2 focus-visible:outline-[#245fa8]"
+                class="absolute inset-y-0 right-0 flex items-center px-3 text-[#5f635f] hover:text-[#202220] focus-visible:outline-2 focus-visible:outline-ring"
                 :aria-label="showUserPassword ? 'Hide password' : 'Show password'"
                 @click="showUserPassword = !showUserPassword"
               >
@@ -3278,7 +3262,7 @@ async function restoreShoe(shoe) {
                 <svg v-else class="size-3.5 text-[#b94d27]" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
                 </svg>
-              </button>
+              </Button>
             </div>
             <p v-if="isEditingUser" class="mt-1 text-[10px] text-[#8e938e]">
               Only enter a value if you want to reset this administrator's password.
@@ -3286,20 +3270,20 @@ async function restoreShoe(shoe) {
           </div>
 
           <div class="mt-6 flex items-center justify-end gap-3 border-t border-[#cfd2ce] pt-4">
-            <button
+            <Button variant="outline"
               type="button"
               class="border border-[#cfd2ce] bg-white px-4 py-2 text-xs font-bold text-[#5f635f] hover:border-[#292b2d] hover:text-[#202220]"
               @click="showUserModal = false"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button variant="ghost"
               type="submit"
               class="bg-[#292b2d] px-5 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#b94d27]"
               :disabled="userModalSaving"
             >
               {{ userModalSaving ? 'Saving…' : (isEditingUser ? 'Save Changes' : 'Create Administrator') }}
-            </button>
+            </Button>
           </div>
         </form>
       </div>

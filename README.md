@@ -261,3 +261,11 @@ Finished photo-generated seller products offer **Product details → Share as te
 Region editor: left click paints/selects; middle mouse rotates in every tool, wheel zooms, right mouse pans. Smart-fill clicks accumulate for the selected part, including different views. Remove individual pending fills or clear all, then **Apply all fills** once. Tolerance updates each suggestion from its original camera view. **Clear selected part** and **Undo** reverse assigned boundaries. Apply or clear pending fills before changing tools/parts. **Fullscreen editor** preserves camera and edits; Escape exits using the browser's normal fullscreen control.
 
 Verification: `php tools/test-shared-templates.php` uses the isolated local database and original KickCraft fixtures, retires its test accounts/listings, and makes no cloud calls. Do not run it against production. `npm test` includes region/permission/path checks; browser checks cover multi-fill, clear/undo and fullscreen state preservation.
+
+### Shared UI and desktop layout
+
+KickCraft uses editable shadcn-vue controls in `src/components/ui/`, with semantic light-theme tokens in `src/style.css`. `components.json` and the `@/` alias configure JavaScript component generation. The existing PHP API, local GLBs and pickup workflows remain unchanged.
+
+The studio prioritizes 1920×1080 desktop use: a large preview, persistent design summary and reserve action, plus Parts & colors / Charms / Size controls. Section changes keep the viewer and design mounted. Checkout places contact fields beside the existing calendar and shows the pickup store before confirmation. Seller tools share controls and typography; admin navigation is compact and inventory counts remain in filters. Confirmation dialogs use Reka focus containment, Escape dismissal and focus restoration.
+
+Verification covers 1920×1080, 1920×950 and 1536×760 CSS viewports, button/form contracts, section selection, checkout summary and existing moderation restrictions. Local full tests require XAMPP PHP on PATH. No new paid generation or real customer reservation is needed to inspect these views.

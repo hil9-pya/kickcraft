@@ -24,7 +24,7 @@ test('Header navbar is cleaned: does not render "Back to shop" or "Order" button
   // Header should NOT contain standalone "Order" button
   assert.doesNotMatch(
     headerContent,
-    />\s*Order\s*<\/button>/,
+    />\s*Order\s*<\/(?:button|Button)>/,
     '<header> navbar must not contain "Order" button'
   )
 
@@ -46,7 +46,7 @@ test('Studio view renders breadcrumb with "← Back to Catalog" and shoe name', 
   // Breadcrumb button calls goToShop and says "← Back to Catalog"
   assert.match(
     content,
-    /<button[^>]*@click="goToShop"[^>]*>[\s\S]*?← Back to Catalog[\s\S]*?<\/button>/,
+    /<(?:button|Button)[^>]*@click="goToShop"[^>]*>[\s\S]*?← Back to Catalog[\s\S]*?<\/(?:button|Button)>/,
     'Breadcrumb must include a button with "← Back to Catalog" that triggers goToShop'
   )
 
@@ -76,12 +76,12 @@ test('Customer-facing copy is updated from "order" to "reserve" / "reservation"'
   // Studio CTA button
   assert.match(
     content,
-    />\s*Reserve this design\s*<\/button>/,
+    />\s*Reserve this design\s*<\/(?:button|Button)>/,
     'Studio action button must say "Reserve this design"'
   )
   assert.doesNotMatch(
     content,
-    />\s*Order this design\s*<\/button>/,
+    />\s*Order this design\s*<\/(?:button|Button)>/,
     'Studio action button must not say "Order this design"'
   )
 
@@ -119,7 +119,7 @@ test('Customer-facing copy is updated from "order" to "reserve" / "reservation"'
   // Footer Reserve button
   assert.match(
     content,
-    /<button[^>]*@click="openReservation"[^>]*>\s*Reserve\s*<\/button>/,
+    /<(?:button|Button)[^>]*@click="openReservation"[^>]*>\s*Reserve\s*<\/(?:button|Button)>/,
     'Footer link must say "Reserve" instead of "Order"'
   )
 })
@@ -241,22 +241,8 @@ test('Reservation dialog integrates KickCraftCalendar with minPickupDate and max
   )
 })
 
-test('Reservation success dialog renders spring pop animation, brutalist verification stamp, and actions', () => {
+test('Reservation success dialog shows a receipt, pickup status and recovery actions', () => {
   const content = fs.readFileSync(APP_PATH, 'utf8')
-
-  // CSS keyframes popIn and .animate-pop-in definition
-  assert.match(
-    content,
-    /@keyframes\s+popIn\s*\{[\s\S]*?transform:\s*scale\(0\.4\)[\s\S]*?transform:\s*scale\(1\.15\)[\s\S]*?transform:\s*scale\(1\)/,
-    'App.vue must define @keyframes popIn spring animation'
-  )
-  assert.match(
-    content,
-    /\.animate-pop-in\s*\{[\s\S]*?animation:\s*popIn\s+0\.5s/,
-    'App.vue must define .animate-pop-in class'
-  )
-
-  // Extract reservation dialog success section (the v-else block inside #reservation-dialog)
   const dialogMatch = content.match(/id="reservation-dialog"[\s\S]*?<\/dialog>/)
   assert.ok(dialogMatch, 'Reservation dialog must exist')
   const dialogContent = dialogMatch[0]
@@ -265,19 +251,10 @@ test('Reservation success dialog renders spring pop animation, brutalist verific
   assert.ok(successBlockMatch, 'Reservation success view (v-else) must exist')
   const successContent = successBlockMatch[0]
 
-  // Success badge includes animate-pop-in class
-  assert.match(
-    successContent,
-    /animate-pop-in/,
-    'Success checkmark badge must include animate-pop-in animation class'
-  )
+  // Success remains readable without a mandatory motion effect.
+  assert.doesNotMatch(successContent, /animate-pop-in/)
 
-  // Brutalist verification banner
-  assert.match(
-    successContent,
-    /\[\s*✓\s*RESERVATION\s+CONFIRMED\s*·\s*HELD\s+FOR\s+STORE\s+PICKUP\s*\]/,
-    'Success view must render brutalist verification banner "[ ✓ RESERVATION CONFIRMED · HELD FOR STORE PICKUP ]"'
-  )
+  assert.match(successContent, /Awaiting store approval/)
 
   // Staggered details: receipt reference, shoe name & size, pickup date, address, and status
   assert.match(
@@ -306,12 +283,12 @@ test('Reservation success dialog renders spring pop animation, brutalist verific
   // Action buttons
   assert.match(
     successContent,
-    /<button[^>]*@click="closeReservation"[^>]*>[\s\S]*?Continue Designing[\s\S]*?<\/button>/,
+    /<(?:button|Button)[^>]*@click="closeReservation"[^>]*>[\s\S]*?Continue Designing[\s\S]*?<\/(?:button|Button)>/,
     'Success view must render "Continue Designing" button that calls closeReservation'
   )
   assert.match(
     successContent,
-    /<button[^>]*@click="goToTrackReservation"[^>]*>[\s\S]*?Track this reservation[\s\S]*?<\/button>/,
+    /<(?:button|Button)[^>]*@click="goToTrackReservation"[^>]*>[\s\S]*?Track this reservation[\s\S]*?<\/(?:button|Button)>/,
     'Success view must link guests to reservation tracking'
   )
 
@@ -329,4 +306,3 @@ test('mobile customers can reach tracking and reserve from the studio without a 
   assert.match(studio, /fixed inset-x-0 bottom-0[\s\S]*?lg:hidden[\s\S]*?selectedShoe\.name[\s\S]*?selectedSize[\s\S]*?@click="openReservation"/)
   assert.doesNotMatch(footer, /@click="openReservation"/)
 })
-

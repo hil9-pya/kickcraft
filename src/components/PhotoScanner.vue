@@ -1,4 +1,5 @@
 <script setup>
+import { Button } from './ui/button'
 import {ref,computed,onMounted,onBeforeUnmount} from 'vue'
 import TripoCapture from './TripoCapture.vue'
 import ScanPhotoMask from './ScanPhotoMask.vue'
@@ -149,10 +150,10 @@ onBeforeUnmount(()=>{closed=true;clearTimeout(timer);clearFiles()})
 </script>
 <template>
  <section class="photo-scanner" aria-labelledby="scan-title">
-  <div class="scan-header"><h3 id="scan-title">Scan a shoe from photos or video</h3><div class="scan-actions"><button v-if="job" type="button" :disabled="busy" @click="chooseAnotherCapture">Choose another capture</button><button type="button" :disabled="busy" @click="emit('cancel')">Back to shoe details</button></div></div>
+  <div class="scan-header"><h3 id="scan-title">Scan a shoe from photos or video</h3><div class="scan-actions"><Button variant="outline" v-if="job" type="button" :disabled="busy" @click="chooseAnotherCapture">Choose another capture</Button><Button variant="outline" type="button" :disabled="busy" @click="emit('cancel')">Back to shoe details</Button></div></div>
   <p v-if="error" role="alert" class="scan-error">{{error}}</p>
   <p v-if="job?.alignmentMinPercent===65" class="scan-error" role="status">Experimental reconstruction: 65% alignment threshold, at least 30 aligned views. Lower alignment may produce incomplete geometry, holes, or missing shoe surfaces. Compare all photos before accepting; model validation and admin approval still apply.</p>
-  <div v-if="!job&&recoverable.length" class="scan-actions"><p>Saved captures:</p><button v-for="capture in recoverable" :key="capture.id" type="button" @click="recover(capture.id)">Resume {{capture.engine==='tripo'?'Tripo · ':''}}{{capture.imageCount}} photos · {{capture.state}} · {{capture.createdAt}}</button></div>
+  <div v-if="!job&&recoverable.length" class="scan-actions"><p>Saved captures:</p><Button variant="outline" v-for="capture in recoverable" :key="capture.id" type="button" @click="recover(capture.id)">Resume {{capture.engine==='tripo'?'Tripo · ':''}}{{capture.imageCount}} photos · {{capture.state}} · {{capture.createdAt}}</Button></div>
   <fieldset v-if="!job && !files.length" class="scan-engine" :disabled="busy"><legend>Capture method</legend>
    <label><input v-model="selectedEngine" type="radio" value="meshroom"> Local photo / video scanner</label>
    <label v-if="nativeAvailable"><input v-model="selectedEngine" type="radio" value="realityscan"> Video with AI background masks (comparison)</label>
@@ -183,43 +184,43 @@ onBeforeUnmount(()=>{closed=true;clearTimeout(timer);clearFiles()})
    <p v-if="missingCalibration" class="scan-error">{{missingCalibration}} photos have no camera focal metadata. Original phone/camera JPGs are preferred. If the shape fails comparison, recapture with original camera files.</p>
    <p>{{job?.imageCount || 0}} photos saved · {{files.length}} selected for upload</p>
    <div v-if="!job?.images?.some(image=>image.maskUrl) || files.length" class="photo-grid">
-    <figure v-for="image in job?.images || []" :key="image.id"><img :src="image.previewUrl" :alt="image.name" loading="lazy"><figcaption>{{image.maskReviewed?'Mask reviewed':image.maskUrl?'Review draft mask':'Mask needed'}}</figcaption><button type="button" :disabled="busy" @click="maskImageId=image.id">{{image.maskReviewed?'Edit mask':'Remove background'}}</button></figure>
-    <figure v-for="(item,index) in files" :key="item.url"><img :src="item.url" :alt="item.file.name"><button type="button" :disabled="busy" @click="remove(index)" :aria-label="'Remove '+item.file.name">Remove</button></figure>
+    <figure v-for="image in job?.images || []" :key="image.id"><img :src="image.previewUrl" :alt="image.name" loading="lazy"><figcaption>{{image.maskReviewed?'Mask reviewed':image.maskUrl?'Review draft mask':'Mask needed'}}</figcaption><Button variant="outline" type="button" :disabled="busy" @click="maskImageId=image.id">{{image.maskReviewed?'Edit mask':'Remove background'}}</Button></figure>
+    <figure v-for="(item,index) in files" :key="item.url"><img :src="item.url" :alt="item.file.name"><Button variant="outline" type="button" :disabled="busy" @click="remove(index)" :aria-label="'Remove '+item.file.name">Remove</Button></figure>
    </div>
    <p v-if="job?.error" role="alert" class="scan-error">{{job.error}}</p>
-   <div v-if="nativeAvailable && job?.imageCount" class="scan-actions"><button type="button" :disabled="busy || files.length>0 || job.maskCount===job.imageCount" @click="generateAiMasks">Generate AI masks for unreviewed photos</button><p>AI selects the object instead of matching background colors. Reviewed masks are kept; new masks need review.</p></div>
+   <div v-if="nativeAvailable && job?.imageCount" class="scan-actions"><Button variant="outline" type="button" :disabled="busy || files.length>0 || job.maskCount===job.imageCount" @click="generateAiMasks">Generate AI masks for unreviewed photos</Button><p>AI selects the object instead of matching background colors. Reviewed masks are kept; new masks need review.</p></div>
    <p v-if="job">{{job.maskCount || 0}} of {{job.imageCount}} background masks reviewed. Every photo needs a reviewed mask.</p>
    <ScanPhotoMask v-if="maskImage" :image="maskImage" :saving="busy" :ai-available="nativeAvailable && !files.length" @ai="generateAiMasks" v-model:background="maskColor" v-model:tolerance="maskTolerance" @save="saveMask" @batch="batchMasks" @close="maskImageId=null" />
    <ScanMaskReview v-else-if="job?.images?.some(image=>image.maskUrl)" :images="job.images" :saving="busy" @save="saveReviewedMasks" @edit="maskImageId=$event" />
    <p v-if="progress" aria-live="polite">{{progress}}</p>
    <div class="scan-actions">
-    <button v-if="!nativeVideo" type="button" :disabled="busy || !files.length" @click="upload">{{busy?'Working…':'Save selected photos'}}</button>
-    <button type="button" :disabled="busy || files.length>0 || (job?.imageCount || 0)<30 || job.maskCount!==job.imageCount" @click="start(false)">Start reconstruction</button>
-    <button v-if="job" type="button" :disabled="busy" @click="newCapture">Start new capture</button>
+    <Button variant="outline" v-if="!nativeVideo" type="button" :disabled="busy || !files.length" @click="upload">{{busy?'Working…':'Save selected photos'}}</Button>
+    <Button variant="outline" type="button" :disabled="busy || files.length>0 || (job?.imageCount || 0)<30 || job.maskCount!==job.imageCount" @click="start(false)">Start reconstruction</Button>
+    <Button variant="outline" v-if="job" type="button" :disabled="busy" @click="newCapture">Start new capture</Button>
    </div>
    <p v-if="job">Saved photos survive a reload. Reselect any photos whose upload was interrupted; duplicates are skipped.</p>
   </template>
   <template v-else-if="['queued','processing'].includes(job.state)">
    <p role="status">{{job.stage}}</p><p v-if="job.operation==='mask'">Removing backgrounds locally. No Tripo credits used. Review cutouts when processing finishes.</p><p v-else-if="tripoMode">Tripo cloud generation is handled by the local worker. Refreshing this page does not submit another paid request.</p><p>This may take several minutes. You can close this editor and return to the saved scan.</p>
-   <button type="button" @click="observe">Refresh status</button>
+   <Button variant="outline" type="button" @click="observe">Refresh status</Button>
   </template>
   <template v-else-if="job.state==='finalized'">
    <model-viewer v-if="job.draft" :src="job.draft.glbPath" camera-controls alt="Prepared scanned shoe" class="likeness-preview"></model-viewer>
    <p>Prepared model saved. Continue the catalog details, or start a new capture.</p>
-   <div class="scan-actions"><button v-if="job.draft" type="button" @click="emit('complete',job.draft,job.id)">Continue shoe details</button><button type="button" @click="newCapture">Start new capture</button></div>
+   <div class="scan-actions"><Button variant="outline" v-if="job.draft" type="button" @click="emit('complete',job.draft,job.id)">Continue shoe details</Button><Button variant="outline" type="button" @click="newCapture">Start new capture</Button></div>
   </template>
   <template v-else-if="job.state==='ready'">
    <template v-if="!accepted">
     <p>{{job.stage}}</p>
     <div class="scan-comparison"><model-viewer :src="job.previewUrl" camera-controls alt="Reconstructed shoe preview" class="likeness-preview"></model-viewer><figure v-if="referenceImage"><img :src="referenceImage.previewUrl" :alt="referenceImage.name"><figcaption>Original photo — {{referenceImage.name}}</figcaption></figure></div>
-    <div class="photo-grid"><figure v-for="image in job.images" :key="image.id"><button type="button" @click="referenceId=image.id" :aria-label="'Compare with '+image.name"><img :src="image.previewUrl" :alt="image.name" loading="lazy"></button></figure></div>
+    <div class="photo-grid"><figure v-for="image in job.images" :key="image.id"><Button variant="outline" type="button" @click="referenceId=image.id" :aria-label="'Compare with '+image.name"><img :src="image.previewUrl" :alt="image.name" loading="lazy"></Button></figure></div>
     <p>Compare the shape and photographed details from every angle. Accept only if this is a usable match for your actual shoe.</p>
     <fieldset class="likeness-checks"><legend>Check all views before marking parts</legend>
      <label><input v-model="likenessChecks" type="checkbox" value="front"> Front and toe shape match the original photos.</label>
      <label><input v-model="likenessChecks" type="checkbox" value="sides"> Both sides, sole, and heel match the original photos.</label>
      <label><input v-model="likenessChecks" type="checkbox" value="details"> Laces and tongue are usable; floor and background are removed.</label>
     </fieldset>
-    <div class="scan-actions"><button type="button" :disabled="likenessChecks.length!==3" @click="acceptLikeness">Shape matches — mark parts</button><button type="button" @click="newCapture">Recapture shoe</button></div>
+    <div class="scan-actions"><Button variant="outline" type="button" :disabled="likenessChecks.length!==3" @click="acceptLikeness">Shape matches — mark parts</Button><Button variant="outline" type="button" @click="newCapture">Recapture shoe</Button></div>
    </template>
    <fieldset v-else :disabled="busy"><ScanRegionEditor :preview-url="job.previewUrl" :saving="busy" @complete="complete" /></fieldset>
    <p v-if="busy" role="status">Saving prepared model…</p>
@@ -230,14 +231,13 @@ onBeforeUnmount(()=>{closed=true;clearTimeout(timer);clearFiles()})
    <p v-if="job.canRetry">Retry reuses your saved photos and reviewed masks. No upload or masking needed.</p>
    <p v-if="job.canExperimentalRetry" class="scan-error" id="experimental-retry-warning">Experimental 65% retry may produce incomplete geometry, holes, or missing shoe surfaces. At least 30 views must still align. The result needs model validation, photo comparison, and admin approval; it is not automatically accepted or published.</p>
    <div class="scan-actions">
-    <button v-if="job.canRetry" type="button" :disabled="busy" @click="start(false)">Retry saved capture (80%)</button>
-    <button v-if="job.canExperimentalRetry" type="button" :disabled="busy" aria-describedby="experimental-retry-warning" @click="start(true)">Experimental retry (65%)</button>
-    <button type="button" :disabled="busy" @click="newCapture">Start new capture</button>
+    <Button variant="outline" v-if="job.canRetry" type="button" :disabled="busy" @click="start(false)">Retry saved capture (80%)</Button>
+    <Button variant="outline" v-if="job.canExperimentalRetry" type="button" :disabled="busy" aria-describedby="experimental-retry-warning" @click="start(true)">Experimental retry (65%)</Button>
+    <Button variant="outline" type="button" :disabled="busy" @click="newCapture">Start new capture</Button>
    </div>
   </template>
  </section>
 </template>
 <style scoped>
-.scan-engine{display:flex;flex-wrap:wrap;gap:12px}.scan-engine legend{font-weight:700;margin-bottom:8px}.scan-engine label{display:flex;gap:8px;align-items:center}.scan-comparison{display:grid;grid-template-columns:1fr 1fr;gap:16px}.scan-comparison figure{display:grid;align-content:center}.scan-comparison img{max-height:400px;width:100%;object-fit:contain}.likeness-checks{display:grid;gap:8px}.likeness-checks legend{font-weight:700;margin-bottom:8px}.likeness-checks label{display:flex;align-items:start;gap:8px}.likeness-checks input{margin-top:4px}.photo-scanner{padding:20px;border:1px solid #ccc;background:white;display:grid;grid-auto-rows:max-content;align-content:start;gap:16px;color:#202220}.scan-header{display:flex;justify-content:space-between;align-items:center;gap:12px}.scan-header h3{font-weight:700;font-size:20px}.scan-actions{display:flex;flex-wrap:wrap;gap:12px}ol{list-style:decimal;padding-left:22px;line-height:1.6}.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:12px;max-height:260px;overflow:auto}.photo-grid img{width:100%;height:85px;object-fit:cover}.photo-grid button{padding:4px;font-size:12px;width:100%}button,.file-button{display:inline-block;border:1px solid #777;padding:10px 14px;background:white;cursor:pointer}button:disabled{opacity:.45;cursor:not-allowed}button:focus-visible,.file-button:focus-within{outline:2px solid #b94d27;outline-offset:2px}.file-button input{display:block;max-width:220px;font-size:12px;margin-top:6px}.scan-error{padding:12px;background:#fff0eb;color:#a92d17}.likeness-preview{width:100%;height:400px;background:#f4f5f3}@media(max-width:600px){.scan-comparison{grid-template-columns:1fr}.photo-scanner{padding:12px}.scan-header{align-items:start;flex-direction:column}.likeness-preview{height:300px}}
+.scan-engine{display:flex;flex-wrap:wrap;gap:12px}.scan-engine legend{font-weight:700;margin-bottom:8px}.scan-engine label{display:flex;gap:8px;align-items:center}.scan-comparison{display:grid;grid-template-columns:1fr 1fr;gap:16px}.scan-comparison figure{display:grid;align-content:center}.scan-comparison img{max-height:400px;width:100%;object-fit:contain}.likeness-checks{display:grid;gap:8px}.likeness-checks legend{font-weight:700;margin-bottom:8px}.likeness-checks label{display:flex;align-items:start;gap:8px}.likeness-checks input{margin-top:4px}.photo-scanner{padding:20px;border:1px solid #ccc;background:white;display:grid;grid-auto-rows:max-content;align-content:start;gap:16px;color:#202220}.scan-header{display:flex;justify-content:space-between;align-items:center;gap:12px}.scan-header h3{font-weight:700;font-size:20px}.scan-actions{display:flex;flex-wrap:wrap;gap:12px}ol{list-style:decimal;padding-left:22px;line-height:1.6}.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:12px;max-height:260px;overflow:auto}.photo-grid img{width:100%;height:85px;object-fit:cover}.photo-grid button:not([data-slot]){padding:4px;font-size:12px;width:100%}button:not([data-slot]),.file-button:not([data-slot]){display:inline-block;border:1px solid #777;padding:10px 14px;background:white;cursor:pointer}button:not([data-slot]):disabled{opacity:.45;cursor:not-allowed}button:not([data-slot]):focus-visible,.file-button:focus-within{outline:2px solid #b94d27;outline-offset:2px}.file-button input{display:block;max-width:220px;font-size:12px;margin-top:6px}.scan-error{padding:12px;background:#fff0eb;color:#a92d17}.likeness-preview{width:100%;height:400px;background:#f4f5f3}@media(max-width:600px){.scan-comparison{grid-template-columns:1fr}.photo-scanner{padding:12px}.scan-header{align-items:start;flex-direction:column}.likeness-preview{height:300px}}
 </style>
-
