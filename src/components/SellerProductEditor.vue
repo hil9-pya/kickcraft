@@ -22,7 +22,7 @@ const previewInput=frameLatest(color=>preview(color))
 const paletteInput=frameLatest(({index,color})=>{if(form.colors[index])form.colors[index].value=color})
 function reusePreview(color){previewInput.cancel();previewHex.value=color;preview(color);rememberColor(color)}
 function reusePalette(color){paletteInput.flush();form.colors[paletteIndex.value].value=color}
-watch(()=>[props.shoe.publicationState,props.shoe.reviewNote],([state,note])=>{form.publicationState=state;form.reviewNote=note})
+watch(()=>[props.shoe.publicationState,props.shoe.reviewNote],([state,note])=>{if(state!==form.publicationState)message.value='';form.publicationState=state;form.reviewNote=note})
 async function loaded() {
  ready.value=false;original.clear();highlighted=null
  try {

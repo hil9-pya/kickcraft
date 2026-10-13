@@ -143,3 +143,13 @@ test('seller product cards offer unpublish/remove and archived cards offer resto
  const archived=await renderFile('SellerDashboard.vue',{...base,products:[{...product,deletedAt:'2026-10-14'}],visibleProducts:[{...product,deletedAt:'2026-10-14'}],productView:'archived'})
  assert.match(archived,/>Restore draft<\/button>/);assert.doesNotMatch(archived,/>Unpublish<\/button>/)
 })
+
+test('draft products offer rejection with a review note, but cannot be approved',async()=>{
+ const draft={...shoe,publicationState:'draft',price:1234,stock:0,sizes:[9]}
+ const html=await screen({mode:'products',selected:draft})
+ assert.match(html,/>Reject listing<\/button>/)
+ assert.doesNotMatch(html,/>Approve listing<\/button>/)
+ assert.match(html,/Submit for review in Product details/)
+ const template=await screen({mode:'templates',selected:{...draft}})
+ assert.doesNotMatch(template,/>Reject \/ withdraw template<\/button>/)
+})
