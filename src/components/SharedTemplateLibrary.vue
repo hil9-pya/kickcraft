@@ -1,5 +1,6 @@
 <script setup>
 import { Button } from './ui/button'
+import ShoeThumbnail from './ShoeThumbnail.vue'
 import {ref,onMounted,onBeforeUnmount,nextTick} from 'vue'
 import {api} from '../api.js'
 import {prepareScanMaterials,setMaterialColor,restoreMaterialColor} from '../customization.js'
@@ -30,7 +31,7 @@ onMounted(load);onBeforeUnmount(()=>{selection++;clearPhoto()})
 </script>
 <template>
  <section class="stack">
-  <header><div><h2>Shared shoe templates</h2><p class="muted">Reuse an approved original model and its editable parts. No AI generation credits. Creator keeps attribution.</p></div><Button variant="outline" :disabled="loading||busy" @click="load">Refresh templates</Button></header>
+  <header><div><h2>Shared shoe templates</h2><p class="muted">Reuse an approved original model and its editable parts. Creator keeps attribution.</p></div><Button variant="outline" :disabled="loading||busy" @click="load">Refresh templates</Button></header>
   <p v-if="error" class="error" role="alert">{{error}}</p><p v-if="loading" role="status">Loading templates…</p>
   <section v-if="selected" ref="previewPanel" class="panel stack"><div class="actions"><h3>{{selected.name}}</h3><Button variant="outline" :disabled="busy" @click="selection++;selected=null;clearPhoto()">Close template</Button></div>
    <div class="editor-grid"><div class="stack"><model-viewer :key="selected.id" ref="viewer" :src="selected.glbPath" camera-controls alt="Shared shoe template preview" @load="loaded" @error="error='Could not load template model.'"></model-viewer><label>Preview part<select v-model="part"><option v-for="item in selected.parts" :key="item.id" :value="item.material">{{item.label}}</option></select></label><div class="actions"><Button variant="outline" @click="recolor('#b94d27')">Test rust</Button><Button variant="outline" @click="recolor('#245fa8')">Test blue</Button><Button variant="outline" @click="reset">Original texture</Button></div></div>
@@ -41,7 +42,7 @@ onMounted(load);onBeforeUnmount(()=>{selection++;clearPhoto()})
    </div>
   </section>
   <p v-if="!loading&&!templates.length" class="panel">No shared templates yet. Finish a photo-generated shoe, then choose Share as template in Product details.</p>
-  <div class="product-list"><article v-for="template in templates" :key="template.id" class="panel stack"><img class="product-image" :src="template.thumbnailPath" :alt="template.name"><p class="tag">{{template.publicationState}} · {{template.parts.length}} editable parts</p><h3>{{template.name}}</h3><p>By {{template.storeName}}</p><Button variant="outline" :disabled="busy" @click="inspect(template)">Preview template</Button></article></div>
+  <div class="product-list"><article v-for="template in templates" :key="template.id" class="panel stack"><ShoeThumbnail :src="template.glbPath" :image="template.thumbnailPath" :alt="template.name" /><p class="tag">{{template.publicationState}} · {{template.parts.length}} editable parts</p><h3>{{template.name}}</h3><p>By {{template.storeName}}</p><Button variant="outline" :disabled="busy" @click="inspect(template)">Preview template</Button></article></div>
  </section>
 </template>
 <style scoped>.matching-photo{width:100%;max-height:240px;object-fit:contain}</style>

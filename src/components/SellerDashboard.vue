@@ -8,6 +8,7 @@ import {validateStore,pickupActions,pickupLabels} from '../seller.js'
 import {forgetCompletedScan} from '../scan-capture.js'
 import PhotoScanner from './PhotoScanner.vue'
 import ConfirmModal from './ConfirmModal.vue'
+import ShoeThumbnail from './ShoeThumbnail.vue'
 import SharedTemplateLibrary from './SharedTemplateLibrary.vue'
 import SellerProductEditor from './SellerProductEditor.vue'
 import '../seller.css'
@@ -92,14 +93,21 @@ onBeforeUnmount(()=>{closed=true;clearInterval(timer)})
       <p class="muted creation-help">Create a 3D draft from photos; compare every angle because unseen details may differ. The template starts from KickCraft’s existing eight-part design.</p>
       <form v-if="uploading" class="panel stack upload-form" @submit.prevent="upload"><h2>Upload an original shoe</h2><p>GLB must contain 2–16 independently named material regions, at most 50,000 triangles, with embedded resources. Single-material models need photo scanning and part painting.</p><label>GLB model (up to 20 MB)<input type="file" accept=".glb,model/gltf-binary" required @change="glb=$event.target.files[0]"></label><label>Matching PNG thumbnail (up to 10 MB)<input type="file" accept="image/png" required @change="thumbnail=$event.target.files[0]"></label><Button variant="default" class="primary" :disabled="busy">{{busy?'Uploading…':'Upload product draft'}}</Button></form>
       <p v-if="!products.length&&!loading" class="panel empty-products">No products yet. Scan your shoe, upload a compatible GLB, or start with the original template.</p>
-      <div class="product-list"><article v-for="shoe in products" :key="shoe.id" class="panel stack"><img class="product-image" :src="shoe.thumbnailPath" :alt="shoe.name"><p class="tag">{{shoe.publicationState}} · {{shoe.parts.length}} custom parts</p><h2>{{shoe.name}}</h2><p>₱{{Number(shoe.price).toLocaleString()}} · {{shoe.stock}} pairs</p><p v-if="shoe.reviewNote" class="notice">{{shoe.reviewNote}}</p><Button variant="outline" @click="editing=shoe">Edit product</Button></article></div>
+      <div class="product-list"><article v-for="shoe in products" :key="shoe.id" class="panel stack"><ShoeThumbnail :src="shoe.glbPath" :image="shoe.thumbnailPath" :alt="shoe.name" /><p class="tag">{{shoe.publicationState}} · {{shoe.parts.length}} custom parts</p><h2>{{shoe.name}}</h2><p>₱{{Number(shoe.price).toLocaleString()}} · {{shoe.stock}} pairs</p><p v-if="shoe.reviewNote" class="notice">{{shoe.reviewNote}}</p><Button variant="outline" @click="editing=shoe">Edit product</Button></article></div>
      </template>
     </section>
     <SharedTemplateLibrary v-else-if="tab==='templates'" @created="tab='products';saved($event)" />
-    <section v-else-if="tab==='orders'" class="panel stack">
-     <div class="actions"><h2>Pickup orders</h2><label>Show<select v-model="orderFilter"><option value="all">All orders</option><option v-for="(label,status) in pickupLabels" :key="status" :value="status">{{label}}</option></select></label></div>
-     <p v-if="!visibleOrders.length">No pickup orders in this view.</p>
-     <article class="row" v-for="order in visibleOrders" :key="order.id"><div class="actions"><h3>{{order.shoeName}} · US {{order.size}}</h3><strong>{{pickupLabels[order.status]}}</strong></div><p>{{order.id}} · {{order.customerName}} · {{order.email}}<br>Pickup: {{order.pickupDate}} · ₱{{Number(order.price).toLocaleString()}}<br>{{order.pickupStore}} — {{order.pickupAddress}}</p><div class="checks"><span v-for="(color,id) in order.partColors" :key="id"><i :style="{background:color.value,display:'inline-block',width:'14px',height:'14px',border:'1px solid #bbb'}"></i> {{id}}: {{color.name}}</span><span>Charm: {{order.charmLabel || order.charmId || 'None'}}</span></div><label>Order notes / cancellation reason<Textarea :model-value="orderNotes[order.id]??order.notes" @update:model-value="orderNotes[order.id]=$event" maxlength="2000" /></label><div class="actions"><Button variant="outline" v-for="status in pickupActions[order.status] || []" :key="status" :disabled="busy" @click="status==='completed'?completing=order:updateOrder(order,status)">{{status==='approved'?'Confirm order':status==='ready'?'Mark ready':status==='completed'?'Complete pickup':'Cancel order'}}</Button></div></article>
+    <section v-else-if="tab==='orders'" class="order-workspace stack">
+     <div class="workspace-heading"><div><h2>Pickup orders</h2><p class="muted">{{visibleOrders.length}} {{visibleOrders.length===1?'order':'orders'}} in this view</p></div><label class="order-filter">Status<select v-model="orderFilter"><option value="all">All orders</option><option v-for="(label,status) in pickupLabels" :key="status" :value="status">{{label}}</option></select></label></div>
+     <p v-if="!visibleOrders.length" class="panel empty-products">No pickup orders in this view.</p>
+     <article class="order-card panel" v-for="order in visibleOrders" :key="order.id">
+      <header class="order-heading"><div><p class="muted">{{order.id}}</p><h3>{{order.shoeName}} <span class="muted">· US {{order.size}}</span></h3></div><div class="order-state"><strong>₱{{Number(order.price).toLocaleString()}}</strong><span class="order-status" :data-status="order.status">{{pickupLabels[order.status]}}</span></div></header>
+      <div class="order-information">
+       <div class="stack order-customer"><div><p class="muted">Customer</p><p><strong>{{order.customerName}}</strong></p><p>{{order.email}}</p></div><details class="order-design"><summary>Design details</summary><div class="order-colors"><span v-for="(color,id) in order.partColors" :key="id"><i aria-hidden="true" :style="{background:color.value}"></i>{{id}}: {{color.name}}</span><span>Charm: {{order.charmLabel || order.charmId || 'None'}}</span></div></details></div>
+       <div class="order-pickup"><p class="muted">Pickup date</p><p><strong>{{order.pickupDate}}</strong></p><p class="order-store">{{order.pickupStore}}</p><p class="muted">{{order.pickupAddress}}</p></div>
+       <div class="stack order-controls"><label>Order notes / cancellation reason<Textarea :model-value="orderNotes[order.id]??order.notes" @update:model-value="orderNotes[order.id]=$event" maxlength="2000" /></label><div v-if="pickupActions[order.status]?.length" class="order-actions"><Button v-for="status in pickupActions[order.status] || []" :key="status" :variant="status==='cancelled'?'outline':'default'" :class="{'text-destructive':status==='cancelled'}" :disabled="busy" @click="status==='completed'?completing=order:updateOrder(order,status)">{{status==='approved'?'Confirm order':status==='ready'?'Mark ready':status==='completed'?'Complete pickup':'Cancel order'}}</Button></div></div>
+      </div>
+     </article>
     </section>
    </template>
    <form v-if="(profile.status!=='approved'||tab==='settings')&&profile.status!=='suspended'" class="panel stack store-settings" @submit.prevent="saveStore">

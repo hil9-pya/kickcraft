@@ -47,14 +47,14 @@ function tripoProcess(array $job,callable $progress,?callable $request=null,?cal
   if(is_file($attempt))scanFail('Generation response was lost. Check the AI provider dashboard; automatic resubmission is blocked to prevent duplicate charges.');
   $useMasks=tripoRecord($dir.'/tripo-options.json')['useMasks']??(bool)array_filter($job['images'],fn($image)=>!empty($image['maskReviewed']));
   if($useMasks)scanCheckMasks($job['images'],$dir.'/masks');
-  $progress('Checking generation credit balance');$balance=$request('GET','/account/balance');tripoCredits($balance['balance']??null);
+  $progress('Preparing photo generation');$balance=$request('GET','/account/balance');tripoCredits($balance['balance']??null);
   $tokens=[];
   foreach(tripoViews($job['images']) as $view=>$image){$progress('Preparing and uploading '.$view.' reference to AI provider');$file=tripoInput($image,$dir,$view,$useMasks);$upload=$request('POST','/files',['file'=>new CURLFile($file,'image/png',$view.'.png')],true);$tokens[$view]=$upload['file_token']??'';}
   $generation=tripoGeneration($tokens);
   $fence=@fopen($attempt,'x');if(!$fence)scanFail('Generation already attempted; no duplicate paid request was sent');
   $json=json_encode(['startedAt'=>gmdate('c'),'expectedCredits'=>TRIPO_SCAN_CREDITS,'useMasks'=>$useMasks,'inputHashes'=>array_column($job['images'],'hash'),'request'=>$generation],JSON_THROW_ON_ERROR);
   $written=fwrite($fence,$json);fflush($fence);fclose($fence);if($written!==strlen($json))scanFail('Cannot save paid-request guard; no generation was sent');
-  $progress('Photo generation requested (30 credits)');$task=$request('POST',$generation['path'],$generation['body']);
+  $progress('Photo generation requested');$task=$request('POST',$generation['path'],$generation['body']);
   if(!is_string($task['task_id']??null) || !preg_match('/^[a-zA-Z0-9_-]{1,200}$/D',$task['task_id']))scanFail('AI provider returned no valid task ID. Automatic resubmission is blocked; check the AI provider dashboard.');
   tripoWrite($record,$task);
  }

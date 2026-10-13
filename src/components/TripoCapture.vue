@@ -1,19 +1,20 @@
 <script setup>
 import { Button } from './ui/button'
+import ConfirmModal from './ConfirmModal.vue'
 import {ref,computed,watch,onBeforeUnmount} from 'vue'
 import {validateCaptureFile,fetchScanJob} from '../scan-capture.js'
 import {uploadTripoCapture,startTripoScan} from '../tripo-capture.js'
 const props=defineProps({job:{type:Object,default:null},disabled:Boolean,available:Boolean,maskAvailable:Boolean})
 const emit=defineEmits(['saved','queued','busy','reset','mask'])
-const selected=ref({}),error=ref(''),progress=ref(''),consent=ref(false),useMasks=ref(false)
-const views=[{id:'front',label:'Front / three-quarter (required)'},{id:'left',label:'Left side (optional)'},{id:'back',label:'Heel / back (optional)'},{id:'right',label:'Right side (optional)'}]
+const selected=ref({}),error=ref(''),progress=ref(''),confirming=ref(false),useMasks=ref(false)
+const views=[{id:'front',label:'Front / three-quarter'},{id:'left',label:'Left side'},{id:'back',label:'Heel / back'},{id:'right',label:'Right side'}]
 const saved=computed(()=>Object.fromEntries((props.job?.images || []).map(image=>[image.view,image])))
 const hasFiles=computed(()=>Object.keys(selected.value).length>0)
 const resumed=computed(()=>props.job?.tripoTaskSaved===true)
 const hasMasks=computed(()=>props.job?.images?.some(image=>image.maskUrl))
 const masksReady=computed(()=>!useMasks.value || (props.job?.images?.length>0 && props.job.images.every(image=>image.maskUrl && image.maskReviewed)))
 watch(()=>[props.job?.id,props.job?.tripoTaskSaved,props.job?.images?.map(image=>image.maskUrl).join('|')],()=>{
- useMasks.value=resumed.value?props.job.tripoUseMasks===true:!!hasMasks.value;consent.value=false
+ useMasks.value=resumed.value?props.job.tripoUseMasks===true:!!hasMasks.value;confirming.value=false
 },{immediate:true})
 async function choose(event,view) {
  const file=event.target.files?.[0];event.target.value='';if(!file)return
@@ -38,7 +39,8 @@ async function upload() {
  finally{emit('busy',false)}
 }
 async function generate() {
- if(!consent.value || !masksReady.value || hasFiles.value)return
+ if(!confirming.value || props.disabled || !props.available || !props.job?.id || !saved.value.front || !masksReady.value || hasFiles.value)return
+ confirming.value=false
  emit('busy',true);error.value=''
  try{emit('queued',await startTripoScan(props.job.id,useMasks.value))}catch(cause){error.value=cause.message}finally{emit('busy',false)}
 }
@@ -60,25 +62,23 @@ onBeforeUnmount(()=>{for(const item of Object.values(selected.value))URL.revokeO
    </label></div>
    <Button variant="outline" type="button" :disabled="!hasFiles || (!saved.front && !selected.front)" @click="upload">Save reference photos</Button>
   </fieldset>
-  <section v-if="job?.state==='uploading' && job.imageCount" class="background-tools" aria-label="Optional background removal">
-   <h4>Background cleanup (optional)</h4>
-   <p>Remove backgrounds locally before sending photos to the external cloud service. No extra generation credits. Reviewed masks are kept; check laces, toe and sole edges carefully.</p>
-   <Button variant="outline" type="button" :disabled="disabled || hasFiles || !maskAvailable || job.maskCount===job.imageCount" @click="consent=false;emit('mask')">Remove backgrounds</Button>
+  <section v-if="job?.state==='uploading' && job.imageCount" class="background-tools" aria-label="Background removal">
+   <h4>Background cleanup</h4>
+   <p>Remove backgrounds locally before sending photos to the external cloud service. Reviewed masks are kept; check laces, toe and sole edges carefully.</p>
+   <Button variant="outline" type="button" :disabled="disabled || hasFiles || !maskAvailable || job.maskCount===job.imageCount" @click="confirming=false;emit('mask')">Remove backgrounds</Button>
    <p v-if="!maskAvailable">Background removal is unavailable. Use the original photos or configure the existing local masking worker.</p>
-   <label v-if="hasMasks" class="cloud-consent"><input v-model="useMasks" type="checkbox" :disabled="disabled" @change="consent=false">Use background-removed photos for generation</label>
+   <label v-if="hasMasks" class="cloud-consent"><input v-model="useMasks" type="checkbox" :disabled="disabled" @change="confirming=false">Use background-removed photos for generation</label>
    <p v-if="hasMasks" role="status">{{useMasks?'Review and save every cutout before generation.':'Original photos will be sent. Saved masks remain available.'}} {{job.maskCount}} of {{job.imageCount}} masks reviewed.</p>
    <slot v-if="hasMasks" name="masks"></slot>
   </section>
   <p v-if="progress" role="status">{{progress}}</p>
   <template v-if="job && (job.state==='uploading' || job.canRetry)">
-   <p v-if="resumed">Resume saved generation. No new generation request or generation charge will be made.</p>
-   <p v-else><strong>Generation uses 30 credits ($0.30).</strong></p>
-   <label class="cloud-consent"><input v-model="consent" type="checkbox" :disabled="disabled || !available">{{resumed?'Resume the saved task and download its result from the external cloud service.':'I agree to upload these reference photos to the external cloud service and use 30 credits to create the 3D model.'}}</label>
-   <Button variant="outline" type="button" :disabled="disabled || !available || !consent || hasFiles || !saved.front || !masksReady" @click="generate">{{disabled?'Working…':resumed?'Resume saved generation':'Generate shoe — 30 credits'}}</Button>
+   <p v-if="resumed">Continue processing your saved model.</p>
+   <Button variant="outline" type="button" :disabled="disabled || !available || hasFiles || !saved.front || !masksReady" @click="confirming=true">{{disabled?'Working…':resumed?'Resume saved generation':'Generate shoe'}}</Button>
   </template>
   <p v-if="useMasks && !masksReady" role="status">Generation stays disabled until every background-removed photo is reviewed. Uncheck the option to use originals instead.</p>
-  <p>Generated models need photo comparison, at least two editable parts, and normal product/admin review. Nothing is approved or published automatically.</p>
   <Button variant="outline" v-if="job" type="button" :disabled="disabled" @click="emit('reset')">Start new capture</Button>
+  <ConfirmModal :show="confirming" :title="resumed?'Resume saved generation?':'Create 3D model?'" :message="resumed?'Continue your saved task and download its result from the cloud service.':'Upload your reference photos to the cloud service to create a 3D shoe model?'" :confirm-text="resumed?'Resume generation':'Create model'" cancel-text="Keep editing" @confirm="generate" @cancel="confirming=false" />
  </div>
 </template>
 <style scoped>

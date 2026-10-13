@@ -157,7 +157,7 @@ onBeforeUnmount(()=>{closed=true;clearTimeout(timer);clearFiles()})
   <fieldset v-if="!job && !files.length" class="scan-engine" :disabled="busy"><legend>Capture method</legend>
    <label><input v-model="selectedEngine" type="radio" value="meshroom"> Local photo / video scanner</label>
    <label v-if="nativeAvailable"><input v-model="selectedEngine" type="radio" value="realityscan"> Video with AI background masks (comparison)</label>
-   <label><input v-model="selectedEngine" type="radio" value="tripo" :disabled="!tripoAvailable"> Generate from photos — 1–4 photos, 30 credits</label>
+   <label><input v-model="selectedEngine" type="radio" value="tripo" :disabled="!tripoAvailable"> Generate from photos — 1–4 photos</label>
    <p v-if="!tripoAvailable">Photo generation needs a configured cloud service and local worker.</p>
   </fieldset>
   <TripoCapture v-if="tripoMode && (!job || ['uploading','failed'].includes(job.state))" :job="job" :disabled="busy" :available="tripoAvailable" :mask-available="nativeAvailable" @mask="generateAiMasks" @saved="remember" @queued="tripoQueued" @busy="busy=$event" @reset="newCapture">
@@ -201,7 +201,7 @@ onBeforeUnmount(()=>{closed=true;clearTimeout(timer);clearFiles()})
    <p v-if="job">Saved photos survive a reload. Reselect any photos whose upload was interrupted; duplicates are skipped.</p>
   </template>
   <template v-else-if="['queued','processing'].includes(job.state)">
-   <p role="status">{{job.stage}}</p><p v-if="job.operation==='mask'">Removing backgrounds locally. No generation credits used. Review cutouts when processing finishes.</p><p v-else-if="tripoMode">Cloud photo generation is handled by the local worker. Refreshing this page does not submit another paid request.</p><p>This may take several minutes. You can close this editor and return to the saved scan.</p>
+   <p role="status">{{job.stage}}</p><p v-if="job.operation==='mask'">Removing backgrounds locally. Review cutouts when processing finishes.</p><p v-else-if="tripoMode">Cloud photo generation is handled by the local worker. Refreshing this page continues the existing task.</p><p>This may take several minutes. You can close this editor and return to the saved scan.</p>
    <Button variant="outline" type="button" @click="observe">Refresh status</Button>
   </template>
   <template v-else-if="job.state==='finalized'">
