@@ -17,11 +17,12 @@ export function validateCaptureFile(file,dimensions) {
 }
 export async function fetchScanJob(id) {return (await api('scans/status.php?id='+encodeURIComponent(id))).job}
 export async function generateScanMasks(id) {return (await api('scans/ai-masks.php',{method:'POST',headers,body:{id}})).job}
-export async function finalizeScan(id,payload,charmPoint) {
+export async function finalizeScan(id,payload,charmPoint,charmSettings) {
  const body=new FormData()
  body.append('id',id);body.append('file',new Blob([payload.glb],{type:'model/gltf-binary'}),'scan.glb')
  body.append('neutralTexture',payload.neutralTexture,'neutral.png')
  body.append('thumbnail',payload.thumbnail,'thumbnail.png')
+ if(charmSettings)body.append('charmSettings',JSON.stringify(charmSettings))
  body.append('regions',JSON.stringify(payload.parts));body.append('charmPoint',JSON.stringify(charmPoint))
  return (await api('scans/finalize.php',{method:'POST',headers,body})).draft
 }

@@ -7,8 +7,10 @@ scanRequest('POST', function(int $owner) {
     $thumbnail=scanUploadFile('thumbnail'); $thumbnailInfo=scanImageInfo($thumbnail);
     if ($thumbnailInfo['mime'] !== 'image/png') scanFail('Shoe thumbnail must be PNG');
     if ($texture['mime'] !== 'image/png') scanFail('Replacement detail texture must be PNG');
+    $settings=scanCharmSettings($_POST['charmSettings']??null);
     $db=getDb(); $db->beginTransaction(); $job=scanJob($db,$id,$owner,true);
     $hash=hash_file('sha256',$path).hash_file('sha256',$neutral).hash_file('sha256',$thumbnail).hash('sha256',$_POST['charmPoint'] ?? 'null');
+    if(isset($_POST['charmSettings']))$hash.=hash('sha256',json_encode($settings));
     if ($job['state']==='finalized') {
         $saved=json_decode($job['finalized_payload'],true);
         if ($saved['hash']!==$hash) scanFail('This scan was already finalized with different edits',409);
@@ -25,7 +27,7 @@ scanRequest('POST', function(int $owner) {
     $thumbnailPath='/images/uploads/'.$filename.'-thumb.png';
     if (!@copy($path,$project.'/public'.$glbPath) || !@copy($neutral,$project.'/public'.$texturePath) || !@copy($thumbnail,$project.'/public'.$thumbnailPath)) scanFail('Final scan could not be saved',503);
     $parts=array_map(fn($part)=>array_merge($part,['recolorTexturePath'=>$texturePath]),$info['parts']);
-    $draft=['glbPath'=>$glbPath,'parts'=>$parts,'colors'=>[['name'=>'White','value'=>'#ffffff'],['name'=>'Graphite','value'=>'#292b2d'],['name'=>'Rust','value'=>'#b94d27']],'thumbnailPath'=>$thumbnailPath,'charmsEnabled'=>$point!==null,'charmOffset'=>scanCharmOffset($point),'charmScale'=>'1 1 1'];
+    $draft=['glbPath'=>$glbPath,'parts'=>$parts,'colors'=>[['name'=>'White','value'=>'#ffffff'],['name'=>'Graphite','value'=>'#292b2d'],['name'=>'Rust','value'=>'#b94d27']],'thumbnailPath'=>$thumbnailPath,...scanCharmAssets($point,$settings,$filename)];
     $db->prepare("UPDATE scan_jobs SET state='finalized',stage='Regions saved; complete catalog details',finalized_path=?,finalized_payload=? WHERE id=?")->execute([$glbPath,json_encode(['hash'=>$hash,'draft'=>$draft]),$id]);
     $db->commit(); jsonResponse(['success'=>true,'draft'=>$draft]);
 });

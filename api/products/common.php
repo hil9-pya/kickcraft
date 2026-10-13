@@ -14,7 +14,7 @@ function productTemplate(): array {
 }
 function productInsert(int $owner,array $asset,?string $scan=null): array {
  $id='seller-'.bin2hex(random_bytes(12));
- getDb()->prepare("INSERT INTO shoes(id,name,description,price,stock,status,glb_path,thumbnail_path,charms_enabled,charm_offset,charm_scale,categories,parts,colors,seller_user_id,publication_state,source_scan_id,sizes) VALUES(?,'Untitled shoe','',1,0,'out_of_stock',?,?,?,?,?,'[\"marketplace\",\"sneakers\"]',?,?,?,'draft',?,'[7,8,9,10,11]')")->execute([$id,$asset['glbPath'],$asset['thumbnailPath'],(int)$asset['charmsEnabled'],$asset['charmOffset']??null,$asset['charmScale']??'1 1 1',json_encode($asset['parts']),json_encode($asset['colors']),$owner,$scan]);
+ getDb()->prepare("INSERT INTO shoes(id,name,description,price,stock,status,glb_path,thumbnail_path,charms_enabled,charm_offset,charm_scale,charm_dir,categories,parts,colors,seller_user_id,publication_state,source_scan_id,sizes) VALUES(?,'Untitled shoe','',1,0,'out_of_stock',?,?,?,?,?,?,'[\"marketplace\",\"sneakers\"]',?,?,?,'draft',?,'[7,8,9,10,11]')")->execute([$id,$asset['glbPath'],$asset['thumbnailPath'],(int)$asset['charmsEnabled'],$asset['charmOffset']??null,$asset['charmScale']??'1 1 1',$asset['charmDir']??null,json_encode($asset['parts']),json_encode($asset['colors']),$owner,$scan]);
  return formatShoeRow(productRow($id,$owner));
 }
 function productMaterialNames(string $path): array {

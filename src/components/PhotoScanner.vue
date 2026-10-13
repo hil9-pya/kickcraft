@@ -84,10 +84,10 @@ async function newCapture() {
   try{localStorage.removeItem(storageKey)}catch{}
  }catch(cause){error.value=cause.message}finally{busy.value=false}
 }
-async function complete({payload,charmPoint}) {
+async function complete({payload,charmPoint,charmSettings}) {
  busy.value=true;error.value=''
  try {
-  const draft=await finalizeScan(job.value.id,payload,charmPoint)
+  const draft=await finalizeScan(job.value.id,payload,charmPoint,charmSettings)
   remember({...job.value,state:'finalized',draft})
   emit('complete',draft,job.value.id)
  }catch(cause){error.value=cause.message}finally{busy.value=false}

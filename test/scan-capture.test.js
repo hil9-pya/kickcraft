@@ -32,3 +32,13 @@ test('saving a photo mask sends owner job, photo identity, and lossless PNG',asy
  try{assert.equal((await saveScanMask('job-one','photo-one',new Blob(['mask'],{type:'image/png'}))).maskCount,1)}
  finally{globalThis.fetch=savedFetch}
 })
+
+test('finalize sends explicit charm fitting settings for server-side local assets',async()=>{
+ const {finalizeScan}=await import('../src/scan-capture.js'),savedFetch=globalThis.fetch
+ globalThis.fetch=async(url,options)=>{
+  assert.deepEqual(JSON.parse(options.body.get('charmSettings')),{size:.75,rotation:[10,-20,30]})
+  assert.deepEqual(JSON.parse(options.body.get('charmPoint')),[.1,.2,.3])
+  return new Response(JSON.stringify({draft:{charmsEnabled:true}}))
+ }
+ try{assert.equal((await finalizeScan('job-one',{glb:new ArrayBuffer(1),neutralTexture:new Blob(),thumbnail:new Blob(),parts:[]},[.1,.2,.3],{size:.75,rotation:[10,-20,30]})).charmsEnabled,true)}finally{globalThis.fetch=savedFetch}
+})

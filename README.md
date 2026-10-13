@@ -174,6 +174,12 @@ Use sharp photos of the same original shoe with consistent lighting. One front/t
 
 Both checks target the isolated database and localhost, use local fixtures, and spend no generation credits. The first checks retired capture routes and saved-data access; the second verifies the complete Tripo worker and seller/admin workflow using a mocked provider.
 
+### Fit charms on generated shoes
+
+In the parts editor, choose **Place charm**, click the attachment point, then adjust **Size** and **Rotate X/Y/Z**. Preview Star, Lightning, and K tag before saving. Middle drag rotates the shoe view. Keyboard users can focus the canvas, move with arrow keys, and press Space to place. **Disable charms** removes the attachment.
+
+Saving fits all three local charm models to that point with the same size and rotation. It uses no Tripo credits. Existing originals stay unchanged; fitted assets use new revision directories and persist through product import, repainting, customer selection, and template reuse. Reopening **Edit painted parts** restores the saved fit. Revised seller products become private drafts requiring admin review again. Check each charm from multiple angles: placement is manually reviewed and does not simulate collision or physics.
+
 ## Seller marketplace
 
 Apply at `http://localhost:5174/#seller-register`, then sign in at `#seller`. Pending sellers can view their review status and correct store details. Admin uses `#admin` → **Seller applications** to approve, request changes, or suspend a store. Approved sellers get a persistent five-step walkthrough, product creation, pickup orders, and store settings.

@@ -89,10 +89,11 @@ try {
   check(copy($sourceDir.'/preview.glb',$dir.'/preview.glb'),'Cannot stage actual preview');$image=$source['images'][0];
   check(copy($sourceDir.'/images/'.$image['file'],$dir.'/images/'.$image['file']),'Cannot stage source photo');
   $db->prepare("UPDATE scan_jobs SET state='ready',output_glb='preview.glb',images=? WHERE id=?")->execute([json_encode([$image]),$jobId]);$project=dirname(__DIR__).'/public';
-  $multipart=['id'=>$jobId,'file'=>new CURLFile($project.$draft['glbPath'],'model/gltf-binary','scan.glb'),'neutralTexture'=>new CURLFile($project.$draft['parts'][0]['recolorTexturePath'],'image/png','neutral.png'),'thumbnail'=>new CURLFile($project.$draft['thumbnailPath'],'image/png','thumbnail.png'),'charmPoint'=>'null'];
+  $multipart=['id'=>$jobId,'file'=>new CURLFile($project.$draft['glbPath'],'model/gltf-binary','scan.glb'),'neutralTexture'=>new CURLFile($project.$draft['parts'][0]['recolorTexturePath'],'image/png','neutral.png'),'thumbnail'=>new CURLFile($project.$draft['thumbnailPath'],'image/png','thumbnail.png'),'charmPoint'=>'[0.02,0.08,0.01]','charmSettings'=>'{"size":0.75,"rotation":[20,-30,45]}'];
   check(req('scans/finalize.php',$b['cookie'],$multipart,['X-Requested-With: KickCraftScan'])['status']===404,'Foreign seller finalized scan');
   check(req('scans/finalize.php',$a['cookie'],$multipart,['X-Requested-With: KickCraftScan'])['status']===200,'Seller region finalization failed');
   $scanProduct=post('products/create.php',$a['cookie'],['source'=>'scan','scanId'=>$jobId]);check($scanProduct['status']===201,'Owned finalized scan import failed');$scanPid=$scanProduct['data']['shoe']['id'];$products[]=$scanPid;
+  check($scanProduct['data']['shoe']['charmsEnabled']&&str_ends_with($scanProduct['data']['shoe']['charmDir'],'-charms/'),'Fitted charms lost during scan import');
   check(post('products/create.php',$a['cookie'],['source'=>'scan','scanId'=>$jobId])['data']['shoe']['id']===$scanPid,'Scan retry duplicated listing');
   check(!in_array($jobId,array_column(req('scans/list.php',$a['cookie'])['data']['jobs'],'id'),true),'Linked scan still offered as an unlinked draft');
   check(req('products/scan.php?id='.$scanPid,$a['cookie'])['status']===403,'Seller accessed admin comparison');
@@ -104,11 +105,15 @@ try {
   check(post('products/review.php',$admin,['id'=>$scanPid,'status'=>'approved'])['status']===422,'Scan published without source comparison');
   check(post('products/review.php',$admin,['id'=>$scanPid,'status'=>'approved','photoReviewed'=>true])['status']===200,'Explicit scan review attestation failed');
   $painting=req('products/regions.php?id='.$scanPid,$a['cookie']);check($painting['status']===200&&$painting['data']['shoe']['publicationState']==='approved','Approved shoe painting unavailable');
+  check($painting['data']['charmPoint']===[0.02,0.08,0.01]&&$painting['data']['charmSettings']['size']===0.75&&$painting['data']['charmSettings']['rotation']===[20,-30,45],'Charm fitting did not reopen exactly');
   check(req('products/regions.php?id='.$scanPid,$b['cookie'])['status']===404,'Other seller opened painted parts');
   $oldModel=$painting['data']['shoe']['glbPath'];$oldHash=hash_file('sha256',$project.$oldModel);
-  $revision=['id'=>$scanPid,'expectedModel'=>$oldModel,'file'=>$multipart['file'],'neutralTexture'=>$multipart['neutralTexture'],'thumbnail'=>$multipart['thumbnail'],'charmPoint'=>'null'];
+  $revision=['id'=>$scanPid,'expectedModel'=>$oldModel,'file'=>$multipart['file'],'neutralTexture'=>$multipart['neutralTexture'],'thumbnail'=>$multipart['thumbnail'],'charmPoint'=>'[0.03,0.07,0.02]','charmSettings'=>'{"size":1.25,"rotation":[-15,60,0]}'];
   check(req('products/regions.php',$b['cookie'],$revision)['status']===404,'Other seller changed painted parts');
+  $badFit=$revision;$badFit['charmSettings']='{"size":0,"rotation":[0,0,0]}';check(req('products/regions.php',$a['cookie'],$badFit)['status']===422,'Invalid charm fit accepted');
   $revised=req('products/regions.php',$a['cookie'],$revision);check($revised['status']===200,'Revised part save failed');$revised=$revised['data']['shoe'];
+  $reopened=req('products/regions.php?id='.$scanPid,$a['cookie']);check($reopened['data']['charmSettings']['size']===1.25&&$reopened['data']['charmPoint']===[0.03,0.07,0.02],'Revised charm fitting lost on reopen');
+  foreach(['star','lightning','k-tag'] as $slug){$bytes=file_get_contents($project.$revised['charmDir'].$slug.'-charm.glb');$json=json_decode(substr($bytes,20,unpack('V',substr($bytes,12,4))[1]),true);$root=array_values(array_filter($json['nodes'],fn($node)=>($node['name']??'')==='CharmRoot'))[0];check($root['translation']===[0.03,0.07,0.02]&&$root['scale']===[1.25,1.25,1.25],'Customer charm asset does not match saved fit');}
   check($revised['publicationState']==='draft'&&$revised['glbPath']!==$oldModel,'Repaint overwrote approved model or stayed published');
   check(hash_file('sha256',$project.$oldModel)===$oldHash,'Old approved model modified');
   check($revised['sourceScanId']===$jobId&&$revised['price']==1234&&$revised['stock']===1,'Repaint changed source, price or stock');
@@ -118,6 +123,11 @@ try {
   check(post('products/submit.php',$a['cookie'],['id'=>$scanPid])['status']===200,'Revised model submission failed');
   check(post('products/review.php',$admin,['id'=>$scanPid,'status'=>'approved'])['status']===422,'Revised model bypassed source-photo review');
   check(post('products/review.php',$admin,['id'=>$scanPid,'status'=>'approved','photoReviewed'=>true])['status']===200,'Revised model approval failed');
+  $charmOrder=post('reservations/create.php','',['shoeId'=>$scanPid,'customerName'=>'Charm workflow check','email'=>'charm-check@example.test','pickupDate'=>(new DateTimeImmutable('today'))->modify('+8 days')->format('Y-m-d'),'size'=>9,'charmId'=>'lightning','partColors'=>[]]);
+  check($charmOrder['status']===201,'Customer could not reserve fitted charm');$charmReceipt=$charmOrder['data']['reservation']['id'];$receipts[]=$charmReceipt;
+  check(post('reservations/lookup.php','',['id'=>$charmReceipt,'email'=>'charm-check@example.test'])['data']['reservation']['charmId']==='lightning','Fitted charm choice lost in tracking');
+  check(post('reservations/update-status.php',$a['cookie'],['id'=>$charmReceipt,'status'=>'cancelled','notes'=>'Retire charm verification order'])['status']===200,'Fitted charm reservation could not cancel');
+  $db->prepare('UPDATE reservations SET deleted_at=NOW() WHERE id=?')->execute([$charmReceipt]);
   check(post('products/visibility.php',$a['cookie'],['id'=>$scanPid,'action'=>'archive'])['status']===200,'Generated shoe removal failed');
   check(!in_array($jobId,array_column(req('scans/list.php',$a['cookie'])['data']['jobs'],'id'),true),'Removed shoe offered as duplicate capture');
   check(post('products/create.php',$a['cookie'],['source'=>'scan','scanId'=>$jobId])['status']===409,'Removed capture import did not explain restore');

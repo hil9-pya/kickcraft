@@ -56,15 +56,15 @@ async function openPainting(){
  try{painting.value=await api('products/regions.php?id='+encodeURIComponent(form.id))}
  catch(cause){error.value=cause.message}finally{busy.value=false}
 }
-async function saveParts({payload,charmPoint}){
+async function saveParts({payload,charmPoint,charmSettings}){
  if(busy.value||!painting.value)return
  busy.value=true;error.value=''
  try{
   const body=new FormData();body.append('id',form.id);body.append('expectedModel',painting.value.shoe.glbPath)
-  body.append('file',new Blob([payload.glb],{type:'model/gltf-binary'}),'regions.glb');body.append('neutralTexture',payload.neutralTexture,'neutral.png');body.append('thumbnail',payload.thumbnail,'thumbnail.png');body.append('charmPoint',JSON.stringify(charmPoint))
+  body.append('file',new Blob([payload.glb],{type:'model/gltf-binary'}),'regions.glb');body.append('neutralTexture',payload.neutralTexture,'neutral.png');body.append('thumbnail',payload.thumbnail,'thumbnail.png');body.append('charmPoint',JSON.stringify(charmPoint));body.append('charmSettings',JSON.stringify(charmSettings))
   const {shoe}=await api('products/regions.php',{method:'POST',body})
   const labels=new Map(form.parts.map(part=>[part.id,part.label]))
-  for(const key of ['glbPath','thumbnailPath','charmsEnabled','charmOffset','publicationState','reviewNote'])form[key]=shoe[key]
+  for(const key of ['glbPath','thumbnailPath','charmsEnabled','charmOffset','charmScale','charmDir','publicationState','reviewNote'])form[key]=shoe[key]
   form.parts=shoe.parts.map(part=>({...part,label:labels.get(part.id)||part.label}))
   ready.value=false;painting.value=null;message.value='Revised parts saved as a private draft. Check details and submit for admin review.';emit('saved',shoe)
  }catch(cause){error.value=cause.message}finally{busy.value=false}
@@ -87,7 +87,7 @@ onBeforeUnmount(()=>{previewInput.cancel();paletteInput.cancel();if(highlighted)
   <p v-if="error" role="alert" class="error">{{error}}</p><p v-if="message" role="status" class="success">{{message}}</p>
   <template v-if="painting">
    <div class="actions"><Button variant="outline" type="button" :disabled="busy" @click="painting=null">Back to product details</Button><p class="muted">Saving revised parts withdraws this listing until admin reviews it again. Previous model files and existing pickup orders are retained.</p></div>
-   <ScanRegionEditor :preview-url="painting.shoe.glbPath" :parts="painting.shoe.parts" :charm-point="painting.charmPoint" :saving="busy" @complete="saveParts" />
+   <ScanRegionEditor :preview-url="painting.shoe.glbPath" :parts="painting.shoe.parts" :charm-point="painting.charmPoint" :charm-settings="painting.charmSettings" :saving="busy" @complete="saveParts" />
   </template>
   <template v-else>
   <Button v-if="form.sourceScanId" variant="outline" type="button" :disabled="busy||sharing||!ready" @click="openPainting">Edit painted parts</Button>

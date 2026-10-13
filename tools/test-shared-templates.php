@@ -27,7 +27,7 @@ try {
  }
  [$a,$b]=$accounts;
  verifyTemplate(templateHttp('templates/list.php')['status']===401,'Guest accessed library');
- $asset=productTemplate();foreach($asset['parts'] as &$part)$part['recolorTexturePath']='/images/kickcraft-one-card.png';unset($part);$job=templateUuid();$jobs[]=$job;$dir=scanJobDir($job);mkdir($dir.'/images',0700,true);
+ $asset=array_merge(productTemplate(),scanCharmAssets([0.02,0.08,0.01],['size'=>0.75,'rotation'=>[20,-30,45]],'template-fit-'.bin2hex(random_bytes(8))));foreach($asset['parts'] as &$part)$part['recolorTexturePath']='/images/kickcraft-one-card.png';unset($part);$job=templateUuid();$jobs[]=$job;$dir=scanJobDir($job);mkdir($dir.'/images',0700,true);
  copy(__DIR__.'/../public/images/kickcraft-one-card.png',$dir.'/images/original.png');$info=scanImageInfo($dir.'/images/original.png');
  $image=array_merge($info,['id'=>'original','file'=>'original.png','name'=>'Original KickCraft fixture']);
  $db->prepare("INSERT INTO scan_jobs(id,owner_id,state,engine,images,finalized_path,finalized_payload) VALUES(?,?,'finalized','template',?,?,?)")->execute([$job,$a['id'],json_encode([$image]),$asset['glbPath'],json_encode(['draft'=>$asset])]);
@@ -35,6 +35,7 @@ try {
  verifyTemplate(templatePost('templates/submit.php',$b['cookie'],$body)['status']===404,'Foreign model shared');
  verifyTemplate(templatePost('templates/submit.php',$a['cookie'],array_merge($body,['allowReuse'=>false]))['status']===422,'Sharing allowed without creator permission');
  $r=templatePost('templates/submit.php',$a['cookie'],$body);verifyTemplate($r['status']===201,'Template submission failed: '.json_encode($r['data']));$template=$r['data']['template']['id'];$snapshot=$r['data']['template'];
+ verifyTemplate($snapshot['charmDir']===$asset['charmDir'],'Snapshot lost fitted charms');
  verifyTemplate($snapshot['publicationState']==='pending','Template auto-approved');
  verifyTemplate(templatePost('templates/submit.php',$a['cookie'],$body)['data']['template']['id']===$template,'Submission retry duplicated template');
  verifyTemplate($snapshot['glbPath']!==$asset['glbPath'] && hash_file('sha256',__DIR__.'/../public'.$snapshot['glbPath'])===hash_file('sha256',__DIR__.'/../public'.$asset['glbPath']),'Snapshot not independent');
@@ -56,6 +57,8 @@ try {
  $invalid=$use;unset($invalid['file']);verifyTemplate(templateHttp('templates/use.php',$b['cookie'],$invalid)['status']===400,'Own reference photo not required');
  $r=templateHttp('templates/use.php',$b['cookie'],$use);verifyTemplate($r['status']===201,'Reuse failed: '.json_encode($r['data']));$copy=$r['data']['shoe'];$products[]=$copy['id'];
  verifyTemplate($copy['sellerUserId']===$b['id']&&$copy['publicationState']==='draft'&&$copy['stock']===0&&$copy['sourceTemplateId']===$template,'Reuse copied owner/stock/approval or lost provenance');
+ verifyTemplate($copy['charmDir']===$snapshot['charmDir']&&is_file(__DIR__.'/../public'.$copy['charmDir'].'star-charm.glb'),'Template reuse lost fitted charm assets');
+ $fit=scanSavedCharm(productRow($copy['id']));verifyTemplate($fit['charmSettings']['size']===0.75&&$fit['charmPoint']===[0.02,0.08,0.01],'Reused charm settings could not reopen');
  verifyTemplate($copy['glbPath']===$snapshot['glbPath']&&$copy['parts']===$snapshot['parts'],'Reuse lost material regions');
  verifyTemplate(templateHttp('templates/use.php',$b['cookie'],$use)['data']['shoe']['id']===$copy['id'],'Retry created duplicate draft');
  verifyTemplate(templateHttp('templates/use.php',$a['cookie'],$use)['status']===409,'Request ID stolen by another account');

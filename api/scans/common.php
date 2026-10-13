@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../config.php';
 require_once __DIR__ . '/../db.php';
 require_once __DIR__ . '/../helpers.php';
+require_once __DIR__.'/charms.php';
 
 function scanFail(string $message, int $status = 422): never { throw new RuntimeException($message, $status); }
 function scanId($id): string {

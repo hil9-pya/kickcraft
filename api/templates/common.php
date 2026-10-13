@@ -16,7 +16,7 @@ function templateSnapshot(array $product,string $id): array {
  $parts=json_decode($product['parts'],true);$model=templateFile($product['glb_path'],'glb');$names=productMaterialNames($model);
  if(count($parts)<2 || count(array_unique(array_column($parts,'material')))!==count($parts))scanFail('Template needs two independently recolorable parts');
  foreach($parts as $part)if(!in_array($part['material']??'',$names,true))scanFail('Template part missing from model');
- $asset=['glbPath'=>$product['glb_path'],'thumbnailPath'=>$product['thumbnail_path'],'parts'=>$parts,'colors'=>json_decode($product['colors'],true),'charmsEnabled'=>(bool)$product['charms_enabled'],'charmOffset'=>$product['charm_offset'],'charmScale'=>$product['charm_scale']];
+ $asset=['glbPath'=>$product['glb_path'],'thumbnailPath'=>$product['thumbnail_path'],'parts'=>$parts,'colors'=>json_decode($product['colors'],true),'charmsEnabled'=>(bool)$product['charms_enabled'],'charmOffset'=>$product['charm_offset'],'charmScale'=>$product['charm_scale'],'charmDir'=>$product['charm_dir']??null];
  $root=dirname(__DIR__,2).'/public';$copies=[];
  $copy=function(string $source,string $kind,string $suffix,string $ext)use($id,$root,&$copies):string {
   $file=templateFile($source,$ext);$directory=$root.'/'.$kind.'/uploads';if(!is_dir($directory) && !mkdir($directory,0755,true))scanFail('Template storage unavailable',503);

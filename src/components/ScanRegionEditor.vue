@@ -1,21 +1,28 @@
 <script setup>
 import { Button } from './ui/button'
 import { Slider } from './ui/slider'
-import {ref,onMounted,onBeforeUnmount,computed} from 'vue'
+import {ref,onMounted,onBeforeUnmount,computed,watch} from 'vue'
 import * as THREE from 'three'
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js'
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js'
-import {PARTS} from '../customization.js'
+import {fitCharmPreview} from '../charm-fitting.js'
+import {PARTS,CHARMS} from '../customization.js'
 import {captureShoeThumbnail} from '../scan-thumbnail.js'
 import RecentColors from './RecentColors.vue'
 import {rememberColor} from '../color-history.js'
 import {frameLatest} from '../color-input.js'
 import {setRegionControls,createRegionState,restoreRegionMesh,surfaceBrushFaces,sampleFaceColors,smartFillFaces,paintFaces,cropFaces,undoStroke,redoStroke,canPaintFace,brushStrokePoints,exportScanRegions,buildRegionGroups,neutralDetailTexture} from '../scan-regions.js'
-const props=defineProps({previewUrl:{type:String,required:true},saving:{type:Boolean,default:false},parts:{type:Array,default:()=>[]},charmPoint:{type:Array,default:null}})
+const props=defineProps({previewUrl:{type:String,required:true},saving:{type:Boolean,default:false},parts:{type:Array,default:()=>[]},charmPoint:{type:Array,default:null},charmSettings:{type:Object,default:()=>({size:1,rotation:[0,0,0]})}})
 const emit=defineEmits(['complete'])
 const editor=ref(null),fullscreen=ref(false),fills=ref([])
 const host=ref(null),error=ref(''),ready=ref(false),busy=ref(false)
 const mode=ref('rotate'),region=ref('upper'),radius=ref(16),revision=ref(0),charm=ref(props.charmPoint?[...props.charmPoint]:null),testColor=ref('#ffffff')
+const charmSize=ref(props.charmSettings.size),charmRotation=ref([...props.charmSettings.rotation]),previewCharm=ref('star'),charmReady=ref(false)
+const charmModels=new Map()
+function updateCharms(){
+ for(const [id,root] of charmModels){fitCharmPreview(root,charm.value,{size:Number(charmSize.value),rotation:charmRotation.value.map(Number)});root.visible=!!charm.value&&id===previewCharm.value}
+}
+watch([charm,charmSize,charmRotation,previewCharm],updateCharms,{deep:true})
 const cursor=ref(null),fillTolerance=ref(40)
 let previewMesh,previewParts=[],neutralMap,neutralPreparing,textureColors,paintPointer=null,lastBrush=null
 const previewColors={}
@@ -165,7 +172,7 @@ function keydown(event) {
  if(event.ctrlKey || event.metaKey || event.altKey)return
  if(key==='b' || key==='e'){event.preventDefault();setMode(key==='b'?'paint':'erase');return}
  if(key==='[' || key===']'){event.preventDefault();up();radius.value=Math.max(2,Math.min(40,Number(radius.value)+(key==='['?-2:2)));return}
- if(event.target!==host.value || !['paint','erase','fill'].includes(mode.value))return
+ if(event.target!==host.value || !['paint','erase','fill','charm'].includes(mode.value))return
  const arrows={ArrowLeft:[-8,0],ArrowRight:[8,0],ArrowUp:[0,-8],ArrowDown:[0,8]}
  if(!arrows[event.key] && event.key!==' ')return
  event.preventDefault()
@@ -174,7 +181,8 @@ function keydown(event) {
   const [dx,dy]=arrows[event.key];cursor.value={x:Math.max(0,Math.min(rect.width,at.x+dx)),y:Math.max(0,Math.min(rect.height,at.y+dy))};return
  }
  const clientX=rect.left+at.x,clientY=rect.top+at.y
- if(mode.value==='fill'){const hit=pick(clientX,clientY);if(hit)suggestFill(hit.faceIndex)}
+ if(mode.value==='charm'){const hit=pick(clientX,clientY);if(hit)charm.value=mesh.worldToLocal(hit.point.clone()).toArray()}
+ else if(mode.value==='fill'){const hit=pick(clientX,clientY);if(hit)suggestFill(hit.faceIndex)}
  else {painting=true;lastBrush=null;pending.clear();stroke({clientX,clientY});up()}
 }
 function undo() {if(!ready.value || busy.value || props.saving)return;if(fills.value.length){removeFill(fills.value.length-1);return}if(state){up();undoStroke(state);setMode(mode.value==='preview'?'rotate':mode.value)}}
@@ -184,7 +192,11 @@ function rotate(axis) {
  if(fills.value.length){error.value='Apply or clear pending fills before changing model orientation.';return}
  up();const rotation=new THREE.Matrix4().makeRotationAxis(new THREE.Vector3(axis==='x'?1:0,axis==='y'?1:0,axis==='z'?1:0),Math.PI/2)
  state.geometry.applyMatrix4(rotation);mesh.geometry.applyMatrix4(rotation);overlay.geometry.applyMatrix4(rotation)
- if(charm.value) charm.value=new THREE.Vector3(...charm.value).applyMatrix4(rotation).toArray()
+ if(charm.value){
+  charm.value=new THREE.Vector3(...charm.value).applyMatrix4(rotation).toArray()
+  const fit=new THREE.Quaternion().setFromEuler(new THREE.Euler(...charmRotation.value.map(THREE.MathUtils.degToRad))).premultiply(new THREE.Quaternion().setFromRotationMatrix(rotation))
+  const angles=new THREE.Euler().setFromQuaternion(fit);charmRotation.value=[angles.x,angles.y,angles.z].map(THREE.MathUtils.radToDeg)
+ }
  setMode('rotate')
 }
 function crop() {
@@ -236,12 +248,13 @@ async function finish() {
  if(fills.value.length){error.value='Apply or cancel the suggested fill before saving.';return}
  up();busy.value=true;error.value=''
  try {
+  if(charm.value&&!charmReady.value)throw new Error('Wait for the local charm preview to load before saving.')
   const payload=await exportScanRegions(mesh,state)
   const {geometry}=buildRegionGroups(state)
   try {payload.thumbnail=await captureShoeThumbnail(new THREE.Mesh(geometry,mesh.material[0]))}
   finally {geometry.dispose()}
   const point=charm.value ? mesh.localToWorld(new THREE.Vector3(...charm.value)).toArray() : null
-  emit('complete',{payload,charmPoint:point})
+  emit('complete',{payload,charmPoint:point,charmSettings:{size:Number(charmSize.value),rotation:charmRotation.value.map(Number)}})
  } catch(cause){error.value=cause.message} finally {busy.value=false;refresh()}
 }
 onMounted(async()=>{
@@ -271,6 +284,13 @@ onMounted(async()=>{
   renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',up);renderer.domElement.addEventListener('pointercancel',up);renderer.domElement.addEventListener('lostpointercapture',up)
   const animate=()=>{frame=requestAnimationFrame(animate);controls.update();renderer.render(scene,camera)};animate()
   ready.value=true;refresh()
+  for(const item of CHARMS.filter(charm=>charm.src)){
+   const loadedCharm=await new GLTFLoader().loadAsync(item.src)
+   if(disposed){loadedCharm.scene.traverse(o=>{o.geometry?.dispose();o.material?.dispose()});return}
+   const root=loadedCharm.scene.getObjectByName('CharmRoot');if(!root)throw new Error('Local charm attachment missing.')
+   scene.add(loadedCharm.scene);charmModels.set(item.id,root);updateCharms()
+  }
+  charmReady.value=true
  } catch(cause){error.value=cause.message}
 })
 onBeforeUnmount(()=>{
@@ -292,16 +312,16 @@ onBeforeUnmount(()=>{
   </div>
   <div class="region-layout">
    <div class="canvas-column">
-    <div ref="host" class="scan-canvas" @mousedown.middle.prevent @auxclick.middle.prevent :class="{'brush-active':brushActive,'fill-active':mode==='fill'}" :aria-busy="!ready" tabindex="0" aria-label="Interactive shoe region editor; arrow keys move brush or selection, Space selects" @pointerleave="cursor=null">
+    <div ref="host" class="scan-canvas" @mousedown.middle.prevent @auxclick.middle.prevent :class="{'brush-active':brushActive,'fill-active':['fill','charm'].includes(mode)}" :aria-busy="!ready" tabindex="0" aria-label="Interactive shoe region editor; arrow keys move brush or selection, Space selects" @pointerleave="cursor=null">
      <span v-if="cursor && brushActive" class="brush-cursor" :class="{'erase-cursor':mode==='erase'}" :style="{left:cursor.x+'px',top:cursor.y+'px',width:Number(radius)*2+'px',height:Number(radius)*2+'px',borderColor:mode==='erase'?'#fff':swatches[PARTS.findIndex(p=>p.id===region)]}" aria-hidden="true"></span>
-     <span v-if="cursor && mode==='fill'" class="fill-cursor" :style="{left:cursor.x+'px',top:cursor.y+'px'}" aria-hidden="true">+</span>
+     <span v-if="cursor && ['fill','charm'].includes(mode)" class="fill-cursor" :style="{left:cursor.x+'px',top:cursor.y+'px'}" aria-hidden="true">+</span>
      <p v-if="error" role="alert" class="scan-error">{{error}}</p>
      <span v-if="!ready&&!error" class="canvas-status" role="status">Loading shoe…</span>
     </div>
     <p class="canvas-help">Middle drag to rotate · Scroll to zoom · Right drag to pan. Focus canvas, use arrow keys, then Space to paint or select. B: paint · E: erase · [ / ]: brush size · Ctrl/Cmd+Z: undo · Ctrl/Cmd+Shift+Z: redo.</p>
    </div>
    <aside class="region-inspector" aria-label="Part and tool settings">
-    <div class="inspector-section">
+    <div v-if="mode!=='charm'" class="inspector-section">
      <div class="section-heading"><h4>Shoe parts</h4><span>{{partCount}} / {{PARTS.length}} marked</span></div>
      <div class="part-list">
       <div v-for="(part,index) in PARTS" :key="part.id" class="part-row"><label :class="{selected:region===part.id}">
@@ -325,8 +345,16 @@ onBeforeUnmount(()=>{
      <div class="section-heading"><label id="brush-radius-label">Brush radius</label><output>{{radius}} px</output></div>
      <Slider aria-labelledby="brush-radius-label" :model-value="[Number(radius)]" :min="2" :max="40" :disabled="!ready || busy || saving" @update:model-value="radius=$event[0]" />
     </div>
-    <div v-if="mode==='charm'" class="inspector-section"><p>Click the shoe where charms should attach.</p><p role="status">{{charm?'Charm position selected.':'No attachment point selected.'}}</p><Button variant="outline" type="button" :disabled="busy||saving" @click="charm=null">Disable charms</Button></div>
-    <div class="inspector-section">
+    <div v-if="mode==='charm'" class="inspector-section charm-controls">
+     <h4>Charm attachment</h4><p>Click the shoe to attach. Rotate the view to check all sides. Customers use this saved fit.</p>
+     <p role="status">{{charm?(charmReady?'Charm position selected.':'Loading local charms…'):'No attachment point selected.'}}</p>
+     <label>Preview charm<select v-model="previewCharm" :disabled="!charmReady || busy || saving"><option v-for="item in CHARMS.filter(c=>c.src)" :key="item.id" :value="item.id">{{item.label}}</option></select></label>
+     <div><label id="charm-size-label">Size · {{Math.round(charmSize*100)}}%</label><Slider aria-labelledby="charm-size-label" :model-value="[Math.round(charmSize*100)]" :min="20" :max="300" :step="5" :disabled="!charm || !charmReady || busy || saving" @update:model-value="charmSize=$event[0]/100" /></div>
+     <div v-for="(axis,index) in ['X','Y','Z']" :key="axis"><label :id="'charm-rotation-'+axis">Rotate {{axis}} · {{Math.round(charmRotation[index])}}°</label><Slider :aria-labelledby="'charm-rotation-'+axis" :model-value="[charmRotation[index]]" :min="-180" :max="180" :step="5" :disabled="!charm || !charmReady || busy || saving" @update:model-value="charmRotation[index]=$event[0]" /></div>
+     <Button variant="outline" type="button" :disabled="!charm || busy || saving" @click="charmSize=1;charmRotation=[0,0,0]">Reset size and rotation</Button>
+     <Button variant="outline" type="button" :disabled="!charm || busy || saving" @click="charm=null">Disable charms</Button>
+    </div>
+    <div v-if="mode!=='charm'" class="inspector-section">
      <label class="test-color">Test {{PARTS.find(part=>part.id===region)?.label}} color<input v-model="testColor" type="color" :disabled="!ready || busy || saving || fills.length>0 || !counts[region]" @input="previewColorInput({part:region,color:testColor})" @change="previewColorInput.flush();rememberColor(testColor)"></label>
      <RecentColors :disabled="!ready || busy || saving || fills.length>0 || !counts[region]" @select="reuseColor" />
      <Button variant="outline" size="sm" type="button" :disabled="!ready || busy || saving || fills.length>0 || !counts[region]" @click="previewColor(true)">Restore selected part</Button>
@@ -383,6 +411,8 @@ onBeforeUnmount(()=>{
 .part-list input { accent-color:var(--primary); }
 .part-swatch { width:10px; height:10px; border-radius:2px; flex-shrink:0; }
 .part-list span { font-size:11px; font-weight:400; color:var(--muted-foreground); margin-left:auto; }
+.charm-controls select { width:100%; border:1px solid var(--input); border-radius:6px; padding:6px; background:var(--card); }
+.charm-controls label { font-size:13px; }
 .test-color { display:flex; align-items:center; justify-content:space-between; }
 input[type=color] { width:36px; height:30px; padding:2px; border:1px solid var(--input); border-radius:4px; }
 .fill-list { max-height:132px; overflow:auto; list-style:none; padding:0; display:grid; gap:4px; font-size:12px; }

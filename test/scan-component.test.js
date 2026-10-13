@@ -103,12 +103,12 @@ test('region save captures only kept original-texture geometry and releases it o
  const original={name:'original'},mesh={material:[original],localToWorld(point){return point}}
  const payload={},busy={value:false},error={value:''},charm={value:null}
  let emitted,refreshes=0
- const bindings={busy,props:{saving:false},fills:{value:[]},error,up(){},exportScanRegions:async()=>payload,mesh,state:{},buildRegionGroups:()=>({geometry}),THREE:{Mesh},charm,refresh(){refreshes++},emit:(_,value)=>{emitted=value},captureShoeThumbnail:async shoe=>{
+ const bindings={charmReady:{value:true},charmSize:{value:1.25},charmRotation:{value:[10,20,30]},busy,props:{saving:false},fills:{value:[]},error,up(){},exportScanRegions:async()=>payload,mesh,state:{},buildRegionGroups:()=>({geometry}),THREE:{Mesh},charm,refresh(){refreshes++},emit:(_,value)=>{emitted=value},captureShoeThumbnail:async shoe=>{
   assert.equal(shoe.geometry,geometry);assert.equal(shoe.material,original)
   return 'transparent-auto-fit-png'
  }}
  await componentFunction('ScanRegionEditor.vue','finish','onMounted(',bindings)()
- assert.equal(emitted.payload.thumbnail,'transparent-auto-fit-png')
+ assert.equal(emitted.payload.thumbnail,'transparent-auto-fit-png');assert.deepEqual(emitted.charmSettings,{size:1.25,rotation:[10,20,30]})
  assert.equal(geometry.disposed,true);assert.equal(busy.value,false);assert.equal(refreshes,1)
  geometry.disposed=false;emitted=null
  bindings.captureShoeThumbnail=async()=>{throw new Error('WebGL capture failed')}
@@ -125,4 +125,16 @@ test('dragging scan preview color reuses geometry/materials and skips painting r
  await preview();bindings.testColor.value='#445566';await preview();bindings.testColor.value='#778899';await preview()
  assert.equal(builds,1);assert.equal(scene.objects.length,1);assert.equal(switches,1)
  assert.equal(scene.objects[0].material[1].color.getHexString(),'778899')
+})
+
+test('keyboard can place a charm without painting a shoe part',()=>{
+ const host={getBoundingClientRect:()=>({left:10,top:20,width:200,height:100})},charm={value:null}
+ const point={clone:()=>({toArray:()=>[.01,.02,.03]})}
+ const bindings={ready:{value:true},busy:{value:false},props:{saving:false},mode:{value:'charm'},host:{value:host},renderer:{domElement:host},cursor:{value:{x:60,y:30}},charm,mesh:{worldToLocal:p=>p},pick(x,y){assert.equal(x,70);assert.equal(y,50);return {point}}}
+ const handler=componentFunction('ScanRegionEditor.vue','keydown','function undo()',bindings)
+ handler({key:' ',target:{closest:()=>false},preventDefault(){}})
+ assert.equal(charm.value,null)
+ const target=Object.assign(host,{closest:()=>false})
+ handler({key:' ',target,preventDefault(){}})
+ assert.deepEqual(charm.value,[.01,.02,.03])
 })
