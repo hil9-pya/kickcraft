@@ -76,7 +76,8 @@
 .kc-app h1, .kc-app h2, .kc-app h3 { text-wrap: balance; }
 .kc-app p { overflow-wrap: anywhere; }
 .kc-app :is(input,textarea,select):focus-visible { outline-color: var(--ring); }
-.kc-catalog-card { overflow: hidden; border-radius: 8px; transition: border-color 150ms; }
+.kc-catalog-card { min-width:0; overflow: hidden; border-radius: 8px; transition: border-color 150ms; }
+.kc-catalog-card h2 { overflow-wrap:anywhere; }
 .kc-catalog-card:hover { border-color: var(--input); }
 
 model-viewer { width: 100%; height: 100%; min-height: 0; background: #e9ece9; --poster-color: #e9ece9; }
@@ -136,3 +137,13 @@ dialog::backdrop { background: rgb(32 34 32 / 50%); }
   .checkout-form { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
   .checkout-wide { grid-column: 1 / -1; }
 }
+
+
+/* Tracking starts with one focused form, expanding only after verification. */
+.tracking-page { width:100%; max-width:1040px; min-height:calc(100dvh - 144px); }
+.tracking-workspace { display:grid; grid-template-columns:minmax(0,440px); justify-content:center; align-items:start; gap:24px; }
+.tracking-workspace.has-result { grid-template-columns:320px minmax(0,1fr); }
+.tracking-form,.tracking-result { min-width:0; }
+.public-footer { margin-top:24px; }
+.tracking-page + .public-footer { margin-top:0; }
+@media(max-width:900px) { .tracking-workspace.has-result { grid-template-columns:minmax(0,1fr); } }

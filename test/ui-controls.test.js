@@ -5,6 +5,9 @@ import vue from '@vitejs/plugin-vue'
 import {createSSRApp, h} from 'vue'
 import {renderToString} from '@vue/server-renderer'
 import path from 'node:path'
+import {readFileSync} from 'node:fs'
+import {compile} from '@vue/compiler-dom'
+import * as Vue from 'vue'
 
 const server = await createServer({configFile:false,cacheDir:'node_modules/.vite-ui-tests',plugins:[vue()],resolve:{alias:{'@':path.resolve('src')}},server:{middlewareMode:true,hmr:false},appType:'custom'})
 after(()=>server.close())
@@ -64,4 +67,52 @@ test('region editor blocks painting and finalization until the model loads',asyn
   assert.match(html,new RegExp('<button[^>]*\\sdisabled(?=[\\s=>])[^>]*>'+text+'</button>'))
  }
  assert.match(html,/aria-busy="true"/)
+})
+
+const appSource=readFileSync(path.resolve('src/App.vue'),'utf8')
+async function fragment(source,values){
+ const render=new Function('Vue',compile(source,{prefixIdentifiers:true}).code)(Vue)
+ const app=createSSRApp({render,setup:()=>values})
+ app.component('Button',await component('button/Button.vue'))
+ app.component('Input',await component('input/Input.vue'))
+ return (await renderToString(app)).replace(/<!--.*?-->/gs,'')
+}
+
+test('public footer only appears where it helps and never advertises unverified contact details',async()=>{
+ const footer=appSource.match(/<footer[\s\S]*?<\/footer>/)[0]
+ const actions={goToShop(){},goToTrackReservation(){},goToStudio(){},openFeedbackModal(){}}
+ for(const view of ['shop','marketplace']){
+  const html=await fragment(footer,{view,...actions})
+  assert.match(html,/KickCraft/)
+  assert.match(html,/href="#marketplace"/)
+  assert.match(html,/>Feedback<\/button>/)
+  assert.doesNotMatch(html,/tel:|mailto:|Flagship|10:00 AM|kickcraft\.local/)
+ }
+ const tracking=await fragment(footer,{view:'track',...actions})
+ assert.match(tracking,/© 2026 KickCraft/)
+ assert.doesNotMatch(tracking,/href="#marketplace"/)
+ for(const view of ['studio','seller','admin','seller-register','login','not-found']){
+  const html=await fragment(footer,{view,...actions})
+  assert.doesNotMatch(html,/<footer/)
+ }
+})
+
+test('tracking starts with lookup only; verified result keeps seller pickup details and pending cancellation',async()=>{
+ const start=appSource.search(/<main v-else-if="view === 'track'"/)
+ const source=appSource.slice(start,appSource.indexOf('</main>',start)+7).replace('v-else-if=','v-if=')
+ const values={view:'track',trackReceiptId:'KC-2026-TEST',trackEmail:'guest@example.test',trackLoading:false,trackError:'',trackedReservation:null,lookupReservation(){},goToShop(){},requestCancelTrackedReservation(){},trackingSteps:[],trackingStepIndex:0,getReservationStatusBadge(){return {label:'Pending',bgClass:'',textClass:'',borderClass:''}}}
+ const initial=await fragment(source,values)
+ assert.match(initial,/value="KC-2026-TEST"/)
+ assert.match(initial,/value="guest@example.test"/)
+ assert.doesNotMatch(initial,/Reservation details appear here|aria-label="Reservation progress"/)
+ const reservation={id:'KC-2026-TEST',shoeName:'Original shoe',size:9,status:'pending',pickupStore:'Original Studio',pickupAddress:'Verified seller location',pickupDate:'2026-10-20',partColors:{upper:{name:'Rust',value:'#b94d27'}}}
+ const verified=await fragment(source,{...values,trackedReservation:reservation})
+ assert.match(verified,/Original Studio/)
+ assert.match(verified,/Verified seller location/)
+ assert.match(verified,/Cancel reservation/)
+ const ready=await fragment(source,{...values,trackedReservation:{...reservation,status:'ready'}})
+ assert.doesNotMatch(ready,/Cancel reservation/)
+ const failed=await fragment(source,{...values,trackError:'Receipt or email did not match.'})
+ assert.match(failed,/role="alert"/)
+ assert.match(failed,/value="guest@example.test"/)
 })

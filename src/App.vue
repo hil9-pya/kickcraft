@@ -925,6 +925,8 @@ function scrollToTop() {
             Shop
           </button>
 
+          <a href="#marketplace" class="border-b-2 border-transparent hover:text-primary" :class="view==='marketplace'?'!border-primary text-foreground':'text-muted-foreground'" :aria-current="view==='marketplace'?'page':undefined">Marketplace</a>
+
           <button
             v-if="view !== 'admin'"
             type="button"
@@ -952,7 +954,6 @@ function scrollToTop() {
             Admin Portal
           </button>
 
-          <a href="#marketplace" class="text-[#5f635f] hover:text-[#b94d27]">Marketplace</a>
           <a v-if="currentUser?.role !== 'owner'" href="#seller" class="text-[#5f635f] hover:text-[#b94d27]">{{currentUser?.role==='seller'?'Seller Studio':'Sell with us'}}</a>
           <!-- User session / Auth buttons -->
           <template v-if="currentUser">
@@ -992,33 +993,20 @@ function scrollToTop() {
     <!-- ══════════════════════════════════════════════════════ -->
     <!-- SHOP VIEW                                              -->
     <!-- ══════════════════════════════════════════════════════ -->
-    <main v-if="view === 'shop' || view === 'marketplace'" class="mx-auto max-w-[1440px] px-5 py-8 lg:px-8 lg:py-10">
+    <main v-if="view === 'shop' || view === 'marketplace'" class="mx-auto max-w-[1440px] px-5 py-6 lg:px-8 lg:py-8">
 
       <!-- The product is the hero: a real, interactive local 3D shoe. -->
-      <section v-if="view==='shop'" class="kc-shop-intro mb-8 grid overflow-hidden rounded-lg border border-border bg-card lg:grid-cols-[minmax(320px,.85fr)_minmax(0,1.15fr)]" aria-labelledby="shop-heading">
-        <div class="flex flex-col justify-center border-b border-[#bfc3bf] p-7 sm:p-9 lg:border-b-0 lg:border-r lg:p-10">
-          <h1 id="shop-heading" class="font-display max-w-lg text-4xl font-black leading-[0.95] tracking-[-0.045em] text-[#202220] sm:text-5xl">
-            Build your pair in 3D.
-          </h1>
-          <p class="mt-5 max-w-md text-base leading-7 text-[#5f635f]">
-            Recolor each shoe part, add a charm, choose your size, then reserve the exact design for store pickup.
-          </p>
-          <div class="mt-7 flex flex-wrap gap-3">
-            <Button variant="default"
-              type="button"
-              class="h-12 bg-[#b94d27] px-6 text-sm font-bold text-white transition-colors hover:bg-[#963a20] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              @click="goToStudio(SHOES[0].id)"
-            >Start designing</Button>
-            <Button variant="outline"
-              type="button"
-              class="h-12 border border-[#292b2d] bg-white px-6 text-sm font-bold text-[#292b2d] transition-colors hover:bg-[#f1f3f0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
-              @click="goToTrackReservation"
-            >Track a reservation</Button>
+      <section v-if="view==='shop'" class="kc-shop-intro mb-6 grid overflow-hidden rounded-lg border border-border bg-card lg:grid-cols-[.95fr_1.05fr]" aria-labelledby="shop-heading">
+        <div class="flex flex-col justify-center p-6 lg:p-7">
+          <h1 id="shop-heading" class="font-display text-3xl font-bold leading-tight tracking-tight sm:text-4xl">Build your pair in 3D.</h1>
+          <p class="mt-3 max-w-md text-sm leading-6 text-muted-foreground">Recolor shoe parts, add a charm, choose your size, then reserve your design for store pickup.</p>
+          <div class="mt-5 flex flex-wrap gap-3">
+            <Button type="button" @click="goToStudio(SHOES[0].id)">Start designing</Button>
+            <Button as="a" href="#marketplace" variant="outline">Browse marketplace</Button>
           </div>
-          <p class="mt-6 text-xs leading-5 text-[#6a6e6a]">Drag the shoe to inspect it. No account needed to reserve.</p>
+          <p class="mt-3 text-xs text-muted-foreground">No account needed to reserve. Pay when you collect.</p>
         </div>
-
-        <div class="relative h-[280px] bg-secondary sm:h-[340px] lg:h-[380px]">
+        <div class="relative h-64 bg-secondary lg:h-[280px]">
           <model-viewer
             class="hero-model absolute inset-0"
             :src="SHOES[0].src"
@@ -1033,18 +1021,14 @@ function scrollToTop() {
             @load="heroModelReady = true"
             @error="heroModelReady = true"
           />
-          <div v-if="!heroModelReady" class="pointer-events-none absolute inset-0 animate-pulse bg-[#e3e6e2]" role="status" aria-label="Loading 3D shoe preview">
-            <div class="absolute inset-x-[18%] bottom-[24%] h-24 border border-[#d2d6d1] bg-[#edf0ec]" />
-          </div>
-          <div class="pointer-events-none absolute bottom-4 left-4 border border-white/20 bg-[#292b2d]/90 px-3 py-2 text-xs font-semibold text-white">
-            Drag to rotate · Scroll to zoom
-          </div>
+          <div v-if="!heroModelReady" class="pointer-events-none absolute inset-0 animate-pulse bg-secondary" role="status" aria-label="Loading 3D shoe preview" />
+          <p class="pointer-events-none absolute bottom-3 left-4 text-xs text-muted-foreground">Drag to rotate · Scroll to zoom</p>
         </div>
       </section>
 
-      <div v-if="view==='marketplace'" class="mb-7 border-b border-[#cfd2ce] pb-6"><h1 class="font-display text-3xl font-black">Original shoes from approved studios</h1><p class="mt-2 text-[#626662]">Customize independent parts, choose your size, and reserve for pickup at the seller’s store.</p></div>
+      <div v-if="view==='marketplace'" class="mb-6"><h1 class="font-display text-3xl font-bold tracking-tight">Marketplace</h1><p class="mt-2 text-sm text-muted-foreground">Original shoes from approved studios. Customize independent parts, choose your size, and reserve for pickup at the seller’s store.</p></div>
       <!-- Search & Filters Toolbar -->
-      <div class="mb-8 space-y-3 border-y border-[#cfd2ce] py-4">
+      <div class="mb-6 space-y-3 border-b border-border pb-4">
         <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <!-- Search input -->
           <div class="relative w-full sm:max-w-md">
@@ -1096,9 +1080,9 @@ function scrollToTop() {
       </div>
 
       <!-- Catalog loading state -->
-      <div v-if="catalogLoading" class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3" role="status" aria-label="Loading shoe catalog">
-        <div v-for="slot in 3" :key="slot" class="animate-pulse border border-[#cfd2ce] bg-[#fcfdfb]">
-          <div class="h-72 bg-[#e3e6e2]" />
+      <div v-if="catalogLoading" class="catalog-grid grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4" role="status" aria-label="Loading shoe catalog">
+        <div v-for="slot in 4" :key="slot" class="animate-pulse border border-[#cfd2ce] bg-[#fcfdfb]">
+          <div class="h-56 bg-secondary" />
           <div class="space-y-3 p-5">
             <div class="h-5 w-2/3 bg-[#e3e6e2]" />
             <div class="h-3 w-full bg-[#eceeeb]" />
@@ -1129,7 +1113,7 @@ function scrollToTop() {
       </div>
 
       <!-- Catalog grid -->
-      <div v-else class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div v-else class="catalog-grid grid gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         <template v-for="(card, index) in displayCatalog" :key="card.id">
           <div v-if="index === 0" class="col-span-full flex flex-wrap items-end justify-between gap-2 border-b border-[#cfd2ce] pb-4">
             <div>
@@ -1156,7 +1140,7 @@ function scrollToTop() {
             :aria-label="`Customize and reserve ${card.name}`"
           >
             <!-- Thumbnail -->
-            <div class="relative grid h-72 place-items-center overflow-hidden bg-[#e9ece9] p-7">
+            <div class="relative grid h-56 place-items-center overflow-hidden bg-secondary p-5">
               <img
                 v-if="card.image"
                 :src="card.image"
@@ -1172,11 +1156,11 @@ function scrollToTop() {
             <!-- Card body -->
             <div class="flex flex-1 flex-col p-5">
               <div class="flex items-start justify-between gap-3">
-                <div>
-                  <h2 class="font-display text-xl font-black tracking-[-0.03em] text-[#202220]">{{ card.name }}</h2><p v-if="card.storeName" class="mt-1 text-xs font-semibold text-[#626662]">{{card.storeName}}</p>
-                  <p class="mt-0.5 text-xs text-[#6a6e6a]">{{ card.subtitle }}</p>
+                <div class="min-w-0">
+                  <h2 class="font-display text-lg font-bold leading-snug text-foreground">{{ card.name }}</h2><p v-if="card.storeName" class="mt-1 text-xs font-semibold text-[#626662]">{{card.storeName}}</p>
+                  <p class="mt-2 line-clamp-2 text-sm leading-5 text-muted-foreground">{{ card.subtitle }}</p>
                 </div>
-                <p class="shrink-0 text-lg font-black text-[#b94d27]">{{ card.price }}</p>
+                <p class="shrink-0 whitespace-nowrap text-base font-semibold text-foreground">{{ card.price }}</p>
               </div>
 
               <!-- CTA row -->
@@ -1195,7 +1179,7 @@ function scrollToTop() {
             class="kc-catalog-card flex flex-col overflow-hidden border border-border bg-card text-left opacity-90"
           >
             <!-- Thumbnail / Placeholder -->
-            <div class="relative grid h-48 place-items-center overflow-hidden bg-[#ebeeed] p-6">
+            <div class="relative grid h-56 place-items-center overflow-hidden bg-secondary p-5">
               <img
                 v-if="card.image"
                 :src="card.image"
@@ -1218,11 +1202,11 @@ function scrollToTop() {
             <!-- Card body -->
             <div class="flex flex-1 flex-col p-5">
               <div class="flex items-start justify-between gap-3">
-                <div>
-                  <h2 class="font-display text-xl font-black tracking-[-0.03em] text-[#404345]">{{ card.name }}</h2>
-                  <p class="mt-0.5 text-xs text-[#6a6e6a]">{{ card.subtitle }}</p>
+                <div class="min-w-0">
+                  <h2 class="font-display text-lg font-bold leading-snug text-foreground">{{ card.name }}</h2>
+                  <p class="mt-2 line-clamp-2 text-sm leading-5 text-muted-foreground">{{ card.subtitle }}</p>
                 </div>
-                <p class="shrink-0 text-lg font-bold text-[#6a6e6a]">{{ card.price }}</p>
+                <p class="shrink-0 whitespace-nowrap text-base font-semibold text-muted-foreground">{{ card.price }}</p>
               </div>
 
               <!-- Disabled indicator row -->
@@ -1238,10 +1222,10 @@ function scrollToTop() {
       </div>
 
       <!-- How it works strip -->
-      <section class="mt-10 grid border border-[#bfc3bf] bg-[#292b2d] text-white sm:grid-cols-3" aria-label="How KickCraft works">
-        <div class="border-b border-white/20 p-5 sm:border-b-0 sm:border-r"><p class="font-display font-bold">1. Customize</p><p class="mt-1 text-sm text-white/65">Color the editable parts.</p></div>
-        <div class="border-b border-white/20 p-5 sm:border-b-0 sm:border-r"><p class="font-display font-bold">2. Inspect</p><p class="mt-1 text-sm text-white/65">Rotate and zoom the 3D model before choosing a size.</p></div>
-        <div class="p-5"><p class="font-display font-bold">3. Reserve</p><p class="mt-1 text-sm text-white/65">Place your design reservation for in-store pickup.</p></div>
+      <section v-if="view==='shop'" class="mt-8 grid border-t border-border pt-6 text-foreground sm:grid-cols-3" aria-label="How KickCraft works">
+        <div class="p-4"><p class="font-display font-bold">1. Customize</p><p class="mt-1 text-sm text-muted-foreground">Color the editable parts.</p></div>
+        <div class="p-4"><p class="font-display font-bold">2. Inspect</p><p class="mt-1 text-sm text-muted-foreground">Rotate and zoom the 3D model before choosing a size.</p></div>
+        <div class="p-5"><p class="font-display font-bold">3. Reserve</p><p class="mt-1 text-sm text-muted-foreground">Place your design reservation for in-store pickup.</p></div>
       </section>
     </main>
 
@@ -1651,7 +1635,7 @@ function scrollToTop() {
     <!-- ══════════════════════════════════════════════════════ -->
     <!-- REGISTER VIEW                                          -->
     <!-- ══════════════════════════════════════════════════════ -->
-    <main v-else-if="view === 'track'" class="mx-auto max-w-4xl px-5 py-10 lg:px-8 lg:py-14">
+    <main v-else-if="view === 'track'" class="tracking-page mx-auto px-5 py-8 lg:px-8 lg:py-10">
       <Button variant="ghost"
         type="button"
         class="mb-6 text-xs font-bold text-[#5f635f] hover:text-[#202220] focus-visible:outline-2 focus-visible:outline-ring"
@@ -1660,8 +1644,8 @@ function scrollToTop() {
         ← Back to shop
       </Button>
 
-      <div class="grid border border-[#cfd2ce] bg-white lg:grid-cols-[320px_1fr]">
-        <form class="border-b border-[#cfd2ce] p-6 lg:border-b-0 lg:border-r" @submit.prevent="lookupReservation">
+      <div class="tracking-workspace" :class="{'has-result':!!trackedReservation}">
+        <form class="tracking-form rounded-lg border border-border bg-card p-6" @submit.prevent="lookupReservation">
           <h1 class="font-display text-2xl font-black tracking-tight text-[#202220]">Track reservation</h1>
           <p class="mt-2 text-sm leading-6 text-[#5f635f]">Enter receipt reference and reservation email.</p>
 
@@ -1698,7 +1682,7 @@ function scrollToTop() {
           </Button>
         </form>
 
-        <section class="min-h-80 p-6" aria-live="polite">
+        <section v-if="trackedReservation" class="tracking-result rounded-lg border border-border bg-card p-6" aria-label="Reservation details">
           <div v-if="trackedReservation">
             <div class="flex flex-wrap items-start justify-between gap-4 border-b border-[#cfd2ce] pb-5">
               <div>
@@ -1765,11 +1749,9 @@ function scrollToTop() {
               Cancel reservation
             </Button>
           </div>
-          <div v-else class="grid min-h-64 place-items-center text-center text-sm text-[#6a6e6a]">
-            Reservation details appear here after verification.
-          </div>
         </section>
       </div>
+      <p class="sr-only" role="status">{{trackLoading?'Checking reservation…':trackedReservation?'Reservation details loaded.':''}}</p>
     </main>
 
     <!-- ══════════════════════════════════════════════════════ -->
@@ -1825,82 +1807,25 @@ function scrollToTop() {
     </main>
 
     <!-- ── Footer ───────────────────────────────────────────── -->
-    <footer v-if="!['admin','seller','seller-register','login'].includes(view)" class="mt-6 border-t border-[#383a38] bg-[#202220] text-white">
-      <div class="mx-auto max-w-[1440px] px-5 py-9 lg:px-8 lg:py-10">
-        <div class="grid gap-8 md:grid-cols-[1.15fr_.85fr_1fr]">
-
-          <!-- Col 1: Brand & Studio Flagship -->
-          <div class="space-y-4">
-            <div class="flex items-center gap-3">
-              <span class="grid size-8 place-items-center bg-[#b94d27] text-sm font-black text-white">K</span>
-              <span class="font-display text-lg font-extrabold tracking-[-0.03em] text-white">KickCraft</span>
-            </div>
-            <p class="max-w-md text-xs leading-6 text-white/70">
-              Design an original shoe in 3D, add a charm, and reserve the finished pair for store pickup.
-            </p>
-            <div class="border-t border-white/10 pt-3 text-xs text-white/50">
-              <p class="font-semibold text-white/80">KickCraft Flagship Studio</p>
-              <p class="mt-0.5">Mon–Sat · 10:00 AM – 8:00 PM</p>
-            </div>
-          </div>
-
-          <!-- Col 2: Contact Numbers -->
+    <footer v-if="['shop','marketplace','track'].includes(view)" class="public-footer border-t border-border bg-card">
+      <div class="kc-page flex flex-wrap items-center justify-between gap-4 px-5 py-5 lg:px-8">
+        <template v-if="view==='track'">
+          <p class="text-xs text-muted-foreground">© 2026 KickCraft</p>
+          <Button variant="ghost" size="sm" type="button" @click="openFeedbackModal">Feedback</Button>
+        </template>
+        <template v-else>
           <div>
-            <h3 class="font-display text-sm font-bold text-[#d96a42]">Contact Numbers</h3>
-            <ul class="mt-4 space-y-3 text-xs text-white/75">
-              <li>
-                <span class="block text-[10px] font-bold uppercase tracking-wider text-white/50">Studio Hotline</span>
-                <a href="tel:+63288885425" class="font-mono font-bold text-white transition-colors hover:text-[#b94d27]">(02) 8888-5425</a>
-              </li>
-              <li>
-                <span class="block text-[10px] font-bold uppercase tracking-wider text-white/50">Customer Mobile / SMS</span>
-                <a href="tel:+639171234567" class="font-mono font-bold text-white transition-colors hover:text-[#b94d27]">+63 917 123 4567</a>
-              </li>
-              <li>
-                <span class="block text-[10px] font-bold uppercase tracking-wider text-white/50">In-Store Pickup Desk</span>
-                <a href="tel:+639189876543" class="font-mono font-bold text-white transition-colors hover:text-[#b94d27]">+63 918 987 6543</a>
-              </li>
-            </ul>
+            <p class="font-display font-bold">KickCraft</p>
+            <p class="mt-1 text-xs text-muted-foreground">Original shoes. Customize in 3D. Collect in store.</p>
           </div>
-
-          <!-- Col 3: Feedback -->
-          <div>
-            <h3 class="font-display text-sm font-bold text-[#d96a42]">Feedback</h3>
-            <p class="mt-4 text-xs leading-relaxed text-white/70">
-              Tell us what worked—and what would make the customizer better.
-            </p>
-            <div class="mt-3 space-y-2 text-xs">
-              <div>
-                <span class="block text-[10px] font-bold uppercase tracking-wider text-white/50">Studio email</span>
-                <a
-                  href="mailto:feedback@kickcraft.local?subject=KickCraft%20Shoe%20Feedback"
-                  class="font-mono text-white/90 underline transition-colors hover:text-[#b94d27]"
-                >
-                  feedback@kickcraft.local
-                </a>
-              </div>
-              <Button variant="outline"
-                type="button"
-                class="mt-1 inline-flex items-center gap-2 border border-[#b94d27] bg-[#b94d27]/10 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-[#b94d27] focus-visible:outline-2 focus-visible:outline-[#b94d27]"
-                @click="openFeedbackModal"
-              >
-                <span>Send Quick Feedback</span>
-                <span aria-hidden="true">→</span>
-              </Button>
-            </div>
-          </div>
-
-        </div>
-
-        <!-- Bottom bar -->
-        <div class="mt-8 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-5 text-xs text-white/50 sm:flex-row">
-          <p>© 2026 KickCraft. All rights reserved.</p>
-          <div class="flex flex-wrap items-center justify-center gap-6">
-            <Button variant="ghost" type="button" class="hover:text-white" @click="goToShop">Catalog</Button>
-            <Button variant="ghost" type="button" class="hover:text-white" @click="goToStudio('kickcraft-one')">3D Studio</Button>
-            <Button variant="ghost" type="button" class="hover:text-white" @click="goToTrackReservation">Track Reservation</Button>
-          </div>
-        </div>
+          <nav class="flex flex-wrap items-center gap-5 text-sm" aria-label="Footer navigation">
+            <a href="#shop" class="hover:underline">Shop</a>
+            <a href="#marketplace" class="hover:underline">Marketplace</a>
+            <Button variant="link" type="button" class="h-auto p-0 font-normal text-foreground" @click="goToTrackReservation">Track reservation</Button>
+            <Button variant="ghost" size="sm" type="button" @click="openFeedbackModal">Feedback</Button>
+          </nav>
+          <p class="text-xs text-muted-foreground">© 2026 KickCraft</p>
+        </template>
       </div>
     </footer>
 
@@ -2091,8 +2016,7 @@ function scrollToTop() {
       <div class="w-full max-w-md border-2 border-[#292b2d] bg-[#fcfdfb] p-6 text-[#292b2d] shadow-sm">
         <div class="flex items-start justify-between gap-4 border-b border-[#d9dcd8] pb-4">
           <div>
-            <span class="text-[10px] font-black uppercase tracking-widest text-[#b94d27]">KickCraft Studio</span>
-            <h2 id="feedback-modal-title" class="font-display text-xl font-black">Send Quick Feedback</h2>
+            <h2 id="feedback-modal-title" class="font-display text-xl font-black">Feedback note</h2>
           </div>
           <Button variant="outline"
             type="button"
@@ -2110,7 +2034,7 @@ function scrollToTop() {
           </div>
           <h3 class="font-display text-lg font-black text-[#202220]">Feedback saved on this device</h3>
           <p class="text-xs text-[#5f635f] leading-relaxed max-w-sm mx-auto">
-            Email feedback@kickcraft.local when you want to send it to the studio team.
+            This note stays on this device. It has not been sent to the store.
           </p>
           <div class="pt-3">
             <Button variant="outline"
@@ -2124,6 +2048,7 @@ function scrollToTop() {
         </div>
 
         <form v-else class="space-y-4 pt-4" @submit.prevent="handleFeedbackSubmit">
+          <p class="text-sm text-muted-foreground">Save a note on this device. It is not sent to the store.</p>
           <div v-if="feedbackError" class="border border-[#b94d27]/40 bg-[#fdf2ef] p-3 text-xs font-semibold text-[#963a20]">
             {{ feedbackError }}
           </div>
