@@ -12,14 +12,14 @@ scanRequest('POST', function(int $owner) {
     $view=null;
     if($job['engine']==='tripo'){
         $view=$_POST['view']??'';if(!in_array($view,['front','left','back','right'],true))scanFail('Choose a valid labeled shoe view');
-        if(min($info['width'],$info['height'])<256)scanFail('Tripo photos must be at least 256 pixels on each side');
+        if(min($info['width'],$info['height'])<256)scanFail('Reference photos must be at least 256 pixels on each side');
         foreach($job['images'] as $image)if(($image['view']??'')===$view && $image['hash']!==$hash)scanFail('This view is already saved. Start a new capture to replace it.',409);
     }
     foreach ($job['images'] as $image) if ($image['hash'] === $hash) {
         if($view!==null && ($image['view']??'')!==$view)scanFail('Use a different photo for each shoe view');
         $db->commit(); jsonResponse(['success'=>true,'job'=>scanPublic($job)]);
     }
-    if($job['engine']==='tripo' && count($job['images'])>=4)scanFail('Tripo accepts at most four labeled views');
+    if($job['engine']==='tripo' && count($job['images'])>=4)scanFail('Photo generation accepts at most four labeled views');
     if (count($job['images']) >= 120) scanFail('A scan accepts at most 120 photos');
     $imageId = bin2hex(random_bytes(12));
     $filename = $imageId . ($info['mime']==='image/png' ? '.png' : '.jpg');

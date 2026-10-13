@@ -1715,7 +1715,7 @@ async function restoreShoe(shoe) {
             </div>
           </div>
 
-          <Button variant="outline" type="button" class="border border-[#202220] px-5 py-3 font-semibold text-[#202220]" @click="showPhotoScanner = true">Scan from photos</Button>
+          <Button variant="outline" type="button" class="border border-[#202220] px-5 py-3 font-semibold text-[#202220]" @click="showPhotoScanner = true">Generate from photos</Button>
           <!-- Or Choose from Existing Model Library -->
           <div class="mt-10 border-t border-[#d9dcd8] pt-6">
             <p class="text-[11px] font-bold uppercase tracking-wider text-[#8e938e]">

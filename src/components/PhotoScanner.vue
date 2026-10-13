@@ -150,15 +150,15 @@ onBeforeUnmount(()=>{closed=true;clearTimeout(timer);clearFiles()})
 </script>
 <template>
  <section class="photo-scanner" :class="{'painting-stage':job?.state==='ready'&&accepted}" aria-labelledby="scan-title">
-  <div class="scan-header"><h3 id="scan-title">Scan a shoe from photos or video</h3><div class="scan-actions"><Button variant="outline" v-if="job" type="button" :disabled="busy" @click="chooseAnotherCapture">Choose another capture</Button><Button variant="outline" type="button" :disabled="busy" @click="emit('cancel')">Back to shoe details</Button></div></div>
+  <div class="scan-header"><h3 id="scan-title">Generate a shoe from photos</h3><div class="scan-actions"><Button variant="outline" v-if="job" type="button" :disabled="busy" @click="chooseAnotherCapture">Choose another capture</Button><Button variant="outline" type="button" :disabled="busy" @click="emit('cancel')">Back to shoe details</Button></div></div>
   <p v-if="error" role="alert" class="scan-error">{{error}}</p>
   <p v-if="job?.alignmentMinPercent===65" class="scan-error" role="status">Experimental reconstruction: 65% alignment threshold, at least 30 aligned views. Lower alignment may produce incomplete geometry, holes, or missing shoe surfaces. Compare all photos before accepting; model validation and admin approval still apply.</p>
-  <div v-if="!job&&recoverable.length" class="scan-actions"><p>Saved captures:</p><Button variant="outline" v-for="capture in recoverable" :key="capture.id" type="button" @click="recover(capture.id)">Resume {{capture.engine==='tripo'?'Tripo · ':''}}{{capture.imageCount}} photos · {{capture.state}} · {{capture.createdAt}}</Button></div>
+  <div v-if="!job&&recoverable.length" class="scan-actions"><p>Saved captures:</p><Button variant="outline" v-for="capture in recoverable" :key="capture.id" type="button" @click="recover(capture.id)">Resume {{capture.engine==='tripo'?'Photo generation · ':''}}{{capture.imageCount}} photos · {{capture.state}} · {{capture.createdAt}}</Button></div>
   <fieldset v-if="!job && !files.length" class="scan-engine" :disabled="busy"><legend>Capture method</legend>
    <label><input v-model="selectedEngine" type="radio" value="meshroom"> Local photo / video scanner</label>
    <label v-if="nativeAvailable"><input v-model="selectedEngine" type="radio" value="realityscan"> Video with AI background masks (comparison)</label>
-   <label><input v-model="selectedEngine" type="radio" value="tripo" :disabled="!tripoAvailable"> Tripo AI — 1–4 photos, 30 credits</label>
-   <p v-if="!tripoAvailable">Tripo needs a private server API key and local worker.</p>
+   <label><input v-model="selectedEngine" type="radio" value="tripo" :disabled="!tripoAvailable"> Generate from photos — 1–4 photos, 30 credits</label>
+   <p v-if="!tripoAvailable">Photo generation needs a configured AI service and local worker.</p>
   </fieldset>
   <TripoCapture v-if="tripoMode && (!job || ['uploading','failed'].includes(job.state))" :job="job" :disabled="busy" :available="tripoAvailable" :mask-available="nativeAvailable" @mask="generateAiMasks" @saved="remember" @queued="tripoQueued" @busy="busy=$event" @reset="newCapture">
    <template #masks>
@@ -201,7 +201,7 @@ onBeforeUnmount(()=>{closed=true;clearTimeout(timer);clearFiles()})
    <p v-if="job">Saved photos survive a reload. Reselect any photos whose upload was interrupted; duplicates are skipped.</p>
   </template>
   <template v-else-if="['queued','processing'].includes(job.state)">
-   <p role="status">{{job.stage}}</p><p v-if="job.operation==='mask'">Removing backgrounds locally. No Tripo credits used. Review cutouts when processing finishes.</p><p v-else-if="tripoMode">Tripo cloud generation is handled by the local worker. Refreshing this page does not submit another paid request.</p><p>This may take several minutes. You can close this editor and return to the saved scan.</p>
+   <p role="status">{{job.stage}}</p><p v-if="job.operation==='mask'">Removing backgrounds locally. No generation credits used. Review cutouts when processing finishes.</p><p v-else-if="tripoMode">Cloud photo generation is handled by the local worker. Refreshing this page does not submit another paid request.</p><p>This may take several minutes. You can close this editor and return to the saved scan.</p>
    <Button variant="outline" type="button" @click="observe">Refresh status</Button>
   </template>
   <template v-else-if="job.state==='finalized'">

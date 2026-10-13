@@ -4,7 +4,7 @@ export async function uploadTripoCapture(entries,onProgress,existing=null) {
  let job=existing
  try {
   if(!job)job=(await api('scans/create.php',{method:'POST',headers,body:{engine:'tripo'}})).job
-  if(job.engine!=='tripo' || job.state!=='uploading')throw new Error('Start a new Tripo capture to upload photos.')
+  if(job.engine!=='tripo' || job.state!=='uploading')throw new Error('Start a new photo capture to upload photos.')
   onProgress(job,0,entries.length)
   for(const [index,{view,file}] of entries.entries()) {
    const body=new FormData();body.append('id',job.id);body.append('view',view);body.append('file',file)

@@ -93,7 +93,7 @@ function scanWorkerOnce(PDO $db,?callable $tripoRequest=null,?callable $tripoDow
         if(($job['engine']??'meshroom')==='tripo') {
             $job['images']=$images;
             tripoProcess($job,function(string $stage)use($db,$job,$heartbeat){$db->prepare('UPDATE scan_jobs SET stage=? WHERE id=?')->execute([$stage,$job['id']]);$heartbeat();},$tripoRequest,$tripoDownload);
-            $db->prepare("UPDATE scan_jobs SET state='ready',stage='Tripo model ready. Compare every angle with your actual photographs before marking parts.',output_glb='preview.glb',heartbeat_at=NOW(),completed_at=NOW() WHERE id=? AND state='processing'")->execute([$job['id']]);
+            $db->prepare("UPDATE scan_jobs SET state='ready',stage='Generated model ready. Compare every angle with your actual photographs before marking parts.',output_glb='preview.glb',heartbeat_at=NOW(),completed_at=NOW() WHERE id=? AND state='processing'")->execute([$job['id']]);
             return true;
         }
         scanCheckMasks($images,$dir.'/masks');

@@ -46,8 +46,8 @@ onBeforeUnmount(()=>{for(const item of Object.values(selected.value))URL.revokeO
 </script>
 <template>
  <div class="tripo-capture">
-  <p>Tripo AI generates a textured shoe from one clear photo or up to four labeled views. Multiple views show more of your actual shoe. Use your own original design; AI can invent unseen details.</p>
-  <p v-if="!available" role="alert">Tripo is not configured. Ask the owner to configure the private API key and local worker, or use the local scanner.</p>
+  <p>AI generates a textured shoe from one clear photo or up to four labeled views. Multiple views show more of your actual shoe. Use your own original design; AI can invent unseen details.</p>
+  <p v-if="!available" role="alert">Photo generation is unavailable. Ask the owner to configure the AI service and local worker.</p>
   <p v-if="error" role="alert" class="capture-error">{{error}}</p>
   <p v-if="job?.error" role="alert" class="capture-error">{{job.error}}</p>
   <fieldset v-if="!job || job.state==='uploading'" :disabled="disabled || !available">
@@ -62,7 +62,7 @@ onBeforeUnmount(()=>{for(const item of Object.values(selected.value))URL.revokeO
   </fieldset>
   <section v-if="job?.state==='uploading' && job.imageCount" class="background-tools" aria-label="Optional background removal">
    <h4>Background cleanup (optional)</h4>
-   <p>Remove backgrounds locally before sending photos to Tripo. No extra Tripo credits. Reviewed masks are kept; check laces, toe and sole edges carefully.</p>
+   <p>Remove backgrounds locally before sending photos to the external AI service. No extra generation credits. Reviewed masks are kept; check laces, toe and sole edges carefully.</p>
    <Button variant="outline" type="button" :disabled="disabled || hasFiles || !maskAvailable || job.maskCount===job.imageCount" @click="consent=false;emit('mask')">Remove backgrounds</Button>
    <p v-if="!maskAvailable">Local AI masking is unavailable. Use the original photos or configure the existing local masking worker.</p>
    <label v-if="hasMasks" class="cloud-consent"><input v-model="useMasks" type="checkbox" :disabled="disabled" @change="consent=false">Use background-removed photos for generation</label>
@@ -71,10 +71,10 @@ onBeforeUnmount(()=>{for(const item of Object.values(selected.value))URL.revokeO
   </section>
   <p v-if="progress" role="status">{{progress}}</p>
   <template v-if="job && (job.state==='uploading' || job.canRetry)">
-   <p v-if="resumed">Resume saved Tripo task. No new generation request or generation charge will be made.</p>
-   <p v-else><strong>Generation costs 30 API credits ($0.30), from the owner's Tripo balance.</strong> Saving photos locally is free. Defining and recoloring parts afterwards is free. No paid segmentation is included.</p>
-   <label class="cloud-consent"><input v-model="consent" type="checkbox" :disabled="disabled || !available">{{resumed?'Resume the saved task and download its result from Tripo.':'I agree to send these reference photos to Tripo cloud and use 30 API credits for this generation.'}}</label>
-   <Button variant="outline" type="button" :disabled="disabled || !available || !consent || hasFiles || !saved.front || !masksReady" @click="generate">{{disabled?'Working…':resumed?'Resume saved Tripo task':'Generate shoe — 30 credits'}}</Button>
+   <p v-if="resumed">Resume saved generation. No new generation request or generation charge will be made.</p>
+   <p v-else><strong>Generation costs 30 API credits ($0.30), from the owner's AI service balance.</strong> Saving photos locally is free. Defining and recoloring parts afterwards is free. No paid segmentation is included.</p>
+   <label class="cloud-consent"><input v-model="consent" type="checkbox" :disabled="disabled || !available">{{resumed?'Resume the saved task and download its result from the external AI service.':'I agree to send these reference photos to the external AI cloud service and use 30 API credits for this generation.'}}</label>
+   <Button variant="outline" type="button" :disabled="disabled || !available || !consent || hasFiles || !saved.front || !masksReady" @click="generate">{{disabled?'Working…':resumed?'Resume saved generation':'Generate shoe — 30 credits'}}</Button>
   </template>
   <p v-if="useMasks && !masksReady" role="status">Generation stays disabled until every background-removed photo is reviewed. Uncheck the option to use originals instead.</p>
   <p>Generated models need photo comparison, at least two editable parts, and normal product/admin review. Nothing is approved or published automatically.</p>

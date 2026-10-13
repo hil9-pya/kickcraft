@@ -4,7 +4,7 @@ scanRequest('POST', function(int $owner) {
     $engine=scanJson()['engine'] ?? 'meshroom';
     if (!in_array($engine,['meshroom','realityscan','tripo'],true)) scanFail('Unknown scan engine',400);
     if ($engine==='realityscan' && !is_file((string)configValue('REALITYSCAN_EXE'))) scanFail('Local RealityScan is not configured',503);
-    if($engine==='tripo' && !tripoConfigured())scanFail('Tripo is not configured on the local worker',503);
+    if($engine==='tripo' && !tripoConfigured())scanFail('AI provider is not configured on the local worker',503);
     $db = getDb();
     $db->beginTransaction();
     $db->prepare('SELECT id FROM users WHERE id = ? FOR UPDATE')->execute([$owner]);

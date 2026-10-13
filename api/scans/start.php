@@ -14,9 +14,9 @@ scanRequest('POST', function(int $owner) {
     }
     if($job['engine']==='tripo') {
         tripoKey();tripoViews($job['images']);
-        if($job['state']!=='uploading' && !tripoCanResume($job))scanFail('This Tripo job cannot be regenerated. Create a new capture only if another charge is intended.',409);
+        if($job['state']!=='uploading' && !tripoCanResume($job))scanFail('This AI provider job cannot be regenerated. Create a new capture only if another charge is intended.',409);
         if(!is_file(scanJobDir($id).'/tripo-attempt.json'))tripoWrite(scanJobDir($id).'/tripo-options.json',['useMasks'=>$useMasks]);
-        $db->prepare("UPDATE scan_jobs SET state='queued',operation='reconstruct',stage='Waiting for local Tripo worker',alignment_min_percent=80,error_message=NULL,started_at=NULL,heartbeat_at=NULL,completed_at=NULL WHERE id=?")->execute([$id]);
+        $db->prepare("UPDATE scan_jobs SET state='queued',operation='reconstruct',stage='Waiting for photo generation worker',alignment_min_percent=80,error_message=NULL,started_at=NULL,heartbeat_at=NULL,completed_at=NULL WHERE id=?")->execute([$id]);
         $db->commit();jsonResponse(['success'=>true,'job'=>scanPublic(scanJob($db,$id,$owner))]);
     }
     $retry=scanRetryable($job);

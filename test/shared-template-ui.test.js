@@ -63,10 +63,10 @@ test('seller navigation stays separate from workspace and approval gates stay in
  const approved=await renderFile('SellerDashboard.vue',values)
  assert.match(approved,/<nav[^>]*class="seller-navigation"/)
  assert.match(approved,/<div class="seller-workspace"/)
- assert.match(approved,/Scan from photos/)
+ assert.match(approved,/Generate from photos/)
  for(const status of ['pending','rejected','suspended']){
   const html=await renderFile('SellerDashboard.vue',{...values,profile:{...values.profile,status}})
-  assert.doesNotMatch(html,/Scan from photos|Seller sections|Pickup orders<\/button>/)
+  assert.doesNotMatch(html,/Generate from photos|Seller sections|Pickup orders<\/button>/)
   if(status==='suspended')assert.doesNotMatch(html,/Save store settings|Resubmit application/)
   else assert.match(html,/Store settings/)
  }
