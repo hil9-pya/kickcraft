@@ -16,7 +16,7 @@
 .seller input:not([data-slot]):not([type=checkbox]):not([type=radio]):not([type=color]):not([type=range]), .seller textarea:not([data-slot]), .seller select { border: 1px solid var(--input); border-radius: 6px; background: var(--card); padding: 10px 12px; min-width: 0; width: 100%; font-weight: 400; }
 .seller textarea { min-height: 96px; }
 .seller input[type=checkbox] { accent-color: var(--primary); }
-.seller .fields { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
+.seller .fields { display: grid; align-items: start; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 20px; }
 .seller .wide { grid-column: 1/-1; }
 .seller .panel { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 24px; }
 .seller .stack { display: grid; align-content: start; gap: 18px; }
